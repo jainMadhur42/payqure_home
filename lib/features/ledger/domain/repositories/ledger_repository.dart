@@ -29,6 +29,7 @@ abstract interface class LedgerRepository {
   });
   Future<HouseholdService> updateService({
     required String id,
+    required String monthKey,
     required String name,
     required String description,
     required String unit,
@@ -46,6 +47,7 @@ abstract interface class LedgerRepository {
     required String serviceId,
     required String monthKey,
   });
+  Future<List<AdvancePayment>> getAdvanceHistory({required String serviceId});
   Future<void> savePayment(PaymentTransaction payment);
   Future<void> deletePayment(PaymentTransaction payment);
   Future<List<PaymentTransaction>> getPayments({

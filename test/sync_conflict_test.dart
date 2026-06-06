@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:payqure_home/features/ledger/data/database/ledger_database.dart';
 import 'package:payqure_home/features/ledger/data/repositories/drift_ledger_repository.dart';
 import 'package:payqure_home/features/ledger/data/sync/supabase_ledger_remote_data_source.dart';
+import 'package:payqure_home/features/ledger/domain/entities/payment_transaction.dart';
 
 const userId = 'user-1';
 const monthKey = '2026-05';
@@ -42,7 +43,8 @@ void main() {
 
     final row = await database.select(database.serviceRecords).getSingle();
     expect(row.name, 'Local Milkman');
-    expect(row.pendingSync, isTrue);
+    expect(row.pendingSync, isFalse);
+    expect(remote.pushedServices, 1);
   });
 
   test('newer remote service replaces older local row', () async {
@@ -131,6 +133,303 @@ void main() {
       ),
     );
   });
+
+  test(
+    'logout sync pushes all user data then clears every local table',
+    () async {
+      await _insertCompleteLocalLedger(database);
+
+      await repository.syncUserDataAndClearLocal(userId: userId);
+
+      expect(remote.pushedServices, 1);
+      expect(remote.pushedEntries, 1);
+      expect(remote.pushedAdvances, 1);
+      expect(remote.pushedPayments, 1);
+      expect(remote.pushedSettlements, 1);
+      expect(await database.select(database.profileRecords).get(), isEmpty);
+      expect(await database.select(database.serviceRecords).get(), isEmpty);
+      expect(await database.select(database.entryRecords).get(), isEmpty);
+      expect(
+        await database.select(database.advancePaymentRecords).get(),
+        isEmpty,
+      );
+      expect(
+        await database.select(database.paymentTransactionRecords).get(),
+        isEmpty,
+      );
+      expect(
+        await database.select(database.monthlySettlementRecords).get(),
+        isEmpty,
+      );
+      expect(
+        await database.select(database.syncMetadataRecords).get(),
+        isEmpty,
+      );
+    },
+  );
+
+  test('logout sync failure keeps local data intact', () async {
+    await _insertCompleteLocalLedger(database);
+    remote.failOnEntryPush = true;
+
+    await expectLater(
+      repository.syncUserDataAndClearLocal(userId: userId),
+      throwsStateError,
+    );
+
+    expect(await database.select(database.serviceRecords).get(), isNotEmpty);
+    expect(await database.select(database.entryRecords).get(), isNotEmpty);
+    expect(
+      await database.select(database.advancePaymentRecords).get(),
+      isNotEmpty,
+    );
+    expect(
+      await database.select(database.paymentTransactionRecords).get(),
+      isNotEmpty,
+    );
+    expect(
+      await database.select(database.monthlySettlementRecords).get(),
+      isNotEmpty,
+    );
+  });
+
+  test('service is visible from the month containing its start date', () async {
+    await database
+        .into(database.serviceRecords)
+        .insert(
+          ServiceRecordsCompanion.insert(
+            id: serviceId,
+            userId: userId,
+            monthKey: '2026-06',
+            name: 'Milkman',
+            description:
+                'Provider: Ramesh • Start date: 25/05/2026 • Reminder: 30 minutes before',
+            icon: 'milk',
+            templateType: 'quantityBased',
+            unit: 'L',
+            rateCents: 6000,
+            updatedAt: DateTime.utc(2026, 6, 1),
+            pendingSync: const Value(false),
+          ),
+        );
+
+    final overview = await repository.getOverview(
+      userId: userId,
+      monthKey: '2026-05',
+    );
+
+    expect(overview.services.map((service) => service.id), contains(serviceId));
+    final corrected = await database
+        .select(database.serviceRecords)
+        .getSingle();
+    expect(corrected.monthKey, '2026-05');
+    expect(remote.pushedServices, greaterThanOrEqualTo(1));
+  });
+
+  test('service start month excludes stale earlier carry forward', () async {
+    final now = DateTime.utc(2026, 5, 25);
+    await database
+        .into(database.serviceRecords)
+        .insert(
+          ServiceRecordsCompanion.insert(
+            id: serviceId,
+            userId: userId,
+            monthKey: monthKey,
+            name: 'Milkman',
+            description: 'Provider: Test • Start date: 25/05/2026',
+            icon: 'milk',
+            templateType: 'quantity',
+            unit: 'L',
+            rateCents: 70000,
+            updatedAt: now,
+          ),
+        );
+    await database
+        .into(database.entryRecords)
+        .insert(
+          EntryRecordsCompanion.insert(
+            id: 'entry-may-25',
+            serviceId: serviceId,
+            monthKey: monthKey,
+            day: 25,
+            status: 'delivered',
+            quantity: const Value(1),
+            unit: const Value('L'),
+            rateCents: const Value(70000),
+            amountCents: const Value(70000),
+            updatedAt: now,
+          ),
+        );
+    await database
+        .into(database.monthlySettlementRecords)
+        .insert(
+          MonthlySettlementRecordsCompanion.insert(
+            id: '${userId}_${serviceId}_2026-04',
+            userId: userId,
+            serviceId: serviceId,
+            monthKey: '2026-04',
+            grossAmountCents: const Value(70000),
+            payableAmountCents: const Value(70000),
+            remainingAmountCents: const Value(70000),
+            carryForwardToNextMonthCents: const Value(70000),
+            status: 'pending',
+            generatedAt: now,
+            updatedAt: now,
+          ),
+        );
+
+    final bill = await repository.getMonthlyBill(
+      serviceId: serviceId,
+      monthKey: monthKey,
+    );
+
+    expect(bill.grossAmountCents, 70000);
+    expect(bill.settlement?.previousCarryForwardCents, 0);
+    expect(bill.payableAmountCents, 70000);
+  });
+
+  test('saved payment amount and allocation are pushed to Supabase', () async {
+    final now = DateTime.utc(2026, 5, 25);
+    await _insertLocalService(
+      database,
+      name: 'Milkman',
+      updatedAt: now,
+      pendingSync: false,
+    );
+    await database
+        .into(database.entryRecords)
+        .insert(
+          EntryRecordsCompanion.insert(
+            id: 'entry-payment-sync',
+            serviceId: serviceId,
+            monthKey: monthKey,
+            day: 25,
+            status: 'delivered',
+            quantity: const Value(1),
+            unit: const Value('L'),
+            rateCents: const Value(70000),
+            amountCents: const Value(70000),
+            updatedAt: now,
+          ),
+        );
+
+    await repository.savePayment(
+      PaymentTransaction(
+        id: 'payment-sync',
+        userId: userId,
+        serviceId: serviceId,
+        monthKey: monthKey,
+        amountCents: 30000,
+        paymentDate: now,
+        mode: PaymentMode.upi,
+        updatedAt: now,
+      ),
+    );
+
+    expect(remote.pushedPayments, 1);
+    expect(remote.lastPushedPayment?.amountCents, 30000);
+    expect(remote.lastPushedPayment?.currentMonthAmountCents, 30000);
+    expect(remote.lastPushedPayment?.previousBalanceAmountCents, 0);
+    expect(remote.lastPushedPayment?.advanceAmountCents, 0);
+  });
+}
+
+Future<void> _insertCompleteLocalLedger(LedgerDatabase database) async {
+  final now = DateTime.utc(2026, 5, 20);
+  await database
+      .into(database.profileRecords)
+      .insert(
+        ProfileRecordsCompanion.insert(
+          id: userId,
+          name: 'Test User',
+          email: 'test@example.com',
+          phone: '+919999999999',
+          emailVerified: const Value(true),
+          updatedAt: now,
+          pendingSync: const Value(true),
+        ),
+      );
+  await _insertLocalService(
+    database,
+    name: 'Milkman',
+    updatedAt: now,
+    pendingSync: true,
+  );
+  await database
+      .into(database.entryRecords)
+      .insert(
+        EntryRecordsCompanion.insert(
+          id: 'entry-1',
+          serviceId: serviceId,
+          monthKey: monthKey,
+          day: 20,
+          status: 'delivered',
+          quantity: const Value(1),
+          unit: const Value('L'),
+          rateCents: const Value(6000),
+          amountCents: const Value(6000),
+          updatedAt: now,
+          pendingSync: const Value(true),
+        ),
+      );
+  await database
+      .into(database.advancePaymentRecords)
+      .insert(
+        AdvancePaymentRecordsCompanion.insert(
+          id: 'advance-1',
+          serviceId: serviceId,
+          monthKey: monthKey,
+          amountCents: 5000,
+          paidOn: now,
+          updatedAt: now,
+          pendingSync: const Value(true),
+        ),
+      );
+  await database
+      .into(database.paymentTransactionRecords)
+      .insert(
+        PaymentTransactionRecordsCompanion.insert(
+          id: 'payment-1',
+          userId: userId,
+          serviceId: serviceId,
+          monthKey: monthKey,
+          amountCents: 4000,
+          paymentDate: now,
+          paymentMode: 'cash',
+          currentMonthAmountCents: const Value(4000),
+          createdAt: now,
+          updatedAt: now,
+          pendingSync: const Value(true),
+        ),
+      );
+  await database
+      .into(database.monthlySettlementRecords)
+      .insert(
+        MonthlySettlementRecordsCompanion.insert(
+          id: '${userId}_${serviceId}_$monthKey',
+          userId: userId,
+          serviceId: serviceId,
+          monthKey: monthKey,
+          grossAmountCents: const Value(6000),
+          payableAmountCents: const Value(6000),
+          paidAmountCents: const Value(4000),
+          remainingAmountCents: const Value(2000),
+          carryForwardToNextMonthCents: const Value(2000),
+          status: 'partiallyPaid',
+          generatedAt: now,
+          updatedAt: now,
+          pendingSync: const Value(true),
+        ),
+      );
+  await database
+      .into(database.syncMetadataRecords)
+      .insert(
+        SyncMetadataRecordsCompanion.insert(
+          id: 'preference:currency_code',
+          entityType: 'USD',
+          lastSyncedAt: Value(now),
+        ),
+      );
 }
 
 Future<void> _insertLocalService(
@@ -185,7 +484,14 @@ class _FakeRemoteDataSource implements LedgerRemoteDataSource {
   List<Map<String, dynamic>> advances = const [];
   List<Map<String, dynamic>> payments = const [];
   List<Map<String, dynamic>> settlements = const [];
-  int? schemaVersion = 2;
+  int? schemaVersion = 3;
+  bool failOnEntryPush = false;
+  int pushedServices = 0;
+  int pushedEntries = 0;
+  int pushedAdvances = 0;
+  int pushedPayments = 0;
+  int pushedSettlements = 0;
+  PaymentTransactionRecord? lastPushedPayment;
 
   @override
   bool get isConfigured => true;
@@ -230,17 +536,31 @@ class _FakeRemoteDataSource implements LedgerRemoteDataSource {
   }
 
   @override
-  Future<void> pushAdvance(AdvancePaymentRecord row) async {}
+  Future<void> pushAdvance(AdvancePaymentRecord row) async {
+    pushedAdvances++;
+  }
 
   @override
-  Future<void> pushEntry(EntryRecord row) async {}
+  Future<void> pushEntry(EntryRecord row) async {
+    if (failOnEntryPush) {
+      throw StateError('Remote entry push failed.');
+    }
+    pushedEntries++;
+  }
 
   @override
-  Future<void> pushPayment(PaymentTransactionRecord row) async {}
+  Future<void> pushPayment(PaymentTransactionRecord row) async {
+    pushedPayments++;
+    lastPushedPayment = row;
+  }
 
   @override
-  Future<void> pushSettlement(MonthlySettlementRecord row) async {}
+  Future<void> pushSettlement(MonthlySettlementRecord row) async {
+    pushedSettlements++;
+  }
 
   @override
-  Future<void> pushService(ServiceRecord row) async {}
+  Future<void> pushService(ServiceRecord row) async {
+    pushedServices++;
+  }
 }

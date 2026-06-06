@@ -11,13 +11,15 @@ import '../../domain/entities/service_entry.dart';
 import '../../domain/entities/user_profile.dart';
 import '../../domain/repositories/ledger_repository.dart';
 import '../../domain/services/bill_calculator.dart';
+import '../../domain/services/payment_allocation_calculator.dart';
+import '../../domain/services/service_start_date_resolver.dart';
 import '../../domain/services/settlement_calculator.dart';
 import '../database/ledger_database.dart';
 import '../mappers/ledger_mappers.dart';
 import '../sync/supabase_ledger_remote_data_source.dart';
 
 class DriftLedgerRepository implements LedgerRepository {
-  static const requiredRemoteSchemaVersion = 2;
+  static const requiredRemoteSchemaVersion = 3;
 
   DriftLedgerRepository({
     required LedgerDatabase database,
@@ -37,6 +39,10 @@ class DriftLedgerRepository implements LedgerRepository {
   final LedgerRemoteDataSource _remoteDataSource;
   final BillCalculator _billCalculator;
   final SettlementCalculator _settlementCalculator;
+  final PaymentAllocationCalculator _paymentAllocationCalculator =
+      const PaymentAllocationCalculator();
+  final ServiceStartDateResolver _serviceStartDateResolver =
+      const ServiceStartDateResolver();
 
   @override
   Stream<LedgerOverview> watchOverview({
@@ -45,10 +51,7 @@ class DriftLedgerRepository implements LedgerRepository {
   }) {
     final query = _database.select(_database.serviceRecords)
       ..where(
-        (table) =>
-            table.userId.equals(userId) &
-            table.monthKey.isSmallerOrEqualValue(monthKey) &
-            table.isDeleted.equals(false),
+        (table) => table.userId.equals(userId) & table.isDeleted.equals(false),
       );
 
     return query.watch().asyncMap(
@@ -156,6 +159,7 @@ class DriftLedgerRepository implements LedgerRepository {
   @override
   Future<HouseholdService> updateService({
     required String id,
+    required String monthKey,
     required String name,
     required String description,
     required String unit,
@@ -167,6 +171,7 @@ class DriftLedgerRepository implements LedgerRepository {
       _database.serviceRecords,
     )..where((table) => table.id.equals(id))).write(
       ServiceRecordsCompanion(
+        monthKey: Value(monthKey),
         name: Value(name),
         description: Value(description),
         unit: Value(unit),
@@ -211,6 +216,10 @@ class DriftLedgerRepository implements LedgerRepository {
               .copyWith(pendingSync: true, updatedAt: DateTime.now())
               .toCompanion(),
         );
+    await _reallocatePayments(
+      serviceId: entry.serviceId,
+      monthKey: entry.monthKey,
+    );
     await _recalculateSettlement(
       serviceId: entry.serviceId,
       monthKey: entry.monthKey,
@@ -234,6 +243,10 @@ class DriftLedgerRepository implements LedgerRepository {
             pendingSync: const Value(true),
           ),
         );
+    await _reallocatePayments(
+      serviceId: advance.serviceId,
+      monthKey: advance.monthKey,
+    );
     await _recalculateSettlement(
       serviceId: advance.serviceId,
       monthKey: advance.monthKey,
@@ -258,11 +271,31 @@ class DriftLedgerRepository implements LedgerRepository {
   }
 
   @override
+  Future<List<AdvancePayment>> getAdvanceHistory({
+    required String serviceId,
+  }) async {
+    final rows =
+        await (_database.select(_database.advancePaymentRecords)
+              ..where(
+                (table) =>
+                    table.serviceId.equals(serviceId) &
+                    table.isDeleted.equals(false),
+              )
+              ..orderBy([(table) => OrderingTerm.desc(table.paidOn)]))
+            .get();
+    return rows.map((row) => row.toDomain()).toList();
+  }
+
+  @override
   Future<void> savePayment(PaymentTransaction payment) async {
     final next = payment.copyWith(pendingSync: true, updatedAt: DateTime.now());
     await _database
         .into(_database.paymentTransactionRecords)
         .insertOnConflictUpdate(next.toCompanion());
+    await _reallocatePayments(
+      serviceId: payment.serviceId,
+      monthKey: payment.monthKey,
+    );
     await _recalculateSettlement(
       serviceId: payment.serviceId,
       monthKey: payment.monthKey,
@@ -283,6 +316,10 @@ class DriftLedgerRepository implements LedgerRepository {
               )
               .toCompanion(),
         );
+    await _reallocatePayments(
+      serviceId: payment.serviceId,
+      monthKey: payment.monthKey,
+    );
     await _recalculateSettlement(
       serviceId: payment.serviceId,
       monthKey: payment.monthKey,
@@ -332,7 +369,11 @@ class DriftLedgerRepository implements LedgerRepository {
     required String serviceId,
     required String monthKey,
   }) async {
-    return _recalculateSettlement(serviceId: serviceId, monthKey: monthKey);
+    final settlement = await _recalculateSettlement(
+      serviceId: serviceId,
+      monthKey: monthKey,
+    );
+    return _applyFollowingMonthPayments(settlement);
   }
 
   @override
@@ -349,13 +390,14 @@ class DriftLedgerRepository implements LedgerRepository {
       service: service,
       advances: advances,
     );
-    final settlement = await _recalculateSettlement(
+    final calculatedSettlement = await _recalculateSettlement(
       serviceId: serviceId,
       monthKey: monthKey,
       service: service,
       advances: advances,
       baseGrossAmountCents: baseBill.grossAmountCents,
     );
+    final settlement = await _applyFollowingMonthPayments(calculatedSettlement);
     final payments = await getPayments(
       serviceId: serviceId,
       monthKey: monthKey,
@@ -513,6 +555,11 @@ class DriftLedgerRepository implements LedgerRepository {
     await _database.transaction(() async {
       for (final row in services) {
         final updatedAt = _date(row['updated_at']);
+        final storedMonthKey = row['month_key'].toString();
+        final effectiveMonthKey = _effectiveServiceMonthKey(
+          storedMonthKey: storedMonthKey,
+          description: row['description']?.toString() ?? '',
+        );
         if (!await _shouldApplyRemoteService(row['id'].toString(), updatedAt)) {
           continue;
         }
@@ -522,7 +569,7 @@ class DriftLedgerRepository implements LedgerRepository {
               ServiceRecordsCompanion.insert(
                 id: row['id'].toString(),
                 userId: row['user_id'].toString(),
-                monthKey: row['month_key'].toString(),
+                monthKey: effectiveMonthKey,
                 name: row['name'].toString(),
                 description: row['description'].toString(),
                 icon: row['icon'].toString(),
@@ -532,7 +579,7 @@ class DriftLedgerRepository implements LedgerRepository {
                 rateCents: _int(row['rate_cents']),
                 monthlyAmountCents: Value(_int(row['monthly_amount_cents'])),
                 updatedAt: updatedAt,
-                pendingSync: const Value(false),
+                pendingSync: Value(effectiveMonthKey != storedMonthKey),
                 isDeleted: Value(_bool(row['is_deleted'])),
               ),
             );
@@ -600,6 +647,13 @@ class DriftLedgerRepository implements LedgerRepository {
                 paymentDate: _date(row['payment_date']),
                 paymentMode: row['payment_mode'].toString(),
                 note: Value(row['note']?.toString() ?? ''),
+                currentMonthAmountCents: Value(
+                  _int(row['current_month_amount_cents']),
+                ),
+                previousBalanceAmountCents: Value(
+                  _int(row['previous_balance_amount_cents']),
+                ),
+                advanceAmountCents: Value(_int(row['advance_amount_cents'])),
                 createdAt: _date(row['created_at']),
                 updatedAt: updatedAt,
                 pendingSync: const Value(false),
@@ -646,6 +700,7 @@ class DriftLedgerRepository implements LedgerRepository {
             );
       }
     });
+    await syncPending();
   }
 
   Future<MonthlySettlement> _recalculateSettlement({
@@ -668,10 +723,16 @@ class DriftLedgerRepository implements LedgerRepository {
       serviceId: serviceId,
       monthKey: monthKey,
     );
-    final previousSettlement = await _loadSettlement(
-      serviceId: serviceId,
-      monthKey: _previousMonthKey(monthKey),
-    );
+    final previousSettlement =
+        _serviceStartDateResolver.canUsePreviousSettlement(
+          service: activeService,
+          selectedMonthKey: monthKey,
+        )
+        ? await _loadSettlement(
+            serviceId: serviceId,
+            monthKey: _previousMonthKey(monthKey),
+          )
+        : null;
     final settlement = _settlementCalculator.calculate(
       userId: activeService.userId,
       serviceId: serviceId,
@@ -688,6 +749,139 @@ class DriftLedgerRepository implements LedgerRepository {
         .into(_database.monthlySettlementRecords)
         .insertOnConflictUpdate(settlement.toCompanion());
     return settlement;
+  }
+
+  Future<void> _reallocatePayments({
+    required String serviceId,
+    required String monthKey,
+  }) async {
+    final service = await _loadService(serviceId, monthKey);
+    final advances = await getAdvances(
+      serviceId: serviceId,
+      monthKey: monthKey,
+    );
+    final gross = _billCalculator
+        .calculate(service: service, advances: advances)
+        .grossAmountCents;
+    final previousSettlement =
+        _serviceStartDateResolver.canUsePreviousSettlement(
+          service: service,
+          selectedMonthKey: monthKey,
+        )
+        ? await _loadSettlement(
+            serviceId: serviceId,
+            monthKey: _previousMonthKey(monthKey),
+          )
+        : null;
+    final openingPending =
+        previousSettlement?.carryForwardToNextMonthCents ?? 0;
+    final openingAdvance = previousSettlement?.advanceToNextMonthCents ?? 0;
+    final manualAdvance = advances.fold<int>(
+      0,
+      (sum, advance) => sum + advance.amountCents,
+    );
+    final availableAdvance = openingAdvance + manualAdvance;
+    final currentAdvanceUsed = availableAdvance.clamp(0, gross);
+    final currentDue = gross - currentAdvanceUsed;
+    final previousAdvanceUsed = (availableAdvance - currentAdvanceUsed).clamp(
+      0,
+      openingPending,
+    );
+    final previousDue = openingPending - previousAdvanceUsed;
+
+    final rows =
+        await (_database.select(_database.paymentTransactionRecords)
+              ..where(
+                (table) =>
+                    table.serviceId.equals(serviceId) &
+                    table.monthKey.equals(monthKey),
+              )
+              ..orderBy([
+                (table) => OrderingTerm.asc(table.paymentDate),
+                (table) => OrderingTerm.asc(table.createdAt),
+              ]))
+            .get();
+    var remainingCurrent = currentDue;
+    var remainingPrevious = previousDue;
+    final now = DateTime.now();
+    for (final row in rows) {
+      if (row.isDeleted) {
+        await (_database.update(
+          _database.paymentTransactionRecords,
+        )..where((table) => table.id.equals(row.id))).write(
+          PaymentTransactionRecordsCompanion(
+            currentMonthAmountCents: const Value(0),
+            previousBalanceAmountCents: const Value(0),
+            advanceAmountCents: const Value(0),
+            updatedAt: Value(now),
+            pendingSync: const Value(true),
+          ),
+        );
+        continue;
+      }
+      final allocation = _paymentAllocationCalculator.calculate(
+        paymentCents: row.amountCents,
+        currentMonthDueCents: remainingCurrent,
+        previousBalanceCents: remainingPrevious,
+      );
+      remainingCurrent -= allocation.currentMonthCents;
+      remainingPrevious -= allocation.previousBalanceCents;
+      await (_database.update(
+        _database.paymentTransactionRecords,
+      )..where((table) => table.id.equals(row.id))).write(
+        PaymentTransactionRecordsCompanion(
+          currentMonthAmountCents: Value(allocation.currentMonthCents),
+          previousBalanceAmountCents: Value(allocation.previousBalanceCents),
+          advanceAmountCents: Value(allocation.advanceCents),
+          updatedAt: Value(now),
+          pendingSync: const Value(true),
+        ),
+      );
+    }
+  }
+
+  Future<MonthlySettlement> _applyFollowingMonthPayments(
+    MonthlySettlement settlement,
+  ) async {
+    final followingMonth = _nextMonthKey(settlement.monthKey);
+    final rows =
+        await (_database.select(_database.paymentTransactionRecords)..where(
+              (table) =>
+                  table.serviceId.equals(settlement.serviceId) &
+                  table.monthKey.equals(followingMonth) &
+                  table.isDeleted.equals(false),
+            ))
+            .get();
+    final appliedToPrevious = rows.fold<int>(
+      0,
+      (sum, row) => sum + row.previousBalanceAmountCents,
+    );
+    if (appliedToPrevious == 0) {
+      return settlement;
+    }
+    final applied = appliedToPrevious.clamp(0, settlement.remainingAmountCents);
+    final remaining = settlement.remainingAmountCents - applied;
+    return MonthlySettlement(
+      id: settlement.id,
+      userId: settlement.userId,
+      serviceId: settlement.serviceId,
+      monthKey: settlement.monthKey,
+      grossAmountCents: settlement.grossAmountCents,
+      advanceUsedCents: settlement.advanceUsedCents,
+      previousCarryForwardCents: settlement.previousCarryForwardCents,
+      previousAdvanceCents: settlement.previousAdvanceCents,
+      payableAmountCents: settlement.payableAmountCents,
+      paidAmountCents: settlement.paidAmountCents + applied,
+      remainingAmountCents: remaining,
+      carryForwardToNextMonthCents: remaining,
+      advanceToNextMonthCents: settlement.advanceToNextMonthCents,
+      status: remaining == 0
+          ? SettlementStatus.paid
+          : SettlementStatus.partiallyPaid,
+      generatedAt: settlement.generatedAt,
+      updatedAt: settlement.updatedAt,
+      pendingSync: settlement.pendingSync,
+    );
   }
 
   Future<MonthlySettlement?> _loadSettlement({
@@ -928,16 +1122,33 @@ class DriftLedgerRepository implements LedgerRepository {
     final rows =
         await (_database.select(_database.serviceRecords)..where(
               (table) =>
-                  table.userId.equals(userId) &
-                  table.monthKey.isSmallerOrEqualValue(monthKey) &
-                  table.isDeleted.equals(false),
+                  table.userId.equals(userId) & table.isDeleted.equals(false),
             ))
             .get();
     final services = <HouseholdService>[];
     for (final row in rows) {
+      final effectiveMonthKey = _effectiveServiceMonthKey(
+        storedMonthKey: row.monthKey,
+        description: row.description,
+      );
+      if (effectiveMonthKey.compareTo(monthKey) > 0) {
+        continue;
+      }
+      if (effectiveMonthKey != row.monthKey) {
+        await (_database.update(
+          _database.serviceRecords,
+        )..where((table) => table.id.equals(row.id))).write(
+          ServiceRecordsCompanion(
+            monthKey: Value(effectiveMonthKey),
+            updatedAt: Value(DateTime.now()),
+            pendingSync: const Value(true),
+          ),
+        );
+      }
       final entries = await _loadEntries(row.id, monthKey);
       services.add(row.toDomain(entries, activeMonthKey: monthKey));
     }
+    await syncPending();
     return services;
   }
 
@@ -989,6 +1200,25 @@ class DriftLedgerRepository implements LedgerRepository {
     return '${months[month - 1]} ${parts[0]}';
   }
 
+  String _effectiveServiceMonthKey({
+    required String storedMonthKey,
+    required String description,
+  }) {
+    final match = RegExp(
+      r'Start date:\s*(\d{1,2})/(\d{1,2})/(\d{4})',
+      caseSensitive: false,
+    ).firstMatch(description);
+    if (match == null) {
+      return storedMonthKey;
+    }
+    final month = int.tryParse(match.group(2) ?? '');
+    final year = int.tryParse(match.group(3) ?? '');
+    if (month == null || year == null || month < 1 || month > 12) {
+      return storedMonthKey;
+    }
+    return '$year-${month.toString().padLeft(2, '0')}';
+  }
+
   DateTime _date(Object? value) {
     if (value is DateTime) {
       return value;
@@ -1007,6 +1237,16 @@ class DriftLedgerRepository implements LedgerRepository {
         : DateTime.now().month;
     final previous = DateTime(year, month - 1);
     return '${previous.year}-${previous.month.toString().padLeft(2, '0')}';
+  }
+
+  String _nextMonthKey(String key) {
+    final parts = key.split('-');
+    final year = int.tryParse(parts.first) ?? DateTime.now().year;
+    final month = parts.length > 1
+        ? int.tryParse(parts[1]) ?? DateTime.now().month
+        : DateTime.now().month;
+    final next = DateTime(year, month + 1);
+    return '${next.year}-${next.month.toString().padLeft(2, '0')}';
   }
 
   int _int(Object? value) {

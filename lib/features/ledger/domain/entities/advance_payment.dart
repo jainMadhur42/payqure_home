@@ -6,6 +6,7 @@ class AdvancePayment {
     required this.amountCents,
     required this.paidOn,
     this.note = '',
+    this.pendingSync = false,
   });
 
   final String id;
@@ -14,4 +15,5 @@ class AdvancePayment {
   final int amountCents;
   final DateTime paidOn;
   final String note;
+  final bool pendingSync;
 }

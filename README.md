@@ -8,7 +8,7 @@ Daily Service Ledger is a Flutter app for tracking household services, daily ent
 - Clean-ish feature split under `lib/features/ledger`.
 - Drift/SQLite for local offline data.
 - Supabase Auth and Postgres for production auth/profile/ledger sync.
-- Local demo auth mode when Supabase `--dart-define` values are not supplied.
+- Supabase Auth session persistence across app restarts.
 
 ## Supabase Setup
 
@@ -16,13 +16,13 @@ See [docs/supabase_setup_runbook.md](docs/supabase_setup_runbook.md).
 
 ## Run
 
-Local demo mode:
+Run with the configured Supabase project:
 
 ```bash
 flutter run
 ```
 
-With Supabase:
+Override Supabase for another environment:
 
 ```bash
 flutter run \

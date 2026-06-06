@@ -12,19 +12,25 @@ import '../../domain/entities/app_route.dart';
 import '../../domain/entities/household_service.dart';
 import '../../domain/entities/monthly_bill.dart';
 import '../../domain/entities/service_entry.dart';
+import '../../domain/entities/service_history_item.dart';
 import '../../domain/entities/service_template.dart';
+import '../../domain/entities/service_template_catalog.dart';
 import '../controllers/ledger_controller.dart';
-import '../widgets/add_advance_bottom_sheet.dart';
 import '../widgets/ledger_bottom_nav.dart';
 import '../widgets/ledger_screen_shared.dart';
 import '../widgets/loading_skeleton.dart';
 import '../widgets/month_selector.dart';
 
 import 'currency_screen.dart';
+import 'contacts_screen.dart';
+import 'global_history_screen.dart';
 import 'home_screen.dart';
 import 'payment_history_screen.dart';
 import 'service_detail_screen.dart';
+import 'service_template_picker_screen.dart';
 import 'settlement_detail_screen.dart';
+import 'theme_screen.dart';
+import 'unit_picker_screen.dart';
 
 class LedgerFlowScreen extends StatelessWidget {
   const LedgerFlowScreen({required this.controller, super.key});
@@ -36,12 +42,12 @@ class LedgerFlowScreen extends StatelessWidget {
     final overview = controller.overview;
     if (overview == null) {
       return Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         body: HomeLoadingSkeleton(monthKey: controller.monthKey),
         bottomNavigationBar: LedgerBottomNav(
           selectedIndex: _bottomNavIndex,
-          onSelected: (index) => _selectBottomNav(index, null),
-          onAdd: () => _showAddActions(context, null),
+          onSelected: _selectBottomNav,
+          onAdd: () => _showAddActions(context),
         ),
       );
     }
@@ -85,20 +91,30 @@ class LedgerFlowScreen extends StatelessWidget {
                   controller: controller,
                   service: selectedService,
                 ),
+        LedgerRoute.globalPaymentHistory => GlobalHistoryScreen(
+          controller: controller,
+          type: ServiceHistoryType.payment,
+        ),
+        LedgerRoute.advanceHistory => GlobalHistoryScreen(
+          controller: controller,
+          type: ServiceHistoryType.advance,
+        ),
         LedgerRoute.pdfPreview =>
           selectedService == null
               ? const _EmptyLedgerView()
               : _PdfPreview(controller: controller, service: selectedService),
+        LedgerRoute.contacts => ContactsScreen(services: overview.services),
         LedgerRoute.more => _MoreView(controller: controller),
         LedgerRoute.profile => _ProfileView(controller: controller),
         LedgerRoute.currency => CurrencyScreen(controller: controller),
+        LedgerRoute.theme => ThemeScreen(controller: controller),
         _ => const SizedBox.shrink(),
       },
       bottomNavigationBar: _showBottomNav
           ? LedgerBottomNav(
               selectedIndex: _bottomNavIndex,
-              onSelected: (index) => _selectBottomNav(index, selectedService),
-              onAdd: () => _showAddActions(context, selectedService),
+              onSelected: _selectBottomNav,
+              onAdd: () => _showAddActions(context),
             )
           : null,
     );
@@ -118,7 +134,7 @@ class LedgerFlowScreen extends StatelessWidget {
     };
   }
 
-  void _selectBottomNav(int index, HouseholdService? selectedService) {
+  void _selectBottomNav(int index) {
     switch (index) {
       case 0:
         controller.goTo(LedgerRoute.dashboard);
@@ -127,179 +143,100 @@ class LedgerFlowScreen extends StatelessWidget {
     }
   }
 
-  void _showAddActions(
-    BuildContext context,
-    HouseholdService? selectedService,
-  ) {
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.lg,
-            0,
-            AppSpacing.lg,
-            AppSpacing.lg,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Quick Actions',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              _AddActionTile(
-                icon: Icons.event_available_outlined,
-                title: 'Quick Log Today',
-                subtitle: 'Mark today’s service status quickly',
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  controller.openQuickLog(date: DateTime.now());
-                },
-              ),
-              _AddActionTile(
-                icon: Icons.edit_calendar_outlined,
-                title: 'Log Past Date',
-                subtitle: 'Update service entries for an earlier date',
-                onTap: () async {
-                  Navigator.pop(sheetContext);
-                  final now = DateTime.now();
-                  final picked = await showDatePicker(
-                    context: context,
-                    initialDate: now,
-                    firstDate: DateTime(now.year - 2),
-                    lastDate: now,
-                  );
-                  if (picked != null) {
-                    controller.openQuickLog(date: picked);
-                  }
-                },
-              ),
-              _AddActionTile(
-                icon: Icons.home_repair_service_outlined,
-                title: 'Add Service',
-                subtitle: 'Track a new household service',
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  controller.startCreateService();
-                },
-              ),
-              _AddActionTile(
-                icon: Icons.account_balance_wallet_outlined,
-                title: 'Add Advance',
-                subtitle: 'Save an advance for a service',
-                isEnabled: controller.overview?.services.isNotEmpty ?? false,
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  _pickServiceForAction(
-                    context,
-                    title: 'Add Advance',
-                    onPicked: (service) => _showAdvanceSheet(context, service),
-                  );
-                },
-              ),
-              _AddActionTile(
-                icon: Icons.description_outlined,
-                title: 'Generate Statement',
-                subtitle: 'Create a PDF statement for a service',
-                isEnabled: controller.overview?.services.isNotEmpty ?? false,
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  _pickServiceForAction(
-                    context,
-                    title: 'Generate Statement',
-                    onPicked: (service) {
-                      controller.selectedService = service;
-                      controller.openPdfPreview(source: PdfSource.bills);
-                    },
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _pickServiceForAction(
-    BuildContext context, {
-    required String title,
-    required ValueChanged<HouseholdService> onPicked,
-  }) {
-    final services =
-        controller.overview?.services ?? const <HouseholdService>[];
-    if (services.isEmpty) {
-      return;
-    }
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (pickerContext) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.lg,
-            0,
-            AppSpacing.lg,
-            AppSpacing.lg,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              ...services.map(
-                (service) => ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(
-                    serviceIcon(service.icon),
-                    color: service.templateType.color,
-                  ),
-                  title: Text(service.name),
-                  subtitle: Text(providerName(service)),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () {
-                    Navigator.pop(pickerContext);
-                    controller.selectedService = service;
-                    onPicked(service);
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showAdvanceSheet(BuildContext context, HouseholdService service) {
+  void _showAddActions(BuildContext context) {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => AddAdvanceBottomSheet(
-        controller: controller,
-        serviceId: service.id,
-        serviceName: service.name,
-        month: controller.overview?.monthLabel ?? controller.monthKey,
-        onSaved: () {
-          ScaffoldMessenger.of(context)
-            ..hideCurrentSnackBar()
-            ..showSnackBar(
-              const SnackBar(content: Text('Advance payment added.')),
-            );
-        },
+      builder: (sheetContext) => DraggableScrollableSheet(
+        initialChildSize: 0.52,
+        minChildSize: 0.40,
+        maxChildSize: 0.72,
+        expand: false,
+        builder: (context, scrollController) => Material(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(AppRadius.lg),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            children: [
+              const SizedBox(height: AppSpacing.sm),
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  AppSpacing.md,
+                  AppSpacing.lg,
+                  AppSpacing.sm,
+                ),
+                child: Text(
+                  'Quick Actions',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: ListView(
+                  controller: scrollController,
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.lg,
+                    AppSpacing.sm,
+                    AppSpacing.lg,
+                    AppSpacing.xl,
+                  ),
+                  children: [
+                    _AddActionTile(
+                      icon: Icons.event_available_outlined,
+                      title: 'Quick Log Today',
+                      subtitle: 'Mark today’s service status quickly',
+                      onTap: () {
+                        Navigator.pop(sheetContext);
+                        controller.openQuickLog(date: DateTime.now());
+                      },
+                    ),
+                    _AddActionTile(
+                      icon: Icons.edit_calendar_outlined,
+                      title: 'Log Past Date',
+                      subtitle: 'Update service entries for an earlier date',
+                      onTap: () async {
+                        Navigator.pop(sheetContext);
+                        final now = DateTime.now();
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: now,
+                          firstDate: DateTime(now.year - 2),
+                          lastDate: now,
+                        );
+                        if (picked != null) {
+                          controller.openQuickLog(date: picked);
+                        }
+                      },
+                    ),
+                    _AddActionTile(
+                      icon: Icons.home_repair_service_outlined,
+                      title: 'Add Service',
+                      subtitle: 'Track a new household service',
+                      onTap: () {
+                        Navigator.pop(sheetContext);
+                        controller.startCreateService();
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -346,14 +283,22 @@ class LedgerFlowScreen extends StatelessWidget {
             ? 'Settlement Details'
             : controller.route == LedgerRoute.paymentHistory
             ? 'Payment History'
+            : controller.route == LedgerRoute.globalPaymentHistory
+            ? 'Payment History'
+            : controller.route == LedgerRoute.advanceHistory
+            ? 'Advance History'
             : isQuickLog
             ? 'Quick Log'
             : controller.route == LedgerRoute.more
             ? 'More'
+            : controller.route == LedgerRoute.contacts
+            ? 'Contacts (${ContactsScreen.contactCount(controller.overview?.services ?? const [])})'
             : controller.route == LedgerRoute.profile
             ? 'Profile'
             : controller.route == LedgerRoute.currency
             ? 'Currency'
+            : controller.route == LedgerRoute.theme
+            ? 'Theme'
             : 'Payqure Home',
       ),
       actions: [
@@ -377,6 +322,10 @@ class LedgerFlowScreen extends StatelessWidget {
       },
       LedgerRoute.settlementDetail => LedgerRoute.calendar,
       LedgerRoute.paymentHistory => LedgerRoute.calendar,
+      LedgerRoute.globalPaymentHistory ||
+      LedgerRoute.advanceHistory ||
+      LedgerRoute.theme => LedgerRoute.more,
+      LedgerRoute.contacts => LedgerRoute.more,
       LedgerRoute.pdfPreview => switch (controller.pdfSource) {
         PdfSource.serviceDetail => LedgerRoute.calendar,
         PdfSource.bills => LedgerRoute.dashboard,
@@ -394,29 +343,25 @@ class _AddActionTile extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onTap,
-    this.isEnabled = true,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
-  final VoidCallback? onTap;
-  final bool isEnabled;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final foreground = isEnabled ? AppColors.ink : AppColors.muted;
+    final colorScheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: InkWell(
-        onTap: isEnabled ? onTap : null,
+        onTap: onTap,
         borderRadius: BorderRadius.circular(AppRadius.lg),
         child: Container(
           padding: const EdgeInsets.all(AppSpacing.md),
           decoration: BoxDecoration(
-            color: isEnabled
-                ? AppColors.background
-                : AppColors.background.withValues(alpha: 0.52),
+            color: colorScheme.surfaceContainerHigh,
             borderRadius: BorderRadius.circular(AppRadius.lg),
           ),
           child: Row(
@@ -425,16 +370,10 @@ class _AddActionTile extends StatelessWidget {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: isEnabled
-                      ? AppColors.primarySoft
-                      : AppColors.line.withValues(alpha: 0.42),
+                  color: AppColors.primarySoft,
                   borderRadius: BorderRadius.circular(AppRadius.md),
                 ),
-                child: Icon(
-                  icon,
-                  color: isEnabled ? AppColors.primary : AppColors.muted,
-                  size: 21,
-                ),
+                child: Icon(icon, color: AppColors.primary, size: 21),
               ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
@@ -446,7 +385,7 @@ class _AddActionTile extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: foreground,
+                        color: colorScheme.onSurface,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
@@ -455,15 +394,19 @@ class _AddActionTile extends StatelessWidget {
                       subtitle,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(color: AppColors.muted),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
                     ),
                   ],
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
-              Icon(Icons.chevron_right, color: AppColors.muted, size: 20),
+              Icon(
+                Icons.chevron_right,
+                color: colorScheme.onSurfaceVariant,
+                size: 20,
+              ),
             ],
           ),
         ),
@@ -989,15 +932,22 @@ class _MoreView extends StatelessWidget {
         ),
         _MoreSection(
           title: 'Records',
-          children: const [
+          children: [
+            _MoreTile(
+              icon: Icons.contacts_outlined,
+              title:
+                  'Contacts (${ContactsScreen.contactCount(controller.overview?.services ?? const [])})',
+              onTap: () => controller.goTo(LedgerRoute.contacts),
+            ),
             _MoreTile(
               icon: Icons.account_balance_wallet_outlined,
               title: 'Payment History',
+              onTap: () => controller.goTo(LedgerRoute.globalPaymentHistory),
             ),
-            _MoreTile(icon: Icons.history_outlined, title: 'Advance History'),
             _MoreTile(
-              icon: Icons.picture_as_pdf_outlined,
-              title: 'Generated Statements',
+              icon: Icons.history_outlined,
+              title: 'Advance History',
+              onTap: () => controller.goTo(LedgerRoute.advanceHistory),
             ),
           ],
         ),
@@ -1010,21 +960,16 @@ class _MoreView extends StatelessWidget {
                   'Currency (${controller.selectedCurrency.code} ${controller.selectedCurrency.symbol})',
               onTap: () => controller.goTo(LedgerRoute.currency),
             ),
-            const _MoreTile(icon: Icons.palette_outlined, title: 'Theme'),
-            const _MoreTile(
-              icon: Icons.notifications_outlined,
-              title: 'Notifications',
+            _MoreTile(
+              icon: Icons.palette_outlined,
+              title: 'Theme (${_themeLabel(controller.selectedThemeMode)})',
+              onTap: () => controller.goTo(LedgerRoute.theme),
             ),
-            const _MoreTile(icon: Icons.sync_outlined, title: 'Sync Status'),
           ],
         ),
         _MoreSection(
           title: 'Support',
           children: const [
-            _MoreTile(
-              icon: Icons.support_agent_outlined,
-              title: 'Help & Support',
-            ),
             _MoreTile(
               icon: Icons.privacy_tip_outlined,
               title: 'Privacy Policy',
@@ -1048,6 +993,14 @@ class _MoreView extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  String _themeLabel(ThemeMode mode) {
+    return switch (mode) {
+      ThemeMode.light => 'Light',
+      ThemeMode.dark => 'Dark',
+      ThemeMode.system => 'System',
+    };
   }
 }
 
@@ -1102,7 +1055,9 @@ class _MoreTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = destructive ? AppColors.danger : AppColors.ink;
+    final color = destructive
+        ? AppColors.danger
+        : Theme.of(context).colorScheme.onSurface;
     return ListTile(
       onTap: onTap,
       leading: Icon(icon, color: color, size: 22),
@@ -1115,7 +1070,10 @@ class _MoreTile extends StatelessWidget {
       ),
       trailing: destructive
           ? null
-          : const Icon(Icons.chevron_right, color: AppColors.muted),
+          : Icon(
+              Icons.chevron_right,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
       visualDensity: VisualDensity.compact,
     );
   }
@@ -1284,6 +1242,39 @@ class _CreateServiceView extends StatefulWidget {
   State<_CreateServiceView> createState() => _CreateServiceViewState();
 }
 
+class _FormSectionHeader extends StatelessWidget {
+  const _FormSectionHeader({required this.title, required this.subtitle});
+
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: AppColors.ink,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            subtitle,
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: AppColors.muted),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _CreateServiceViewState extends State<_CreateServiceView> {
   final _formKey = GlobalKey<FormState>();
   final providerNameController = TextEditingController();
@@ -1291,9 +1282,11 @@ class _CreateServiceViewState extends State<_CreateServiceView> {
   final _serviceTimeController = TextEditingController();
   final _startDateController = TextEditingController();
   final _serviceNameController = TextEditingController();
+  final _quantityController = TextEditingController(text: '1');
   final _amountController = TextEditingController();
-  ServiceTemplateType _templateType = ServiceTemplateType.quantity;
-  int _remindBeforeMinutes = 30;
+  ServiceTemplateDefinition? _selectedTemplate;
+  String? _selectedUnit;
+  int _remindBeforeMinutes = 0;
   DateTime? _startDate;
 
   @override
@@ -1309,8 +1302,12 @@ class _CreateServiceViewState extends State<_CreateServiceView> {
     _startDate = draft.startDate;
     _startDateController.text = _formatDate(draft.startDate);
     _serviceNameController.text = draft.serviceName;
+    _quantityController.text = draft.defaultQuantity.toStringAsFixed(
+      draft.defaultQuantity.truncateToDouble() == draft.defaultQuantity ? 0 : 1,
+    );
     _amountController.text = draft.amount.toStringAsFixed(0);
-    _templateType = draft.templateType;
+    _selectedTemplate = ServiceTemplateCatalog.byId(draft.serviceTemplateName);
+    _selectedUnit = draft.unit;
     _remindBeforeMinutes = draft.remindBeforeMinutes;
   }
 
@@ -1321,6 +1318,7 @@ class _CreateServiceViewState extends State<_CreateServiceView> {
     _serviceTimeController.dispose();
     _startDateController.dispose();
     _serviceNameController.dispose();
+    _quantityController.dispose();
     _amountController.dispose();
     super.dispose();
   }
@@ -1349,31 +1347,111 @@ class _CreateServiceViewState extends State<_CreateServiceView> {
                 validator: _required,
               ),
               const SizedBox(height: AppSpacing.md),
-              TextFormField(
-                controller: _serviceTimeController,
-                readOnly: true,
-                onTap: _pickServiceTime,
-                decoration: const InputDecoration(
-                  labelText: 'Time of Service Provider',
-                  suffixIcon: Icon(Icons.schedule_outlined),
+              InkWell(
+                onTap: widget.controller.isEditingService
+                    ? null
+                    : _pickServiceTemplate,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                child: InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: 'Service',
+                    suffixIcon: Icon(Icons.chevron_right),
+                  ),
+                  child: Row(
+                    children: [
+                      Text(
+                        _selectedTemplate?.emoji ?? '＋',
+                        style: const TextStyle(fontSize: 22),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Text(
+                          _selectedTemplate?.title ?? 'Choose service',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodyLarge
+                              ?.copyWith(
+                                color: _selectedTemplate == null
+                                    ? AppColors.muted
+                                    : AppColors.ink,
+                                fontWeight: FontWeight.w800,
+                              ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                validator: _required,
               ),
-              const SizedBox(height: AppSpacing.md),
-              DropdownButtonFormField<int>(
-                initialValue: _remindBeforeMinutes,
-                decoration: const InputDecoration(
-                  labelText: 'Time Before To Remind For Service',
+              if (_selectedTemplate?.isCustom == true) ...[
+                const SizedBox(height: AppSpacing.md),
+                TextFormField(
+                  controller: _serviceNameController,
+                  decoration: const InputDecoration(labelText: 'Service Name'),
+                  validator: _required,
                 ),
-                items: const [
-                  DropdownMenuItem(value: 10, child: Text('10 minutes before')),
-                  DropdownMenuItem(value: 15, child: Text('15 minutes before')),
-                  DropdownMenuItem(value: 30, child: Text('30 minutes before')),
-                  DropdownMenuItem(value: 60, child: Text('1 hour before')),
-                  DropdownMenuItem(value: 120, child: Text('2 hours before')),
-                ],
-                onChanged: (value) =>
-                    setState(() => _remindBeforeMinutes = value ?? 30),
+              ],
+              if (_selectedTemplate?.templateType ==
+                  ServiceTemplateType.quantity) ...[
+                const SizedBox(height: AppSpacing.md),
+                InkWell(
+                  onTap: _pickUnit,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Unit',
+                      suffixIcon: Icon(Icons.chevron_right),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.straighten_rounded,
+                          color: AppColors.primary,
+                          size: 21,
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: Text(
+                            _selectedUnit ?? 'Choose unit',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodyLarge
+                                ?.copyWith(
+                                  color: _selectedUnit == null
+                                      ? AppColors.muted
+                                      : AppColors.ink,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                TextFormField(
+                  controller: _quantityController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(
+                      RegExp(r'^\d*\.?\d{0,3}'),
+                    ),
+                  ],
+                  decoration: const InputDecoration(
+                    labelText: 'Default Quantity',
+                  ),
+                  validator: _quantity,
+                ),
+              ],
+              const SizedBox(height: AppSpacing.md),
+              TextFormField(
+                controller: _amountController,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: InputDecoration(labelText: _amountLabel),
+                validator: _amount,
               ),
               const SizedBox(height: AppSpacing.md),
               TextFormField(
@@ -1386,38 +1464,51 @@ class _CreateServiceViewState extends State<_CreateServiceView> {
                 ),
                 validator: _required,
               ),
-              const SizedBox(height: AppSpacing.md),
-              TextFormField(
-                controller: _serviceNameController,
-                decoration: const InputDecoration(labelText: 'Service Name'),
-                validator: _required,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              DropdownButtonFormField<ServiceTemplateType>(
-                initialValue: _templateType,
-                decoration: const InputDecoration(labelText: 'Service Type'),
-                items: ServiceTemplateType.values
-                    .map(
-                      (type) => DropdownMenuItem(
-                        value: type,
-                        child: Text(type.label),
-                      ),
-                    )
-                    .toList(),
-                onChanged: widget.controller.isEditingService
-                    ? null
-                    : (value) => setState(
-                        () => _templateType = value ?? _templateType,
-                      ),
+              const SizedBox(height: AppSpacing.xl),
+              const _FormSectionHeader(
+                title: 'Reminder',
+                subtitle:
+                    'Optional. Set a service time and choose when to be reminded.',
               ),
               const SizedBox(height: AppSpacing.md),
               TextFormField(
-                controller: _amountController,
-                keyboardType: TextInputType.number,
+                controller: _serviceTimeController,
+                readOnly: true,
+                onTap: _pickServiceTime,
                 decoration: InputDecoration(
-                  labelText: 'Amount (${CurrencyFormatter.symbol})',
+                  labelText: 'Time of Service',
+                  hintText: 'Not set',
+                  suffixIcon: _serviceTimeController.text.isEmpty
+                      ? const Icon(Icons.schedule_outlined)
+                      : IconButton(
+                          tooltip: 'Clear service time',
+                          onPressed: () {
+                            setState(() {
+                              _serviceTimeController.clear();
+                              _remindBeforeMinutes = 0;
+                            });
+                          },
+                          icon: const Icon(Icons.close),
+                        ),
                 ),
-                validator: _amount,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              DropdownButtonFormField<int>(
+                key: ValueKey(_remindBeforeMinutes),
+                initialValue: _remindBeforeMinutes,
+                decoration: const InputDecoration(labelText: 'Remind me'),
+                items: const [
+                  DropdownMenuItem(value: 0, child: Text('No reminder')),
+                  DropdownMenuItem(value: 10, child: Text('10 minutes before')),
+                  DropdownMenuItem(value: 15, child: Text('15 minutes before')),
+                  DropdownMenuItem(value: 30, child: Text('30 minutes before')),
+                  DropdownMenuItem(value: 60, child: Text('1 hour before')),
+                  DropdownMenuItem(value: 120, child: Text('2 hours before')),
+                ],
+                onChanged: _serviceTimeController.text.isEmpty
+                    ? null
+                    : (value) =>
+                          setState(() => _remindBeforeMinutes = value ?? 0),
               ),
             ],
           ),
@@ -1443,6 +1534,82 @@ class _CreateServiceViewState extends State<_CreateServiceView> {
   String? _amount(String? value) {
     final amount = double.tryParse(value ?? '');
     return amount == null || amount < 0 ? 'Enter a valid amount' : null;
+  }
+
+  String? _quantity(String? value) {
+    final quantity = double.tryParse(value ?? '');
+    return quantity == null || quantity <= 0 ? 'Enter a valid quantity' : null;
+  }
+
+  String get _amountLabel {
+    final template = _selectedTemplate;
+    if (template?.templateType == ServiceTemplateType.attendance) {
+      return 'Daily Wage (${CurrencyFormatter.symbol})';
+    }
+    if (template?.templateType == ServiceTemplateType.fixedMonthly) {
+      return 'Monthly Amount (${CurrencyFormatter.symbol})';
+    }
+    final unit = _selectedUnit ?? 'Unit';
+    return 'Price Per $unit (${CurrencyFormatter.symbol})';
+  }
+
+  List<String> get _availableUnits {
+    final units = [...?_selectedTemplate?.units];
+    final selectedUnit = _selectedUnit;
+    if (selectedUnit != null &&
+        selectedUnit.isNotEmpty &&
+        !units.contains(selectedUnit)) {
+      units.add(selectedUnit);
+    }
+    return units;
+  }
+
+  Future<void> _pickServiceTemplate() async {
+    final selected = await Navigator.of(context)
+        .push<ServiceTemplateDefinition>(
+          MaterialPageRoute(
+            builder: (_) => ServiceTemplatePickerScreen(
+              selectedTemplateId: _selectedTemplate?.id ?? '',
+            ),
+          ),
+        );
+    if (selected == null || !mounted) {
+      return;
+    }
+    setState(() {
+      _selectedTemplate = selected;
+      _selectedUnit = selected.defaultUnit;
+      _quantityController.text = selected.defaultQuantity.toStringAsFixed(
+        selected.defaultQuantity.truncateToDouble() == selected.defaultQuantity
+            ? 0
+            : 1,
+      );
+      if (!selected.isCustom) {
+        _serviceNameController.text = selected.title;
+      } else {
+        _serviceNameController.clear();
+      }
+    });
+  }
+
+  Future<void> _pickUnit() async {
+    final units = _availableUnits;
+    if (units.isEmpty) {
+      return;
+    }
+    final selected = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => UnitPickerScreen(
+          units: units,
+          selectedUnit: _selectedUnit,
+          serviceName: _selectedTemplate?.title ?? '',
+        ),
+      ),
+    );
+    if (selected == null || !mounted) {
+      return;
+    }
+    setState(() => _selectedUnit = selected);
   }
 
   Future<void> _pickServiceTime() async {
@@ -1478,6 +1645,13 @@ class _CreateServiceViewState extends State<_CreateServiceView> {
   }
 
   void _save() {
+    final template = _selectedTemplate;
+    if (template == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Choose a service first.')));
+      return;
+    }
     if (_formKey.currentState?.validate() != true) {
       return;
     }
@@ -1488,8 +1662,19 @@ class _CreateServiceViewState extends State<_CreateServiceView> {
         serviceTime: _serviceTimeController.text.trim(),
         remindBeforeMinutes: _remindBeforeMinutes,
         startDate: _startDate!,
-        serviceName: _serviceNameController.text.trim(),
-        templateType: _templateType,
+        serviceName: template.isCustom
+            ? _serviceNameController.text.trim()
+            : template.title,
+        serviceTemplateName: template.id,
+        serviceIcon: template.iconIdentifier,
+        templateType: template.templateType,
+        unit: template.templateType == ServiceTemplateType.quantity
+            ? (_selectedUnit ?? template.defaultUnit)
+            : template.defaultUnit,
+        defaultQuantity: template.templateType == ServiceTemplateType.quantity
+            ? double.tryParse(_quantityController.text) ??
+                  template.defaultQuantity
+            : 1,
         amount: double.tryParse(_amountController.text) ?? 0,
       ),
     );
@@ -1522,14 +1707,36 @@ class _CreateServiceReviewView extends StatelessWidget {
               DetailRow(label: 'Service Name', value: draft.serviceName),
               DetailRow(label: 'Provider', value: draft.providerName),
               DetailRow(label: 'Contact', value: draft.contactNumber),
-              DetailRow(label: 'Service Time', value: draft.serviceTime),
+              DetailRow(
+                label: 'Service Time',
+                value: draft.serviceTime.isEmpty
+                    ? 'Not set'
+                    : draft.serviceTime,
+              ),
               DetailRow(
                 label: 'Reminder',
-                value: '${draft.remindBeforeMinutes} minutes before',
+                value: draft.remindBeforeMinutes <= 0
+                    ? 'Not set'
+                    : '${draft.remindBeforeMinutes} minutes before',
               ),
-              DetailRow(label: 'Service Type', value: draft.templateType.label),
+              if (draft.templateType == ServiceTemplateType.quantity) ...[
+                DetailRow(label: 'Unit', value: draft.unit),
+                DetailRow(
+                  label: 'Default Quantity',
+                  value: draft.defaultQuantity.toStringAsFixed(
+                    draft.defaultQuantity.truncateToDouble() ==
+                            draft.defaultQuantity
+                        ? 0
+                        : 1,
+                  ),
+                ),
+              ],
               DetailRow(
-                label: 'Amount',
+                label: switch (draft.templateType) {
+                  ServiceTemplateType.quantity => 'Unit Price',
+                  ServiceTemplateType.attendance => 'Daily Wage',
+                  ServiceTemplateType.fixedMonthly => 'Monthly Amount',
+                },
                 value: CurrencyFormatter.rupees(draft.amount),
               ),
               DetailRow(

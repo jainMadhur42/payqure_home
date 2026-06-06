@@ -81,6 +81,12 @@ class PaymentTransactionRecords extends Table {
   DateTimeColumn get paymentDate => dateTime()();
   TextColumn get paymentMode => text()();
   TextColumn get note => text().withDefault(const Constant(''))();
+  IntColumn get currentMonthAmountCents =>
+      integer().withDefault(const Constant(0))();
+  IntColumn get previousBalanceAmountCents =>
+      integer().withDefault(const Constant(0))();
+  IntColumn get advanceAmountCents =>
+      integer().withDefault(const Constant(0))();
   DateTimeColumn get createdAt => dateTime()();
   DateTimeColumn get updatedAt => dateTime()();
   BoolColumn get pendingSync => boolean().withDefault(const Constant(false))();
@@ -146,7 +152,7 @@ class LedgerDatabase extends _$LedgerDatabase {
   LedgerDatabase.defaults() : super(driftDatabase(name: 'payqure_ledger'));
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -158,6 +164,20 @@ class LedgerDatabase extends _$LedgerDatabase {
       if (from < 3) {
         await m.createTable(paymentTransactionRecords);
         await m.createTable(monthlySettlementRecords);
+      }
+      if (from < 4) {
+        await m.addColumn(
+          paymentTransactionRecords,
+          paymentTransactionRecords.currentMonthAmountCents,
+        );
+        await m.addColumn(
+          paymentTransactionRecords,
+          paymentTransactionRecords.previousBalanceAmountCents,
+        );
+        await m.addColumn(
+          paymentTransactionRecords,
+          paymentTransactionRecords.advanceAmountCents,
+        );
       }
     },
     beforeOpen: (details) async {

@@ -3,9 +3,13 @@ import '../entities/household_service.dart';
 import '../entities/monthly_bill.dart';
 import '../entities/service_entry.dart';
 import '../entities/service_template.dart';
+import 'monthly_usage_calculator.dart';
 
 class BillCalculator {
-  const BillCalculator();
+  const BillCalculator()
+    : _monthlyUsageCalculator = const MonthlyUsageCalculator();
+
+  final MonthlyUsageCalculator _monthlyUsageCalculator;
 
   MonthlyBill calculate({
     required HouseholdService service,
@@ -19,7 +23,7 @@ class BillCalculator {
       (total, entry) => total + entry.quantity,
     );
     final gross = service.templateType == ServiceTemplateType.fixedMonthly
-        ? service.monthlyAmountCents
+        ? _fixedMonthlyGross(service)
         : deliveredEntries.fold<int>(
             0,
             (total, entry) => total + entry.amountCents,
@@ -43,5 +47,20 @@ class BillCalculator {
           BillLineItem(label: 'Less: Advance Paid', amountCents: -advanceTotal),
       ],
     );
+  }
+
+  int _fixedMonthlyGross(HouseholdService service) {
+    final parts = service.monthKey.split('-');
+    final year = int.tryParse(parts.first) ?? DateTime.now().year;
+    final month = parts.length > 1
+        ? int.tryParse(parts[1]) ?? DateTime.now().month
+        : DateTime.now().month;
+    return _monthlyUsageCalculator
+        .calculate(
+          service: service,
+          monthKey: service.monthKey,
+          cutoffDate: DateTime(year, month + 1, 0),
+        )
+        .usageAmountCents;
   }
 }

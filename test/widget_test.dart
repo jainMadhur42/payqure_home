@@ -1,4 +1,5 @@
 import 'package:drift/native.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:payqure_home/app.dart';
@@ -8,6 +9,8 @@ import 'package:payqure_home/features/ledger/data/repositories/supabase_auth_rep
 import 'package:payqure_home/features/ledger/data/services/pdf_statement_service.dart';
 import 'package:payqure_home/features/ledger/data/sync/supabase_ledger_remote_data_source.dart';
 import 'package:payqure_home/features/ledger/presentation/controllers/ledger_controller.dart';
+import 'package:payqure_home/features/ledger/presentation/screens/splash_screen.dart';
+import 'package:payqure_home/core/theme/app_theme.dart';
 
 void main() {
   testWidgets('App shows service ledger splash screen', (
@@ -22,6 +25,29 @@ void main() {
     expect(
       find.text('Track daily services. Settle monthly bills easily.'),
       findsOneWidget,
+    );
+  });
+
+  testWidgets('Splash follows dark theme colors', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        darkTheme: AppTheme.dark,
+        themeMode: ThemeMode.dark,
+        home: SplashScreen(onDone: () {}),
+      ),
+    );
+
+    final container = tester.widget<Container>(
+      find.byKey(const ValueKey('splash-background')),
+    );
+    final decoration = container.decoration! as BoxDecoration;
+    final gradient = decoration.gradient! as LinearGradient;
+
+    expect(gradient.colors.first, const Color(0xFF101117));
+    expect(
+      tester.widget<Text>(find.text('Daily Service Ledger')).style?.color,
+      AppTheme.dark.colorScheme.onSurface,
     );
   });
 
@@ -73,5 +99,32 @@ void main() {
 
     expect(controller.monthKey, nextMonthKey);
     expect(controller.overview?.services, isEmpty);
+  });
+
+  test('Controller persists selected theme mode', () async {
+    final database = LedgerDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = DriftLedgerRepository(
+      database: database,
+      remoteDataSource: SupabaseLedgerRemoteDataSource(null),
+    );
+    final controller = LedgerController(
+      authRepository: SupabaseAuthRepository(client: null),
+      ledgerRepository: repository,
+      pdfStatementService: const PdfStatementService(),
+    );
+    addTearDown(controller.dispose);
+
+    await controller.selectThemeMode(ThemeMode.dark);
+
+    final restoredController = LedgerController(
+      authRepository: SupabaseAuthRepository(client: null),
+      ledgerRepository: repository,
+      pdfStatementService: const PdfStatementService(),
+    );
+    addTearDown(restoredController.dispose);
+    await restoredController.restoreThemePreference();
+
+    expect(restoredController.selectedThemeMode, ThemeMode.dark);
   });
 }

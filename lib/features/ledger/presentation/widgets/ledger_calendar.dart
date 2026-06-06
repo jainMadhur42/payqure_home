@@ -11,6 +11,8 @@ class LedgerCalendar extends StatelessWidget {
     required this.entries,
     required this.monthKey,
     required this.onDaySelected,
+    this.serviceStartDate,
+    this.onBlockedDaySelected,
     this.selectedDay = 29,
     super.key,
   });
@@ -19,6 +21,8 @@ class LedgerCalendar extends StatelessWidget {
   final String monthKey;
   final int selectedDay;
   final ValueChanged<int> onDaySelected;
+  final DateTime? serviceStartDate;
+  final ValueChanged<DateTime>? onBlockedDaySelected;
 
   @override
   Widget build(BuildContext context) {
@@ -39,6 +43,15 @@ class LedgerCalendar extends StatelessWidget {
           final day = index + 1;
           final selected = day == selectedDay;
           final date = DateTime(monthDate.year, monthDate.month, day);
+          final isBlocked =
+              serviceStartDate != null &&
+              date.isBefore(
+                DateTime(
+                  serviceStartDate!.year,
+                  serviceStartDate!.month,
+                  serviceStartDate!.day,
+                ),
+              );
           final isFuture = date.isAfter(todayDate);
           final entry = entryByDay[day];
           final status = isFuture
@@ -49,9 +62,14 @@ class LedgerCalendar extends StatelessWidget {
             child: CalendarDayCell(
               date: date,
               status: status,
-              isSelected: selected,
+              isSelected: selected && !isBlocked,
               isToday: date == todayDate,
+              isBlocked: isBlocked,
               onTap: () {
+                if (isBlocked) {
+                  onBlockedDaySelected?.call(date);
+                  return;
+                }
                 HapticFeedback.selectionClick();
                 onDaySelected(day);
               },
@@ -122,6 +140,7 @@ class CalendarDayCell extends StatelessWidget {
     required this.status,
     required this.isSelected,
     required this.isToday,
+    this.isBlocked = false,
     required this.onTap,
     super.key,
   });
@@ -130,12 +149,17 @@ class CalendarDayCell extends StatelessWidget {
   final CalendarDayStatus status;
   final bool isSelected;
   final bool isToday;
+  final bool isBlocked;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final colors = _entryColors(status);
-    final textColor = isSelected ? Colors.white : AppColors.ink;
+    final textColor = isSelected
+        ? Colors.white
+        : isBlocked
+        ? AppColors.muted.withValues(alpha: 0.55)
+        : AppColors.ink;
 
     return InkWell(
       onTap: onTap,
@@ -148,10 +172,16 @@ class CalendarDayCell extends StatelessWidget {
           vertical: AppSpacing.xs,
         ),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary : colors.background,
+          color: isSelected
+              ? AppColors.primary
+              : isBlocked
+              ? AppColors.background
+              : colors.background,
           borderRadius: BorderRadius.circular(AppRadius.md),
           border: Border.all(
-            color: isToday
+            color: isBlocked
+                ? AppColors.line.withValues(alpha: 0.45)
+                : isToday
                 ? AppColors.primary
                 : isSelected
                 ? AppColors.primary
@@ -171,6 +201,12 @@ class CalendarDayCell extends StatelessWidget {
                 ),
               ),
             ),
+            if (isBlocked)
+              Container(
+                width: 14,
+                height: 1.5,
+                color: AppColors.muted.withValues(alpha: 0.45),
+              ),
           ],
         ),
       ),

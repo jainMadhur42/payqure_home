@@ -18,27 +18,54 @@ class SettlementCalculator {
     final previousCarryForward =
         previousSettlement?.carryForwardToNextMonthCents ?? 0;
     final previousAdvance = previousSettlement?.advanceToNextMonthCents ?? 0;
-    final totalDueBeforeAdvance = previousCarryForward + grossAmountCents;
     final availableAdvance = previousAdvance + manualAdvanceCents;
-    final advanceUsed = availableAdvance > totalDueBeforeAdvance
-        ? totalDueBeforeAdvance
-        : availableAdvance;
-    final payableBeforePayments = totalDueBeforeAdvance - advanceUsed;
+    final currentAdvanceUsed = availableAdvance.clamp(0, grossAmountCents);
+    final currentDue = grossAmountCents - currentAdvanceUsed;
+    final advanceAfterCurrent = availableAdvance - currentAdvanceUsed;
+    final previousAdvanceUsed = advanceAfterCurrent.clamp(
+      0,
+      previousCarryForward,
+    );
+    final previousDue = previousCarryForward - previousAdvanceUsed;
+    final advanceUsed = currentAdvanceUsed + previousAdvanceUsed;
+    final payableBeforePayments = currentDue + previousDue;
     final paid = payments.fold<int>(0, (sum, payment) {
       if (payment.isDeleted) {
         return sum;
       }
       return sum + payment.amountCents;
     });
-    final remainingAfterPayment = payableBeforePayments - paid;
-    final carryForward = remainingAfterPayment > 0 ? remainingAfterPayment : 0;
-    final advanceToNext = remainingAfterPayment < 0
-        ? remainingAfterPayment.abs()
-        : availableAdvance - advanceUsed;
+    final allocatedCurrent = _allocated(
+      payments,
+      (payment) => payment.currentMonthAmountCents,
+    );
+    final allocatedPrevious = _allocated(
+      payments,
+      (payment) => payment.previousBalanceAmountCents,
+    );
+    final allocatedAdvance = _allocated(
+      payments,
+      (payment) => payment.advanceAmountCents,
+    );
+    final hasAllocations =
+        allocatedCurrent + allocatedPrevious + allocatedAdvance > 0;
+    final currentPaid = hasAllocations
+        ? allocatedCurrent
+        : paid.clamp(0, currentDue);
+    final previousPaid = hasAllocations
+        ? allocatedPrevious
+        : (paid - currentPaid).clamp(0, previousDue);
+    final paymentAdvance = hasAllocations
+        ? allocatedAdvance
+        : (paid - currentPaid - previousPaid).clamp(0, paid);
+    final carryForward =
+        (currentDue - currentPaid) + (previousDue - previousPaid);
+    final advanceToNext = availableAdvance - advanceUsed + paymentAdvance;
     final status = _status(
       payableBeforePayments: payableBeforePayments,
       paidAmount: paid,
-      remainingAmount: remainingAfterPayment,
+      remainingAmount: carryForward,
+      advanceAmount: advanceToNext,
     );
 
     return MonthlySettlement(
@@ -66,16 +93,27 @@ class SettlementCalculator {
     required int payableBeforePayments,
     required int paidAmount,
     required int remainingAmount,
+    required int advanceAmount,
   }) {
-    if (remainingAmount < 0) {
+    if (advanceAmount > 0) {
       return SettlementStatus.overpaid;
     }
-    if (remainingAmount == 0) {
+    if (remainingAmount == 0 && paidAmount > 0) {
       return SettlementStatus.paid;
     }
     if (paidAmount == 0) {
       return SettlementStatus.pending;
     }
     return SettlementStatus.partiallyPaid;
+  }
+
+  int _allocated(
+    List<PaymentTransaction> payments,
+    int Function(PaymentTransaction payment) selector,
+  ) {
+    return payments.fold<int>(
+      0,
+      (sum, payment) => payment.isDeleted ? sum : sum + selector(payment),
+    );
   }
 }

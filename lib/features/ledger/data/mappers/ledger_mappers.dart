@@ -73,6 +73,7 @@ extension AdvanceRecordMapper on AdvancePaymentRecord {
       amountCents: amountCents,
       paidOn: paidOn,
       note: note,
+      pendingSync: pendingSync,
     );
   }
 }
@@ -88,6 +89,9 @@ extension PaymentTransactionRecordMapper on PaymentTransactionRecord {
       paymentDate: paymentDate,
       mode: _paymentMode(paymentMode),
       note: note,
+      currentMonthAmountCents: currentMonthAmountCents,
+      previousBalanceAmountCents: previousBalanceAmountCents,
+      advanceAmountCents: advanceAmountCents,
       updatedAt: updatedAt,
       pendingSync: pendingSync,
       isDeleted: isDeleted,
@@ -149,6 +153,9 @@ extension PaymentTransactionCompanionMapper on PaymentTransaction {
       paymentDate: paymentDate,
       paymentMode: mode.dbValue,
       note: Value(note),
+      currentMonthAmountCents: Value(currentMonthAmountCents),
+      previousBalanceAmountCents: Value(previousBalanceAmountCents),
+      advanceAmountCents: Value(advanceAmountCents),
       createdAt: updatedAt,
       updatedAt: updatedAt,
       pendingSync: Value(pendingSync),
@@ -184,7 +191,7 @@ extension MonthlySettlementCompanionMapper on MonthlySettlement {
 ServiceTemplateType _templateType(String value) {
   return ServiceTemplateType.values.firstWhere(
     (type) => type.name == value,
-    orElse: () => ServiceTemplateType.custom,
+    orElse: () => ServiceTemplateType.quantity,
   );
 }
 

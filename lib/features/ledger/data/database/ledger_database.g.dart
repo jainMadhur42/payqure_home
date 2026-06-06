@@ -2691,6 +2691,41 @@ class $PaymentTransactionRecordsTable extends PaymentTransactionRecords
     requiredDuringInsert: false,
     defaultValue: const Constant(''),
   );
+  static const VerificationMeta _currentMonthAmountCentsMeta =
+      const VerificationMeta('currentMonthAmountCents');
+  @override
+  late final GeneratedColumn<int> currentMonthAmountCents =
+      GeneratedColumn<int>(
+        'current_month_amount_cents',
+        aliasedName,
+        false,
+        type: DriftSqlType.int,
+        requiredDuringInsert: false,
+        defaultValue: const Constant(0),
+      );
+  static const VerificationMeta _previousBalanceAmountCentsMeta =
+      const VerificationMeta('previousBalanceAmountCents');
+  @override
+  late final GeneratedColumn<int> previousBalanceAmountCents =
+      GeneratedColumn<int>(
+        'previous_balance_amount_cents',
+        aliasedName,
+        false,
+        type: DriftSqlType.int,
+        requiredDuringInsert: false,
+        defaultValue: const Constant(0),
+      );
+  static const VerificationMeta _advanceAmountCentsMeta =
+      const VerificationMeta('advanceAmountCents');
+  @override
+  late final GeneratedColumn<int> advanceAmountCents = GeneratedColumn<int>(
+    'advance_amount_cents',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -2753,6 +2788,9 @@ class $PaymentTransactionRecordsTable extends PaymentTransactionRecords
     paymentDate,
     paymentMode,
     note,
+    currentMonthAmountCents,
+    previousBalanceAmountCents,
+    advanceAmountCents,
     createdAt,
     updatedAt,
     pendingSync,
@@ -2838,6 +2876,33 @@ class $PaymentTransactionRecordsTable extends PaymentTransactionRecords
         note.isAcceptableOrUnknown(data['note']!, _noteMeta),
       );
     }
+    if (data.containsKey('current_month_amount_cents')) {
+      context.handle(
+        _currentMonthAmountCentsMeta,
+        currentMonthAmountCents.isAcceptableOrUnknown(
+          data['current_month_amount_cents']!,
+          _currentMonthAmountCentsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('previous_balance_amount_cents')) {
+      context.handle(
+        _previousBalanceAmountCentsMeta,
+        previousBalanceAmountCents.isAcceptableOrUnknown(
+          data['previous_balance_amount_cents']!,
+          _previousBalanceAmountCentsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('advance_amount_cents')) {
+      context.handle(
+        _advanceAmountCentsMeta,
+        advanceAmountCents.isAcceptableOrUnknown(
+          data['advance_amount_cents']!,
+          _advanceAmountCentsMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -2913,6 +2978,18 @@ class $PaymentTransactionRecordsTable extends PaymentTransactionRecords
         DriftSqlType.string,
         data['${effectivePrefix}note'],
       )!,
+      currentMonthAmountCents: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}current_month_amount_cents'],
+      )!,
+      previousBalanceAmountCents: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}previous_balance_amount_cents'],
+      )!,
+      advanceAmountCents: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}advance_amount_cents'],
+      )!,
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -2948,6 +3025,9 @@ class PaymentTransactionRecord extends DataClass
   final DateTime paymentDate;
   final String paymentMode;
   final String note;
+  final int currentMonthAmountCents;
+  final int previousBalanceAmountCents;
+  final int advanceAmountCents;
   final DateTime createdAt;
   final DateTime updatedAt;
   final bool pendingSync;
@@ -2961,6 +3041,9 @@ class PaymentTransactionRecord extends DataClass
     required this.paymentDate,
     required this.paymentMode,
     required this.note,
+    required this.currentMonthAmountCents,
+    required this.previousBalanceAmountCents,
+    required this.advanceAmountCents,
     required this.createdAt,
     required this.updatedAt,
     required this.pendingSync,
@@ -2977,6 +3060,11 @@ class PaymentTransactionRecord extends DataClass
     map['payment_date'] = Variable<DateTime>(paymentDate);
     map['payment_mode'] = Variable<String>(paymentMode);
     map['note'] = Variable<String>(note);
+    map['current_month_amount_cents'] = Variable<int>(currentMonthAmountCents);
+    map['previous_balance_amount_cents'] = Variable<int>(
+      previousBalanceAmountCents,
+    );
+    map['advance_amount_cents'] = Variable<int>(advanceAmountCents);
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     map['pending_sync'] = Variable<bool>(pendingSync);
@@ -2994,6 +3082,9 @@ class PaymentTransactionRecord extends DataClass
       paymentDate: Value(paymentDate),
       paymentMode: Value(paymentMode),
       note: Value(note),
+      currentMonthAmountCents: Value(currentMonthAmountCents),
+      previousBalanceAmountCents: Value(previousBalanceAmountCents),
+      advanceAmountCents: Value(advanceAmountCents),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
       pendingSync: Value(pendingSync),
@@ -3015,6 +3106,13 @@ class PaymentTransactionRecord extends DataClass
       paymentDate: serializer.fromJson<DateTime>(json['paymentDate']),
       paymentMode: serializer.fromJson<String>(json['paymentMode']),
       note: serializer.fromJson<String>(json['note']),
+      currentMonthAmountCents: serializer.fromJson<int>(
+        json['currentMonthAmountCents'],
+      ),
+      previousBalanceAmountCents: serializer.fromJson<int>(
+        json['previousBalanceAmountCents'],
+      ),
+      advanceAmountCents: serializer.fromJson<int>(json['advanceAmountCents']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       pendingSync: serializer.fromJson<bool>(json['pendingSync']),
@@ -3033,6 +3131,13 @@ class PaymentTransactionRecord extends DataClass
       'paymentDate': serializer.toJson<DateTime>(paymentDate),
       'paymentMode': serializer.toJson<String>(paymentMode),
       'note': serializer.toJson<String>(note),
+      'currentMonthAmountCents': serializer.toJson<int>(
+        currentMonthAmountCents,
+      ),
+      'previousBalanceAmountCents': serializer.toJson<int>(
+        previousBalanceAmountCents,
+      ),
+      'advanceAmountCents': serializer.toJson<int>(advanceAmountCents),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'pendingSync': serializer.toJson<bool>(pendingSync),
@@ -3049,6 +3154,9 @@ class PaymentTransactionRecord extends DataClass
     DateTime? paymentDate,
     String? paymentMode,
     String? note,
+    int? currentMonthAmountCents,
+    int? previousBalanceAmountCents,
+    int? advanceAmountCents,
     DateTime? createdAt,
     DateTime? updatedAt,
     bool? pendingSync,
@@ -3062,6 +3170,11 @@ class PaymentTransactionRecord extends DataClass
     paymentDate: paymentDate ?? this.paymentDate,
     paymentMode: paymentMode ?? this.paymentMode,
     note: note ?? this.note,
+    currentMonthAmountCents:
+        currentMonthAmountCents ?? this.currentMonthAmountCents,
+    previousBalanceAmountCents:
+        previousBalanceAmountCents ?? this.previousBalanceAmountCents,
+    advanceAmountCents: advanceAmountCents ?? this.advanceAmountCents,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
     pendingSync: pendingSync ?? this.pendingSync,
@@ -3085,6 +3198,15 @@ class PaymentTransactionRecord extends DataClass
           ? data.paymentMode.value
           : this.paymentMode,
       note: data.note.present ? data.note.value : this.note,
+      currentMonthAmountCents: data.currentMonthAmountCents.present
+          ? data.currentMonthAmountCents.value
+          : this.currentMonthAmountCents,
+      previousBalanceAmountCents: data.previousBalanceAmountCents.present
+          ? data.previousBalanceAmountCents.value
+          : this.previousBalanceAmountCents,
+      advanceAmountCents: data.advanceAmountCents.present
+          ? data.advanceAmountCents.value
+          : this.advanceAmountCents,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       pendingSync: data.pendingSync.present
@@ -3105,6 +3227,9 @@ class PaymentTransactionRecord extends DataClass
           ..write('paymentDate: $paymentDate, ')
           ..write('paymentMode: $paymentMode, ')
           ..write('note: $note, ')
+          ..write('currentMonthAmountCents: $currentMonthAmountCents, ')
+          ..write('previousBalanceAmountCents: $previousBalanceAmountCents, ')
+          ..write('advanceAmountCents: $advanceAmountCents, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('pendingSync: $pendingSync, ')
@@ -3123,6 +3248,9 @@ class PaymentTransactionRecord extends DataClass
     paymentDate,
     paymentMode,
     note,
+    currentMonthAmountCents,
+    previousBalanceAmountCents,
+    advanceAmountCents,
     createdAt,
     updatedAt,
     pendingSync,
@@ -3140,6 +3268,9 @@ class PaymentTransactionRecord extends DataClass
           other.paymentDate == this.paymentDate &&
           other.paymentMode == this.paymentMode &&
           other.note == this.note &&
+          other.currentMonthAmountCents == this.currentMonthAmountCents &&
+          other.previousBalanceAmountCents == this.previousBalanceAmountCents &&
+          other.advanceAmountCents == this.advanceAmountCents &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt &&
           other.pendingSync == this.pendingSync &&
@@ -3156,6 +3287,9 @@ class PaymentTransactionRecordsCompanion
   final Value<DateTime> paymentDate;
   final Value<String> paymentMode;
   final Value<String> note;
+  final Value<int> currentMonthAmountCents;
+  final Value<int> previousBalanceAmountCents;
+  final Value<int> advanceAmountCents;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<bool> pendingSync;
@@ -3170,6 +3304,9 @@ class PaymentTransactionRecordsCompanion
     this.paymentDate = const Value.absent(),
     this.paymentMode = const Value.absent(),
     this.note = const Value.absent(),
+    this.currentMonthAmountCents = const Value.absent(),
+    this.previousBalanceAmountCents = const Value.absent(),
+    this.advanceAmountCents = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.pendingSync = const Value.absent(),
@@ -3185,6 +3322,9 @@ class PaymentTransactionRecordsCompanion
     required DateTime paymentDate,
     required String paymentMode,
     this.note = const Value.absent(),
+    this.currentMonthAmountCents = const Value.absent(),
+    this.previousBalanceAmountCents = const Value.absent(),
+    this.advanceAmountCents = const Value.absent(),
     required DateTime createdAt,
     required DateTime updatedAt,
     this.pendingSync = const Value.absent(),
@@ -3208,6 +3348,9 @@ class PaymentTransactionRecordsCompanion
     Expression<DateTime>? paymentDate,
     Expression<String>? paymentMode,
     Expression<String>? note,
+    Expression<int>? currentMonthAmountCents,
+    Expression<int>? previousBalanceAmountCents,
+    Expression<int>? advanceAmountCents,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<bool>? pendingSync,
@@ -3223,6 +3366,12 @@ class PaymentTransactionRecordsCompanion
       if (paymentDate != null) 'payment_date': paymentDate,
       if (paymentMode != null) 'payment_mode': paymentMode,
       if (note != null) 'note': note,
+      if (currentMonthAmountCents != null)
+        'current_month_amount_cents': currentMonthAmountCents,
+      if (previousBalanceAmountCents != null)
+        'previous_balance_amount_cents': previousBalanceAmountCents,
+      if (advanceAmountCents != null)
+        'advance_amount_cents': advanceAmountCents,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (pendingSync != null) 'pending_sync': pendingSync,
@@ -3240,6 +3389,9 @@ class PaymentTransactionRecordsCompanion
     Value<DateTime>? paymentDate,
     Value<String>? paymentMode,
     Value<String>? note,
+    Value<int>? currentMonthAmountCents,
+    Value<int>? previousBalanceAmountCents,
+    Value<int>? advanceAmountCents,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<bool>? pendingSync,
@@ -3255,6 +3407,11 @@ class PaymentTransactionRecordsCompanion
       paymentDate: paymentDate ?? this.paymentDate,
       paymentMode: paymentMode ?? this.paymentMode,
       note: note ?? this.note,
+      currentMonthAmountCents:
+          currentMonthAmountCents ?? this.currentMonthAmountCents,
+      previousBalanceAmountCents:
+          previousBalanceAmountCents ?? this.previousBalanceAmountCents,
+      advanceAmountCents: advanceAmountCents ?? this.advanceAmountCents,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       pendingSync: pendingSync ?? this.pendingSync,
@@ -3290,6 +3447,19 @@ class PaymentTransactionRecordsCompanion
     if (note.present) {
       map['note'] = Variable<String>(note.value);
     }
+    if (currentMonthAmountCents.present) {
+      map['current_month_amount_cents'] = Variable<int>(
+        currentMonthAmountCents.value,
+      );
+    }
+    if (previousBalanceAmountCents.present) {
+      map['previous_balance_amount_cents'] = Variable<int>(
+        previousBalanceAmountCents.value,
+      );
+    }
+    if (advanceAmountCents.present) {
+      map['advance_amount_cents'] = Variable<int>(advanceAmountCents.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -3319,6 +3489,9 @@ class PaymentTransactionRecordsCompanion
           ..write('paymentDate: $paymentDate, ')
           ..write('paymentMode: $paymentMode, ')
           ..write('note: $note, ')
+          ..write('currentMonthAmountCents: $currentMonthAmountCents, ')
+          ..write('previousBalanceAmountCents: $previousBalanceAmountCents, ')
+          ..write('advanceAmountCents: $advanceAmountCents, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('pendingSync: $pendingSync, ')
@@ -6005,6 +6178,9 @@ typedef $$PaymentTransactionRecordsTableCreateCompanionBuilder =
       required DateTime paymentDate,
       required String paymentMode,
       Value<String> note,
+      Value<int> currentMonthAmountCents,
+      Value<int> previousBalanceAmountCents,
+      Value<int> advanceAmountCents,
       required DateTime createdAt,
       required DateTime updatedAt,
       Value<bool> pendingSync,
@@ -6021,6 +6197,9 @@ typedef $$PaymentTransactionRecordsTableUpdateCompanionBuilder =
       Value<DateTime> paymentDate,
       Value<String> paymentMode,
       Value<String> note,
+      Value<int> currentMonthAmountCents,
+      Value<int> previousBalanceAmountCents,
+      Value<int> advanceAmountCents,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<bool> pendingSync,
@@ -6074,6 +6253,21 @@ class $$PaymentTransactionRecordsTableFilterComposer
 
   ColumnFilters<String> get note => $composableBuilder(
     column: $table.note,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get currentMonthAmountCents => $composableBuilder(
+    column: $table.currentMonthAmountCents,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get previousBalanceAmountCents => $composableBuilder(
+    column: $table.previousBalanceAmountCents,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get advanceAmountCents => $composableBuilder(
+    column: $table.advanceAmountCents,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -6147,6 +6341,21 @@ class $$PaymentTransactionRecordsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get currentMonthAmountCents => $composableBuilder(
+    column: $table.currentMonthAmountCents,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get previousBalanceAmountCents => $composableBuilder(
+    column: $table.previousBalanceAmountCents,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get advanceAmountCents => $composableBuilder(
+    column: $table.advanceAmountCents,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -6206,6 +6415,21 @@ class $$PaymentTransactionRecordsTableAnnotationComposer
 
   GeneratedColumn<String> get note =>
       $composableBuilder(column: $table.note, builder: (column) => column);
+
+  GeneratedColumn<int> get currentMonthAmountCents => $composableBuilder(
+    column: $table.currentMonthAmountCents,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get previousBalanceAmountCents => $composableBuilder(
+    column: $table.previousBalanceAmountCents,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get advanceAmountCents => $composableBuilder(
+    column: $table.advanceAmountCents,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -6276,6 +6500,9 @@ class $$PaymentTransactionRecordsTableTableManager
                 Value<DateTime> paymentDate = const Value.absent(),
                 Value<String> paymentMode = const Value.absent(),
                 Value<String> note = const Value.absent(),
+                Value<int> currentMonthAmountCents = const Value.absent(),
+                Value<int> previousBalanceAmountCents = const Value.absent(),
+                Value<int> advanceAmountCents = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<bool> pendingSync = const Value.absent(),
@@ -6290,6 +6517,9 @@ class $$PaymentTransactionRecordsTableTableManager
                 paymentDate: paymentDate,
                 paymentMode: paymentMode,
                 note: note,
+                currentMonthAmountCents: currentMonthAmountCents,
+                previousBalanceAmountCents: previousBalanceAmountCents,
+                advanceAmountCents: advanceAmountCents,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 pendingSync: pendingSync,
@@ -6306,6 +6536,9 @@ class $$PaymentTransactionRecordsTableTableManager
                 required DateTime paymentDate,
                 required String paymentMode,
                 Value<String> note = const Value.absent(),
+                Value<int> currentMonthAmountCents = const Value.absent(),
+                Value<int> previousBalanceAmountCents = const Value.absent(),
+                Value<int> advanceAmountCents = const Value.absent(),
                 required DateTime createdAt,
                 required DateTime updatedAt,
                 Value<bool> pendingSync = const Value.absent(),
@@ -6320,6 +6553,9 @@ class $$PaymentTransactionRecordsTableTableManager
                 paymentDate: paymentDate,
                 paymentMode: paymentMode,
                 note: note,
+                currentMonthAmountCents: currentMonthAmountCents,
+                previousBalanceAmountCents: previousBalanceAmountCents,
+                advanceAmountCents: advanceAmountCents,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 pendingSync: pendingSync,

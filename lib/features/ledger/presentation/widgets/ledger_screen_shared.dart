@@ -92,26 +92,49 @@ IconData serviceIcon(String icon) {
     'person' => Icons.person_pin_circle_outlined,
     'car' => Icons.directions_car_outlined,
     'news' => Icons.newspaper_outlined,
-    'custom' => Icons.add_circle_outline,
+    'milk' => Icons.local_drink_outlined,
+    'ironing_service' || 'ironing' => Icons.iron_outlined,
+    'laundry' => Icons.local_laundry_service_outlined,
+    'tiffin' => Icons.lunch_dining_outlined,
+    'egg' => Icons.egg_outlined,
+    'vegetable' => Icons.eco_outlined,
+    'pet_food' => Icons.pets_outlined,
+    'flower' => Icons.local_florist_outlined,
+    'maid' => Icons.cleaning_services_outlined,
+    'cook' => Icons.soup_kitchen_outlined,
+    'driver' => Icons.drive_eta_outlined,
+    'babysitter' => Icons.child_care_outlined,
+    'gardener' => Icons.yard_outlined,
+    'custom_quantity' => Icons.inventory_2_outlined,
+    'custom_attendance' => Icons.person_outline,
+    'custom_monthly' => Icons.calendar_month_outlined,
     _ => Icons.home_repair_service_outlined,
   };
 }
 
 String providerName(HouseholdService service) {
+  return serviceDescriptionValue(service, 'provider') ?? 'Not added';
+}
+
+String contactNumber(HouseholdService service) {
+  return serviceDescriptionValue(service, 'contact') ?? 'Not added';
+}
+
+String? serviceDescriptionValue(HouseholdService service, String field) {
   for (final item in service.description.split(' • ')) {
     final separator = item.indexOf(':');
     if (separator == -1) {
       continue;
     }
     final label = item.substring(0, separator).trim().toLowerCase();
-    if (label == 'provider') {
+    if (label == field.toLowerCase()) {
       final value = item.substring(separator + 1).trim();
       if (value.isNotEmpty) {
         return value;
       }
     }
   }
-  return 'Not added';
+  return null;
 }
 
 String entryStatusLabel(HouseholdService service, ServiceEntry entry) {

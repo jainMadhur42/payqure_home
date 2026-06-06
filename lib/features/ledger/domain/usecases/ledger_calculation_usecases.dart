@@ -6,6 +6,7 @@ import '../entities/service_entry.dart';
 import '../services/cutoff_date_resolver.dart';
 import '../services/entry_amount_calculator.dart';
 import '../services/monthly_usage_calculator.dart';
+import '../services/service_start_date_resolver.dart';
 import '../services/till_date_settlement_calculator.dart';
 
 class ServiceTillDateSummary {
@@ -40,10 +41,12 @@ class GetServiceTillDateSummaryUseCase {
   const GetServiceTillDateSummaryUseCase()
     : _cutoffDateResolver = const CutoffDateResolver(),
       _monthlyUsageCalculator = const MonthlyUsageCalculator(),
+      _serviceStartDateResolver = const ServiceStartDateResolver(),
       _settlementCalculator = const TillDateSettlementCalculator();
 
   final CutoffDateResolver _cutoffDateResolver;
   final MonthlyUsageCalculator _monthlyUsageCalculator;
+  final ServiceStartDateResolver _serviceStartDateResolver;
   final TillDateSettlementCalculator _settlementCalculator;
 
   ServiceTillDateSummary call({
@@ -71,7 +74,13 @@ class GetServiceTillDateSummaryUseCase {
       usageAmountCents: usage.usageAmountCents,
       advances: advances,
       payments: payments,
-      previousSettlement: previousSettlement,
+      previousSettlement:
+          _serviceStartDateResolver.canUsePreviousSettlement(
+            service: service,
+            selectedMonthKey: monthKey,
+          )
+          ? previousSettlement
+          : null,
     );
     return ServiceTillDateSummary(usage: usage, settlement: settlement);
   }

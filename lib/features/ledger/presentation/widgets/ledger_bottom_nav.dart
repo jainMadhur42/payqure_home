@@ -56,9 +56,9 @@ class AppBottomNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final leftItems = items.take(2).toList();
-    final homeItem = leftItems.first;
-    final moreItem = leftItems.last;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final homeItem = items[0];
+    final moreItem = items[1];
     return SafeArea(
       top: false,
       child: Padding(
@@ -71,12 +71,16 @@ class AppBottomNavBar extends StatelessWidget {
         child: Container(
           height: 72,
           decoration: BoxDecoration(
-            color: AppColors.surface,
+            color: Theme.of(context).colorScheme.surface,
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: AppColors.line.withValues(alpha: 0.62)),
+            border: Border.all(
+              color: isDark
+                  ? Theme.of(context).dividerColor
+                  : AppColors.line.withValues(alpha: 0.62),
+            ),
             boxShadow: [
               BoxShadow(
-                color: AppColors.ink.withValues(alpha: 0.08),
+                color: Colors.black.withValues(alpha: isDark ? 0.24 : 0.08),
                 blurRadius: 24,
                 offset: const Offset(0, 10),
               ),
@@ -160,7 +164,11 @@ class _BottomNavDestination extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = isSelected ? AppColors.primary : AppColors.muted;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final color = isSelected
+        ? (isDark ? theme.colorScheme.primary : AppColors.primary)
+        : theme.colorScheme.onSurfaceVariant;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(AppRadius.md),
@@ -175,7 +183,11 @@ class _BottomNavDestination extends StatelessWidget {
               width: 36,
               height: 32,
               decoration: BoxDecoration(
-                color: isSelected ? AppColors.primarySoft : Colors.transparent,
+                color: isSelected
+                    ? (isDark
+                          ? theme.colorScheme.primaryContainer
+                          : AppColors.primarySoft)
+                    : Colors.transparent,
                 borderRadius: BorderRadius.circular(AppRadius.sm),
               ),
               child: Icon(

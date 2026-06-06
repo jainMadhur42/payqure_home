@@ -10,31 +10,49 @@ import 'features/ledger/data/sync/supabase_ledger_remote_data_source.dart';
 import 'features/ledger/presentation/controllers/ledger_controller.dart';
 import 'features/ledger/presentation/screens/ledger_home_screen.dart';
 
-class PayqureHomeApp extends StatelessWidget {
+class PayqureHomeApp extends StatefulWidget {
   const PayqureHomeApp({this.supabaseClient, this.database, super.key});
 
   final SupabaseClient? supabaseClient;
   final LedgerDatabase? database;
 
   @override
-  Widget build(BuildContext context) {
-    final appDatabase = database ?? LedgerDatabase.defaults();
-    final authRepository = SupabaseAuthRepository(client: supabaseClient);
+  State<PayqureHomeApp> createState() => _PayqureHomeAppState();
+}
+
+class _PayqureHomeAppState extends State<PayqureHomeApp> {
+  late final LedgerController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    final appDatabase = widget.database ?? LedgerDatabase.defaults();
+    final authRepository = SupabaseAuthRepository(
+      client: widget.supabaseClient,
+    );
     final ledgerRepository = DriftLedgerRepository(
       database: appDatabase,
-      remoteDataSource: SupabaseLedgerRemoteDataSource(supabaseClient),
+      remoteDataSource: SupabaseLedgerRemoteDataSource(widget.supabaseClient),
     );
-    final controller = LedgerController(
+    _controller = LedgerController(
       authRepository: authRepository,
       ledgerRepository: ledgerRepository,
       pdfStatementService: const PdfStatementService(),
     );
+  }
 
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Daily Service Ledger',
-      theme: AppTheme.light,
-      home: LedgerHomeScreen(controller: controller),
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) => MaterialApp(
+        debugShowCheckedModeBanner: false,
+        title: 'Daily Service Ledger',
+        theme: AppTheme.light,
+        darkTheme: AppTheme.dark,
+        themeMode: _controller.selectedThemeMode,
+        home: LedgerHomeScreen(controller: _controller),
+      ),
     );
   }
 }

@@ -8,6 +8,7 @@ import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../domain/entities/home_summary.dart';
+import '../../domain/entities/service_entry.dart';
 import '../../domain/entities/service_template.dart';
 import '../controllers/ledger_controller.dart';
 import '../widgets/ledger_screen_shared.dart';
@@ -123,6 +124,19 @@ class HomeScreen extends StatelessWidget {
                         summary: summary,
                         monthLabel: overview.monthLabel,
                         onTap: () => controller.selectService(summary.service),
+                        onQuickMark: (status) =>
+                            controller.saveQuickEntryForService(
+                              service: summary.service,
+                              day: _quickLogDay(controller.monthKey),
+                              status: status,
+                            ),
+                        onCustomize: () {
+                          controller.selectService(summary.service);
+                          controller.selectDayForEdit(
+                            _quickLogDay(controller.monthKey),
+                            source: EntrySource.calendar,
+                          );
+                        },
                       ),
                     ),
                   ),
@@ -133,6 +147,19 @@ class HomeScreen extends StatelessWidget {
         },
       ),
     );
+  }
+
+  int _quickLogDay(String monthKey) {
+    final parts = monthKey.split('-');
+    final year = int.tryParse(parts.first) ?? DateTime.now().year;
+    final month = parts.length > 1
+        ? int.tryParse(parts[1]) ?? DateTime.now().month
+        : DateTime.now().month;
+    final now = DateTime.now();
+    if (year == now.year && month == now.month) {
+      return now.day;
+    }
+    return DateTime(year, month + 1, 0).day;
   }
 }
 
@@ -331,105 +358,309 @@ class _HeroMetricItem extends StatelessWidget {
   }
 }
 
-class HomeServiceCard extends StatelessWidget {
+class HomeServiceCard extends StatefulWidget {
   const HomeServiceCard({
     required this.summary,
     required this.monthLabel,
     required this.onTap,
+    required this.onQuickMark,
+    required this.onCustomize,
     super.key,
   });
 
   final HomeServiceSummary summary;
   final String monthLabel;
   final VoidCallback onTap;
+  final ValueChanged<ServiceEntryStatus> onQuickMark;
+  final VoidCallback onCustomize;
+
+  @override
+  State<HomeServiceCard> createState() => _HomeServiceCardState();
+}
+
+class _HomeServiceCardState extends State<HomeServiceCard> {
+  static const _actionSize = 50.0;
+  static const _actionSpacing = AppSpacing.sm;
+  double _revealOffset = 0;
+
+  List<_SwipeAction> get _actions {
+    final service = widget.summary.service;
+    return switch (service.templateType) {
+      ServiceTemplateType.attendance => [
+        _SwipeAction(
+          label: 'P',
+          tooltip: 'Present',
+          color: AppColors.success,
+          onTap: () => widget.onQuickMark(ServiceEntryStatus.delivered),
+        ),
+        _SwipeAction(
+          label: 'A',
+          tooltip: 'Absent',
+          color: AppColors.danger,
+          onTap: () => widget.onQuickMark(ServiceEntryStatus.notDelivered),
+        ),
+        _SwipeAction(
+          label: 'H',
+          tooltip: 'Half Day',
+          color: AppColors.warning,
+          onTap: () => widget.onQuickMark(ServiceEntryStatus.halfDay),
+        ),
+      ],
+      ServiceTemplateType.fixedMonthly => [
+        _SwipeAction(
+          label: 'D',
+          tooltip: 'Delivered',
+          color: AppColors.success,
+          onTap: () => widget.onQuickMark(ServiceEntryStatus.delivered),
+        ),
+        _SwipeAction(
+          label: 'ND',
+          tooltip: 'Not Delivered',
+          color: AppColors.danger,
+          onTap: () => widget.onQuickMark(ServiceEntryStatus.notDelivered),
+        ),
+      ],
+      _ => [
+        _SwipeAction(
+          label: 'D',
+          tooltip: 'Delivered',
+          color: AppColors.success,
+          onTap: () => widget.onQuickMark(ServiceEntryStatus.delivered),
+        ),
+        _SwipeAction(
+          label: 'ND',
+          tooltip: 'Not Delivered',
+          color: AppColors.danger,
+          onTap: () => widget.onQuickMark(ServiceEntryStatus.notDelivered),
+        ),
+        _SwipeAction(
+          label: 'C',
+          tooltip: 'Customize',
+          color: AppColors.primary,
+          onTap: widget.onCustomize,
+        ),
+      ],
+    };
+  }
+
+  double get _maxReveal =>
+      _actions.length * _actionSize + (_actions.length + 1) * _actionSpacing;
+
+  void _handleDragUpdate(DragUpdateDetails details) {
+    setState(() {
+      _revealOffset = (_revealOffset + details.delta.dx).clamp(-_maxReveal, 0);
+    });
+  }
+
+  void _handleDragEnd(DragEndDetails details) {
+    final shouldOpen =
+        details.primaryVelocity != null && details.primaryVelocity! < -250 ||
+        _revealOffset.abs() > _maxReveal * 0.42;
+    setState(() => _revealOffset = shouldOpen ? -_maxReveal : 0);
+    if (shouldOpen) {
+      HapticFeedback.selectionClick();
+    }
+  }
+
+  void _runAction(_SwipeAction action) {
+    HapticFeedback.lightImpact();
+    setState(() => _revealOffset = 0);
+    action.onTap();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final summary = widget.summary;
     final service = summary.service;
     final primaryColor = summary.advanceCents > 0
         ? AppColors.info
         : summary.remainingCents > 0
         ? AppColors.danger
-        : AppColors.success;
-    return AppCard(
-      padding: EdgeInsets.zero,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  ServiceIcon(
-                    icon: service.icon,
-                    color: service.templateType.color,
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
+        : summary.statusLabel == 'Paid'
+        ? AppColors.success
+        : AppColors.danger;
+    final revealProgress = _maxReveal == 0
+        ? 0.0
+        : (_revealOffset.abs() / _maxReveal).clamp(0.0, 1.0);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppRadius.lg),
+      child: Stack(
+        alignment: Alignment.centerRight,
+        children: [
+          Positioned.fill(
+            child: ColoredBox(
+              color: AppColors.primarySoft.withValues(alpha: 0.42),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: _actions
+                      .map(
+                        (action) => Padding(
+                          padding: const EdgeInsets.only(left: AppSpacing.sm),
+                          child: Transform.scale(
+                            scale: 0.62 + revealProgress * 0.38,
+                            child: _SwipeActionButton(
+                              action: action,
+                              onPressed: () => _runAction(action),
+                            ),
+                          ),
+                        ),
+                      )
+                      .toList(),
+                ),
+              ),
+            ),
+          ),
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOutCubic,
+            transform: Matrix4.translationValues(_revealOffset, 0, 0),
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onHorizontalDragUpdate: _handleDragUpdate,
+              onHorizontalDragEnd: _handleDragEnd,
+              child: AppCard(
+                padding: EdgeInsets.zero,
+                child: InkWell(
+                  onTap: _revealOffset != 0
+                      ? () => setState(() => _revealOffset = 0)
+                      : widget.onTap,
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppSpacing.md),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          service.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w900),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            ServiceIcon(
+                              icon: service.icon,
+                              color: service.templateType.color,
+                              serviceName: service.name,
+                              templateType: service.templateType,
+                            ),
+                            const SizedBox(width: AppSpacing.md),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    service.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.w900),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Provider: ${providerName(service)}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(color: AppColors.muted),
+                                  ),
+                                  Text(
+                                    '${widget.monthLabel} · ${service.templateType.label}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(color: AppColors.muted),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  summary.primaryLabel,
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(
+                                        color: AppColors.muted,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                ),
+                                Text(
+                                  CurrencyFormatter.rupees(
+                                    summary.primaryAmountCents / 100,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(
+                                        color: primaryColor,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Provider: ${providerName(service)}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: AppColors.muted),
-                        ),
-                        Text(
-                          '$monthLabel · ${service.templateType.label}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: AppColors.muted),
-                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        ServiceMetricLine(text: summary.metricLabel),
+                        const SizedBox(height: AppSpacing.sm),
+                        ServiceStatusChip(label: summary.statusLabel),
                       ],
                     ),
                   ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        summary.primaryLabel,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.muted,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      Text(
-                        CurrencyFormatter.rupees(
-                          summary.primaryAmountCents / 100,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(
-                              color: primaryColor,
-                              fontWeight: FontWeight.w900,
-                            ),
-                      ),
-                    ],
-                  ),
-                ],
+                ),
               ),
-              const SizedBox(height: AppSpacing.md),
-              ServiceMetricLine(text: summary.metricLabel),
-              const SizedBox(height: AppSpacing.sm),
-              ServiceStatusChip(label: summary.statusLabel),
-            ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SwipeAction {
+  const _SwipeAction({
+    required this.label,
+    required this.tooltip,
+    required this.color,
+    required this.onTap,
+  });
+
+  final String label;
+  final String tooltip;
+  final Color color;
+  final VoidCallback onTap;
+}
+
+class _SwipeActionButton extends StatelessWidget {
+  const _SwipeActionButton({required this.action, required this.onPressed});
+
+  final _SwipeAction action;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: action.tooltip,
+      child: SizedBox.square(
+        dimension: 50,
+        child: Material(
+          color: action.color,
+          shape: const CircleBorder(),
+          elevation: 3,
+          child: InkWell(
+            onTap: onPressed,
+            customBorder: const CircleBorder(),
+            child: Center(
+              child: Text(
+                action.label,
+                maxLines: 1,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
           ),
         ),
       ),
@@ -449,7 +680,7 @@ class ServiceMetricLine extends StatelessWidget {
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-        color: AppColors.ink,
+        color: Theme.of(context).colorScheme.onSurface,
         fontWeight: FontWeight.w700,
       ),
     );

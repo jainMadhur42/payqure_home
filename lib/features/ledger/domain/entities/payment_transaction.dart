@@ -11,6 +11,9 @@ class PaymentTransaction {
     required this.mode,
     required this.updatedAt,
     this.note = '',
+    this.currentMonthAmountCents = 0,
+    this.previousBalanceAmountCents = 0,
+    this.advanceAmountCents = 0,
     this.pendingSync = false,
     this.isDeleted = false,
   });
@@ -23,6 +26,9 @@ class PaymentTransaction {
   final DateTime paymentDate;
   final PaymentMode mode;
   final String note;
+  final int currentMonthAmountCents;
+  final int previousBalanceAmountCents;
+  final int advanceAmountCents;
   final DateTime updatedAt;
   final bool pendingSync;
   final bool isDeleted;
@@ -32,6 +38,9 @@ class PaymentTransaction {
     DateTime? paymentDate,
     PaymentMode? mode,
     String? note,
+    int? currentMonthAmountCents,
+    int? previousBalanceAmountCents,
+    int? advanceAmountCents,
     DateTime? updatedAt,
     bool? pendingSync,
     bool? isDeleted,
@@ -45,6 +54,11 @@ class PaymentTransaction {
       paymentDate: paymentDate ?? this.paymentDate,
       mode: mode ?? this.mode,
       note: note ?? this.note,
+      currentMonthAmountCents:
+          currentMonthAmountCents ?? this.currentMonthAmountCents,
+      previousBalanceAmountCents:
+          previousBalanceAmountCents ?? this.previousBalanceAmountCents,
+      advanceAmountCents: advanceAmountCents ?? this.advanceAmountCents,
       updatedAt: updatedAt ?? this.updatedAt,
       pendingSync: pendingSync ?? this.pendingSync,
       isDeleted: isDeleted ?? this.isDeleted,

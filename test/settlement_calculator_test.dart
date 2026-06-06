@@ -48,6 +48,13 @@ void main() {
     expect(result.advanceToNextMonthCents, 0);
   });
 
+  test('zero remaining without a payment is not marked paid', () {
+    final result = settlement(gross: 0);
+
+    expect(result.paidAmountCents, 0);
+    expect(result.status, SettlementStatus.pending);
+  });
+
   test('partial payment carries remaining due forward', () {
     final result = settlement(gross: 100000, payments: [payment(70000)]);
 
@@ -132,5 +139,41 @@ void main() {
 
     expect(offlinePayment.pendingSync, isTrue);
     expect(result.status, SettlementStatus.paid);
+  });
+
+  test('allocated payment settles current month before previous balance', () {
+    final previous = MonthlySettlement(
+      id: 'previous',
+      userId: 'user',
+      serviceId: 'service',
+      monthKey: '2026-05',
+      grossAmountCents: 90000,
+      advanceUsedCents: 0,
+      previousCarryForwardCents: 0,
+      previousAdvanceCents: 0,
+      payableAmountCents: 90000,
+      paidAmountCents: 70000,
+      remainingAmountCents: 20000,
+      carryForwardToNextMonthCents: 20000,
+      advanceToNextMonthCents: 0,
+      status: SettlementStatus.partiallyPaid,
+      generatedAt: now,
+      updatedAt: now,
+    );
+    final allocatedPayment = payment(110000).copyWith(
+      currentMonthAmountCents: 80000,
+      previousBalanceAmountCents: 20000,
+      advanceAmountCents: 10000,
+    );
+
+    final result = settlement(
+      gross: 80000,
+      payments: [allocatedPayment],
+      previous: previous,
+    );
+
+    expect(result.remainingAmountCents, 0);
+    expect(result.advanceToNextMonthCents, 10000);
+    expect(result.status, SettlementStatus.overpaid);
   });
 }

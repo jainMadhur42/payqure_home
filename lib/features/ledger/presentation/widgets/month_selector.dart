@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../controllers/ledger_controller.dart';
@@ -13,16 +12,20 @@ class MonthSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final colorScheme = theme.colorScheme;
     final months = _monthOptions(controller.monthKey);
     return Container(
       height: 36,
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: colorScheme.surface,
         borderRadius: BorderRadius.circular(18),
+        border: isDark ? Border.all(color: theme.dividerColor) : null,
         boxShadow: [
           BoxShadow(
-            color: AppColors.ink.withValues(alpha: 0.06),
+            color: Colors.black.withValues(alpha: isDark ? 0.22 : 0.06),
             blurRadius: 14,
             offset: const Offset(0, 6),
           ),
@@ -31,17 +34,28 @@ class MonthSelector extends StatelessWidget {
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: controller.monthKey,
+          dropdownColor: colorScheme.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(AppRadius.md),
-          icon: const Icon(Icons.keyboard_arrow_down, size: 18),
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            color: AppColors.ink,
+          icon: Icon(
+            Icons.keyboard_arrow_down,
+            size: 18,
+            color: colorScheme.onSurface,
+          ),
+          style: theme.textTheme.labelLarge?.copyWith(
+            color: colorScheme.onSurface,
             fontWeight: FontWeight.w800,
           ),
           items: months
               .map(
                 (key) => DropdownMenuItem(
                   value: key,
-                  child: Text(monthLabelShort(key)),
+                  child: Text(
+                    monthLabelShort(key),
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      color: colorScheme.onSurface,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 ),
               )
               .toList(),

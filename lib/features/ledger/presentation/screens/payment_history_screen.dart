@@ -373,7 +373,6 @@ Color _templateAccent(ServiceTemplateType type) {
     ServiceTemplateType.quantity => AppColors.success,
     ServiceTemplateType.attendance => AppColors.warning,
     ServiceTemplateType.fixedMonthly => AppColors.info,
-    ServiceTemplateType.custom => AppColors.primary,
   };
 }
 

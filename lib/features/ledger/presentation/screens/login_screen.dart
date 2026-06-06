@@ -310,6 +310,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   @override
   Widget build(BuildContext context) {
     return _AuthScaffold(
+      onBack: () => widget.controller.goTo(
+        widget.controller.isAuthenticated
+            ? LedgerRoute.more
+            : LedgerRoute.login,
+      ),
       title: 'Reset Password',
       subtitle: 'We will send a recovery OTP to your email',
       errorMessage: widget.controller.errorMessage,
@@ -373,6 +378,7 @@ class _ResetPasswordOtpScreenState extends State<ResetPasswordOtpScreen> {
   @override
   Widget build(BuildContext context) {
     return _AuthScaffold(
+      onBack: () => widget.controller.goTo(LedgerRoute.forgotPassword),
       title: 'Enter Recovery OTP',
       subtitle: 'Set your new password after OTP verification',
       errorMessage: widget.controller.errorMessage,
@@ -430,12 +436,14 @@ class _AuthScaffold extends StatelessWidget {
     required this.children,
     this.errorMessage,
     this.statusMessage,
+    this.onBack,
   });
 
   final String title;
   final String subtitle;
   final String? errorMessage;
   final String? statusMessage;
+  final VoidCallback? onBack;
   final List<Widget> children;
 
   @override
@@ -444,7 +452,19 @@ class _AuthScaffold extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.xl),
         children: [
-          const SizedBox(height: 24),
+          SizedBox(
+            height: 44,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: onBack == null
+                  ? null
+                  : IconButton(
+                      tooltip: 'Back',
+                      onPressed: onBack,
+                      icon: const Icon(Icons.arrow_back),
+                    ),
+            ),
+          ),
           const Center(child: AppLogoMark(size: 82)),
           const SizedBox(height: AppSpacing.xl),
           Text(

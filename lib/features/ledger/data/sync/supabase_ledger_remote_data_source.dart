@@ -48,11 +48,7 @@ class SupabaseLedgerRemoteDataSource implements LedgerRemoteDataSource {
     if (client == null) {
       return const [];
     }
-    final rows = await client
-        .from('services')
-        .select()
-        .eq('user_id', userId)
-        .lte('month_key', monthKey);
+    final rows = await client.from('services').select().eq('user_id', userId);
     return rows.cast<Map<String, dynamic>>();
   }
 
@@ -94,10 +90,10 @@ class SupabaseLedgerRemoteDataSource implements LedgerRemoteDataSource {
     if (client == null) {
       return const [];
     }
-    final rows = await client
-        .from('payment_transactions')
-        .select()
-        .eq('month_key', monthKey);
+    final rows = await client.from('payment_transactions').select().inFilter(
+      'month_key',
+      [monthKey, _nextMonthKey(monthKey)],
+    );
     return rows.cast<Map<String, dynamic>>();
   }
 
@@ -194,6 +190,9 @@ class SupabaseLedgerRemoteDataSource implements LedgerRemoteDataSource {
       'payment_date': row.paymentDate.toIso8601String(),
       'payment_mode': row.paymentMode,
       'note': row.note,
+      'current_month_amount_cents': row.currentMonthAmountCents,
+      'previous_balance_amount_cents': row.previousBalanceAmountCents,
+      'advance_amount_cents': row.advanceAmountCents,
       'created_at': row.createdAt.toIso8601String(),
       'updated_at': row.updatedAt.toIso8601String(),
       'is_deleted': row.isDeleted,
@@ -225,5 +224,15 @@ class SupabaseLedgerRemoteDataSource implements LedgerRemoteDataSource {
       'updated_at': row.updatedAt.toIso8601String(),
       'is_deleted': row.isDeleted,
     });
+  }
+
+  String _nextMonthKey(String monthKey) {
+    final parts = monthKey.split('-');
+    final year = int.tryParse(parts.first) ?? DateTime.now().year;
+    final month = parts.length > 1
+        ? int.tryParse(parts[1]) ?? DateTime.now().month
+        : DateTime.now().month;
+    final next = DateTime(year, month + 1);
+    return '${next.year}-${next.month.toString().padLeft(2, '0')}';
   }
 }

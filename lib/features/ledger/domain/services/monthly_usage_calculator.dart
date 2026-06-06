@@ -3,6 +3,7 @@ import '../entities/service_entry.dart';
 import '../entities/service_template.dart';
 import 'entry_amount_calculator.dart';
 import 'rate_resolver.dart';
+import 'service_start_date_resolver.dart';
 
 class MonthlyUsageResult {
   const MonthlyUsageResult({
@@ -23,10 +24,12 @@ class MonthlyUsageResult {
 class MonthlyUsageCalculator {
   const MonthlyUsageCalculator()
     : _entryAmountCalculator = const EntryAmountCalculator(),
-      _rateResolver = const RateResolver();
+      _rateResolver = const RateResolver(),
+      _serviceStartDateResolver = const ServiceStartDateResolver();
 
   final EntryAmountCalculator _entryAmountCalculator;
   final RateResolver _rateResolver;
+  final ServiceStartDateResolver _serviceStartDateResolver;
 
   MonthlyUsageResult calculate({
     required HouseholdService service,
@@ -47,7 +50,8 @@ class MonthlyUsageCalculator {
       );
     }
 
-    final serviceStart = _serviceStartDate(service) ?? monthStart;
+    final serviceStart =
+        _serviceStartDateResolver.resolve(service) ?? monthStart;
     final firstDay = serviceStart.isAfter(monthStart)
         ? serviceStart.day
         : monthStart.day;
@@ -104,6 +108,14 @@ class MonthlyUsageCalculator {
           .amountCents;
     }
 
+    if (service.templateType == ServiceTemplateType.fixedMonthly) {
+      amount = _fixedMonthlyAmount(
+        monthlyAmountCents: service.monthlyAmountCents,
+        deliveredDays: deliveredDays,
+        daysInMonth: monthEnd.day,
+      );
+    }
+
     return MonthlyUsageResult(
       usageAmountCents: amount,
       deliveredDays: deliveredDays,
@@ -111,6 +123,17 @@ class MonthlyUsageCalculator {
       totalQuantity: totalQuantity,
       cutoffDate: cutoffDate,
     );
+  }
+
+  int _fixedMonthlyAmount({
+    required int monthlyAmountCents,
+    required int deliveredDays,
+    required int daysInMonth,
+  }) {
+    if (monthlyAmountCents <= 0 || deliveredDays <= 0 || daysInMonth <= 0) {
+      return 0;
+    }
+    return (monthlyAmountCents * deliveredDays / daysInMonth).round();
   }
 
   ServiceEntry _defaultEntry(
@@ -141,30 +164,5 @@ class MonthlyUsageCalculator {
         ? int.tryParse(parts[1]) ?? DateTime.now().month
         : DateTime.now().month;
     return DateTime(year, month);
-  }
-
-  DateTime? _serviceStartDate(HouseholdService service) {
-    for (final item in service.description.split(' • ')) {
-      final separator = item.indexOf(':');
-      if (separator == -1) {
-        continue;
-      }
-      final label = item.substring(0, separator).trim().toLowerCase();
-      if (label != 'start date') {
-        continue;
-      }
-      final parts = item.substring(separator + 1).trim().split('/');
-      if (parts.length != 3) {
-        return null;
-      }
-      final day = int.tryParse(parts[0]);
-      final month = int.tryParse(parts[1]);
-      final year = int.tryParse(parts[2]);
-      if (day == null || month == null || year == null) {
-        return null;
-      }
-      return DateTime(year, month, day);
-    }
-    return null;
   }
 }

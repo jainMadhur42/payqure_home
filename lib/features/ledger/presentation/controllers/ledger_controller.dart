@@ -1,6 +1,7 @@
 import 'dart:async';
+import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 
 import '../../../../core/utils/id_generator.dart';
 import '../../../../core/utils/error_message_mapper.dart';
@@ -15,11 +16,15 @@ import '../../domain/entities/monthly_bill.dart';
 import '../../domain/entities/monthly_settlement.dart';
 import '../../domain/entities/payment_transaction.dart';
 import '../../domain/entities/service_entry.dart';
+import '../../domain/entities/service_history_item.dart';
 import '../../domain/entities/service_template.dart';
+import '../../domain/entities/service_template_catalog.dart';
 import '../../domain/entities/user_profile.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../../domain/repositories/ledger_repository.dart';
 import '../../domain/services/entry_amount_calculator.dart';
+import '../../domain/services/entry_value_resolver.dart';
+import '../../domain/services/service_start_date_resolver.dart';
 import '../../domain/usecases/ledger_calculation_usecases.dart';
 
 enum EntrySource { quickLog, calendar }
@@ -28,6 +33,7 @@ enum PdfSource { serviceDetail, bills }
 
 class LedgerController extends ChangeNotifier {
   static const _currencyPreferenceKey = 'currency_code';
+  static const _themePreferenceKey = 'theme_mode';
 
   LedgerController({
     required AuthRepository authRepository,
@@ -41,6 +47,7 @@ class LedgerController extends ChangeNotifier {
     this._pdfStatementService,
   ) {
     unawaited(restoreCurrencyPreference());
+    unawaited(restoreThemePreference());
     _authSubscription = _authRepository.watchProfile().listen(
       (nextProfile) => unawaited(_handleProfileChange(nextProfile)),
     );
@@ -58,6 +65,9 @@ class LedgerController extends ChangeNotifier {
       const GetServiceTillDateSummaryUseCase();
   final CalculateEntryAmountUseCase _calculateEntryAmount =
       const CalculateEntryAmountUseCase();
+  final ServiceStartDateResolver _serviceStartDateResolver =
+      const ServiceStartDateResolver();
+  final EntryValueResolver _entryValueResolver = const EntryValueResolver();
   StreamSubscription<UserProfile?>? _authSubscription;
   StreamSubscription<LedgerOverview>? _overviewSubscription;
 
@@ -79,11 +89,33 @@ class LedgerController extends ChangeNotifier {
   AddServiceDraft? addServiceDraft;
   HouseholdService? editingService;
   AppCurrency selectedCurrency = AppCurrency.usd;
+  ThemeMode selectedThemeMode = ThemeMode.system;
 
   bool get isAuthenticated => profile != null;
   bool get isEditingService => editingService != null;
 
   List<AppCurrency> get currencies => AppCurrency.values;
+
+  Future<void> restoreThemePreference() async {
+    final value = await _ledgerRepository.getLocalPreference(
+      _themePreferenceKey,
+    );
+    selectedThemeMode = switch (value) {
+      'light' => ThemeMode.light,
+      'dark' => ThemeMode.dark,
+      _ => ThemeMode.system,
+    };
+    notifyListeners();
+  }
+
+  Future<void> selectThemeMode(ThemeMode mode) async {
+    selectedThemeMode = mode;
+    notifyListeners();
+    await _ledgerRepository.saveLocalPreference(
+      key: _themePreferenceKey,
+      value: mode.name,
+    );
+  }
 
   Future<void> restoreCurrencyPreference() async {
     final code = await _ledgerRepository.getLocalPreference(
@@ -177,13 +209,11 @@ class LedgerController extends ChangeNotifier {
     if (serviceBeingEdited != null) {
       await updateService(
         service: serviceBeingEdited,
+        startMonthKey: _monthKeyForDate(draft.startDate),
         name: draft.serviceName,
         description: draft.description,
-        unit:
-            serviceBeingEdited.templateType == ServiceTemplateType.fixedMonthly
-            ? ''
-            : serviceBeingEdited.unit,
-        defaultQuantity: serviceBeingEdited.defaultQuantity,
+        unit: draft.unit,
+        defaultQuantity: draft.defaultQuantity,
         rateCents: amountCents,
         monthlyAmountCents:
             serviceBeingEdited.templateType == ServiceTemplateType.fixedMonthly
@@ -196,14 +226,13 @@ class LedgerController extends ChangeNotifier {
       return;
     }
     await createService(
+      startMonthKey: _monthKeyForDate(draft.startDate),
       name: draft.serviceName,
       description: draft.description,
-      icon: _iconForType(draft.templateType),
+      icon: draft.serviceIcon,
       templateType: draft.templateType,
-      unit: draft.templateType == ServiceTemplateType.fixedMonthly
-          ? ''
-          : 'Unit',
-      defaultQuantity: 1,
+      unit: draft.unit,
+      defaultQuantity: draft.defaultQuantity,
       rateCents: amountCents,
       monthlyAmountCents: draft.templateType == ServiceTemplateType.fixedMonthly
           ? amountCents
@@ -341,6 +370,14 @@ class LedgerController extends ChangeNotifier {
 
   void selectService(HouseholdService service) {
     selectedService = service;
+    final startDate = _serviceStartDateResolver.resolve(service);
+    final selectedMonth = _dateForMonthKey(monthKey);
+    if (startDate != null &&
+        startDate.year == selectedMonth.year &&
+        startDate.month == selectedMonth.month &&
+        selectedDay < startDate.day) {
+      selectedDay = startDate.day;
+    }
     _setRoute(LedgerRoute.calendar);
     notifyListeners();
   }
@@ -459,6 +496,7 @@ class LedgerController extends ChangeNotifier {
   }
 
   Future<void> createService({
+    String? startMonthKey,
     required String name,
     required String description,
     required String icon,
@@ -473,7 +511,7 @@ class LedgerController extends ChangeNotifier {
     await _run(() async {
       selectedService = await _ledgerRepository.createService(
         userId: userId,
-        monthKey: monthKey,
+        monthKey: startMonthKey ?? monthKey,
         name: name,
         description: description,
         icon: icon,
@@ -489,6 +527,7 @@ class LedgerController extends ChangeNotifier {
 
   Future<void> updateService({
     required HouseholdService service,
+    String? startMonthKey,
     required String name,
     required String description,
     required String unit,
@@ -500,6 +539,7 @@ class LedgerController extends ChangeNotifier {
     await _run(() async {
       selectedService = await _ledgerRepository.updateService(
         id: service.id,
+        monthKey: startMonthKey ?? service.monthKey,
         name: name,
         description: description,
         unit: unit,
@@ -530,15 +570,6 @@ class LedgerController extends ChangeNotifier {
       }
       _setRoute(LedgerRoute.dashboard);
     });
-  }
-
-  String _iconForType(ServiceTemplateType type) {
-    return switch (type) {
-      ServiceTemplateType.quantity => 'water',
-      ServiceTemplateType.attendance => 'person',
-      ServiceTemplateType.fixedMonthly => 'news',
-      ServiceTemplateType.custom => 'custom',
-    };
   }
 
   Future<void> saveSelectedEntry({
@@ -592,6 +623,7 @@ class LedgerController extends ChangeNotifier {
     required ServiceEntryStatus status,
   }) async {
     try {
+      _ensureEntryDateIsValid(service: service, day: day);
       await _saveEntryForService(
         service: service,
         day: day,
@@ -601,10 +633,38 @@ class LedgerController extends ChangeNotifier {
         rateCents: _defaultRateFor(service),
         note: '',
       );
+      await _refreshLedgerState(resetSelection: false);
     } catch (error) {
       errorMessage = ErrorMessageMapper.userFacing(error);
       notifyListeners();
     }
+  }
+
+  void _ensureEntryDateIsValid({
+    required HouseholdService service,
+    required int day,
+  }) {
+    final startDate = _serviceStartDateResolver.resolve(service);
+    if (startDate == null) {
+      return;
+    }
+    final month = _dateForMonthKey(monthKey);
+    final entryDate = DateTime(month.year, month.month, day);
+    if (entryDate.isBefore(startDate)) {
+      throw StateError(
+        'Entries cannot be added before the service start date.',
+      );
+    }
+  }
+
+  DateTime _dateForMonthKey(String key) {
+    final parts = key.split('-');
+    return DateTime(
+      int.tryParse(parts.first) ?? DateTime.now().year,
+      parts.length > 1
+          ? int.tryParse(parts[1]) ?? DateTime.now().month
+          : DateTime.now().month,
+    );
   }
 
   Future<void> clearQuickEntryForService({
@@ -759,6 +819,58 @@ class LedgerController extends ChangeNotifier {
     return _ledgerRepository.getPaymentHistory(serviceId: service.id);
   }
 
+  Future<List<ServiceHistoryItem>> loadGlobalPaymentHistory() async {
+    final services = overview?.services ?? const <HouseholdService>[];
+    final items = <ServiceHistoryItem>[];
+    for (final service in services) {
+      final payments = await _ledgerRepository.getPaymentHistory(
+        serviceId: service.id,
+      );
+      items.addAll(
+        payments.map(
+          (payment) => ServiceHistoryItem(
+            id: payment.id,
+            service: service,
+            type: ServiceHistoryType.payment,
+            amountCents: payment.amountCents,
+            date: payment.paymentDate,
+            modeLabel: payment.mode.label,
+            note: payment.note,
+            pendingSync: payment.pendingSync,
+          ),
+        ),
+      );
+    }
+    items.sort((a, b) => b.date.compareTo(a.date));
+    return items;
+  }
+
+  Future<List<ServiceHistoryItem>> loadGlobalAdvanceHistory() async {
+    final services = overview?.services ?? const <HouseholdService>[];
+    final items = <ServiceHistoryItem>[];
+    for (final service in services) {
+      final advances = await _ledgerRepository.getAdvanceHistory(
+        serviceId: service.id,
+      );
+      items.addAll(
+        advances.map(
+          (advance) => ServiceHistoryItem(
+            id: advance.id,
+            service: service,
+            type: ServiceHistoryType.advance,
+            amountCents: advance.amountCents,
+            date: advance.paidOn,
+            modeLabel: 'Advance',
+            note: advance.note,
+            pendingSync: advance.pendingSync,
+          ),
+        ),
+      );
+    }
+    items.sort((a, b) => b.date.compareTo(a.date));
+    return items;
+  }
+
   Future<MonthlyBill?> loadSelectedBill() async {
     final service = selectedService;
     if (service == null) {
@@ -836,12 +948,16 @@ class LedgerController extends ChangeNotifier {
           ? 'Advance'
           : remainingCents > 0
           ? 'Due till today'
-          : 'Paid';
+          : settlement.status == SettlementStatus.paid
+          ? 'Paid'
+          : 'Pending';
       final primaryAmountCents = advanceCents > 0
           ? advanceCents
           : remainingCents > 0
           ? remainingCents
-          : paidCents;
+          : settlement.status == SettlementStatus.paid
+          ? paidCents
+          : 0;
       summaries.add(
         HomeServiceSummary(
           service: service,
@@ -851,8 +967,8 @@ class LedgerController extends ChangeNotifier {
           paidCents: paidCents,
           remainingCents: remainingCents,
           advanceCents: advanceCents,
-          usageCents: settlement.usageAmountCents,
-          previousPendingCents: settlement.openingPendingCents,
+          usageCents: payableCents,
+          previousPendingCents: settlement.previousBalanceRemainingCents,
           advanceUsedCents: settlement.advanceUsedCents,
           deliveredDays: tillDate.usage.deliveredDays,
           missedDays: tillDate.usage.missedDays,
@@ -1131,7 +1247,10 @@ class LedgerController extends ChangeNotifier {
 
   int _defaultRateFor(HouseholdService service) {
     if (service.templateType == ServiceTemplateType.fixedMonthly) {
-      return 0;
+      return _entryValueResolver.fixedDailyRateCents(
+        service: service,
+        monthKey: monthKey,
+      );
     }
     return service.rateCents;
   }
@@ -1151,7 +1270,14 @@ class LedgerController extends ChangeNotifier {
       return '$present Present Days';
     }
     if (service.templateType == ServiceTemplateType.fixedMonthly) {
-      return 'Fixed monthly';
+      final delivered = loggedEntries
+          .where(
+            (entry) =>
+                entry.status == ServiceEntryStatus.delivered ||
+                entry.status == ServiceEntryStatus.rateChanged,
+          )
+          .length;
+      return '$delivered Delivered Days';
     }
     final total = loggedEntries.fold<double>(
       0,
@@ -1180,8 +1306,12 @@ class LedgerController extends ChangeNotifier {
       LedgerRoute.quickLog ||
       LedgerRoute.createService ||
       LedgerRoute.paymentHistory ||
+      LedgerRoute.globalPaymentHistory ||
+      LedgerRoute.advanceHistory ||
+      LedgerRoute.contacts ||
       LedgerRoute.profile ||
-      LedgerRoute.currency => 3,
+      LedgerRoute.currency ||
+      LedgerRoute.theme => 3,
       LedgerRoute.createServiceReview ||
       LedgerRoute.calendar ||
       LedgerRoute.settlementDetail => 4,
@@ -1225,7 +1355,11 @@ class AddServiceDraft {
     required this.remindBeforeMinutes,
     required this.startDate,
     required this.serviceName,
+    required this.serviceTemplateName,
+    required this.serviceIcon,
     required this.templateType,
+    required this.unit,
+    required this.defaultQuantity,
     required this.amount,
   });
 
@@ -1235,7 +1369,11 @@ class AddServiceDraft {
   final int remindBeforeMinutes;
   final DateTime startDate;
   final String serviceName;
+  final String serviceTemplateName;
+  final String serviceIcon;
   final ServiceTemplateType templateType;
+  final String unit;
+  final double defaultQuantity;
   final double amount;
 
   factory AddServiceDraft.fromService(HouseholdService service) {
@@ -1244,14 +1382,24 @@ class AddServiceDraft {
     final amountCents = service.templateType == ServiceTemplateType.fixedMonthly
         ? service.monthlyAmountCents
         : service.rateCents;
+    final template = ServiceTemplateCatalog.forService(
+      name: service.name,
+      icon: service.icon,
+      type: service.templateType,
+      templateId: fields['template'],
+    );
     return AddServiceDraft(
       providerName: fields['provider'] ?? '',
       contactNumber: fields['contact'] ?? '',
       serviceTime: fields['service time'] ?? '',
-      remindBeforeMinutes: _parseReminderMinutes(fields['reminder']) ?? 30,
+      remindBeforeMinutes: _parseReminderMinutes(fields['reminder']) ?? 0,
       startDate: startDate,
       serviceName: service.name,
+      serviceTemplateName: template.id,
+      serviceIcon: service.icon,
       templateType: service.templateType,
+      unit: service.unit.isEmpty ? template.defaultUnit : service.unit,
+      defaultQuantity: service.defaultQuantity,
       amount: amountCents / 100,
     );
   }
@@ -1260,9 +1408,11 @@ class AddServiceDraft {
     return [
       'Provider: $providerName',
       'Contact: $contactNumber',
-      'Service time: $serviceTime',
+      if (serviceTime.trim().isNotEmpty) 'Service time: $serviceTime',
       'Start date: ${startDate.day.toString().padLeft(2, '0')}/${startDate.month.toString().padLeft(2, '0')}/${startDate.year}',
-      'Reminder: $remindBeforeMinutes minutes before',
+      if (remindBeforeMinutes > 0)
+        'Reminder: $remindBeforeMinutes minutes before',
+      'Template: $serviceTemplateName',
     ].join(' • ');
   }
 }

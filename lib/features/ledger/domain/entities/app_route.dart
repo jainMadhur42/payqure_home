@@ -13,8 +13,12 @@ enum LedgerRoute {
   entry,
   settlementDetail,
   paymentHistory,
+  globalPaymentHistory,
+  advanceHistory,
   pdfPreview,
+  contacts,
   more,
   profile,
   currency,
+  theme,
 }

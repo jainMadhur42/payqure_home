@@ -71,9 +71,9 @@ class _RecordPaymentBottomSheetState extends State<RecordPaymentBottomSheet> {
           );
         }
         return DecoratedBox(
-          decoration: const BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           ),
           child: SafeArea(
             top: false,
@@ -94,7 +94,7 @@ class _RecordPaymentBottomSheetState extends State<RecordPaymentBottomSheet> {
                         width: 36,
                         height: 4,
                         decoration: BoxDecoration(
-                          color: AppColors.line,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                           borderRadius: BorderRadius.circular(99),
                         ),
                       ),
@@ -113,16 +113,16 @@ class _RecordPaymentBottomSheetState extends State<RecordPaymentBottomSheet> {
                       '${widget.service.name}  ·  ${widget.controller.overview?.monthLabel ?? widget.controller.monthKey}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodyMedium?.copyWith(color: AppColors.muted),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                     ),
                     const SizedBox(height: AppSpacing.md),
                     Text(
                       'Remaining Due',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodyMedium?.copyWith(color: AppColors.muted),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                     ),
                     Text(
                       CurrencyFormatter.rupees(remaining / 100),
@@ -198,7 +198,9 @@ class _RecordPaymentBottomSheetState extends State<RecordPaymentBottomSheet> {
                           horizontal: AppSpacing.md,
                         ),
                         decoration: BoxDecoration(
-                          border: Border.all(color: AppColors.line),
+                          border: Border.all(
+                            color: Theme.of(context).dividerColor,
+                          ),
                           borderRadius: BorderRadius.circular(AppRadius.md),
                         ),
                         child: Row(
@@ -365,9 +367,13 @@ class _PaymentModeChip extends StatelessWidget {
         alignment: Alignment.center,
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.primarySoft : AppColors.surface,
+          color: isSelected
+              ? AppColors.primarySoft
+              : Theme.of(context).colorScheme.surfaceContainerHigh,
           border: Border.all(
-            color: isSelected ? AppColors.primary : AppColors.line,
+            color: isSelected
+                ? AppColors.primary
+                : Theme.of(context).dividerColor,
           ),
           borderRadius: BorderRadius.circular(AppRadius.md),
         ),
@@ -378,7 +384,9 @@ class _PaymentModeChip extends StatelessWidget {
             maxLines: 1,
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: isSelected ? AppColors.primary : AppColors.ink,
+              color: isSelected
+                  ? AppColors.primary
+                  : Theme.of(context).colorScheme.onSurface,
               fontWeight: FontWeight.w900,
             ),
           ),

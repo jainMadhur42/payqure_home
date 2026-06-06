@@ -9,11 +9,14 @@ import '../../../../core/utils/currency_formatter.dart';
 import '../../domain/entities/household_service.dart';
 import '../../domain/entities/service_entry.dart';
 import '../../domain/entities/service_template.dart';
+import '../../domain/services/service_start_date_resolver.dart';
+import '../../domain/services/entry_value_resolver.dart';
 import '../controllers/ledger_controller.dart';
 import '../widgets/add_advance_bottom_sheet.dart';
 import '../widgets/ledger_calendar.dart';
 import '../widgets/ledger_screen_shared.dart';
 import '../widgets/record_payment_bottom_sheet.dart';
+import '../widgets/service_icon.dart';
 
 class ServiceDetailScreen extends StatelessWidget {
   const ServiceDetailScreen({
@@ -27,6 +30,7 @@ class ServiceDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final serviceStartDate = const ServiceStartDateResolver().resolve(service);
     final selectedEntry = service.entries
         .where((entry) => entry.day == controller.selectedDay)
         .firstOrNull;
@@ -48,23 +52,30 @@ class ServiceDetailScreen extends StatelessWidget {
                 entries: service.entries,
                 monthKey: service.monthKey,
                 selectedDay: controller.selectedDay,
+                serviceStartDate: serviceStartDate,
                 onDaySelected: (day) => _handleDayTap(context, day),
+                onBlockedDaySelected: (_) =>
+                    _showServiceStartMessage(context, serviceStartDate),
               ),
             ),
             const SizedBox(height: AppSpacing.md),
             const StatusLegend(),
+            const SizedBox(height: AppSpacing.md),
+            QuickEntryActionCard(
+              service: service,
+              onQuickMark: (status) =>
+                  _saveQuickAction(day: controller.selectedDay, status: status),
+              onCustomize: () => controller.selectDayForEdit(
+                controller.selectedDay,
+                source: EntrySource.calendar,
+              ),
+            ),
             const SizedBox(height: AppSpacing.md),
             SelectedDayDetailCard(
               day: controller.selectedDay,
               monthKey: service.monthKey,
               service: service,
               entry: selectedEntry,
-              onEdit: () => controller.selectDayForEdit(
-                controller.selectedDay,
-                source: EntrySource.calendar,
-              ),
-              onQuickMark: (status) =>
-                  _saveQuickAction(day: controller.selectedDay, status: status),
             ),
           ],
         ),
@@ -267,6 +278,39 @@ class ServiceDetailScreen extends StatelessWidget {
     controller.selectDayInline(day);
   }
 
+  void _showServiceStartMessage(
+    BuildContext context,
+    DateTime? serviceStartDate,
+  ) {
+    if (serviceStartDate == null) {
+      return;
+    }
+    final month = const [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ][serviceStartDate.month - 1];
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            'Service started on ${serviceStartDate.day} $month ${serviceStartDate.year}. '
+            'You cannot add an entry before this date.',
+          ),
+        ),
+      );
+  }
+
   void _saveQuickAction({
     required int day,
     required ServiceEntryStatus status,
@@ -286,8 +330,6 @@ class SelectedDayDetailCard extends StatelessWidget {
     required this.monthKey,
     required this.service,
     required this.entry,
-    required this.onEdit,
-    required this.onQuickMark,
     super.key,
   });
 
@@ -295,8 +337,6 @@ class SelectedDayDetailCard extends StatelessWidget {
   final String monthKey;
   final HouseholdService service;
   final ServiceEntry? entry;
-  final VoidCallback onEdit;
-  final ValueChanged<ServiceEntryStatus> onQuickMark;
 
   @override
   Widget build(BuildContext context) {
@@ -316,14 +356,8 @@ class SelectedDayDetailCard extends StatelessWidget {
           _EntryStatusHeader(service: service, entry: entry),
           const SizedBox(height: AppSpacing.md),
           if (entry != null && entry.status != ServiceEntryStatus.noEntry) ...[
-            _LoggedEntryDetails(service: service, entry: entry, onEdit: onEdit),
-            const SizedBox(height: AppSpacing.md),
+            _LoggedEntryDetails(service: service, entry: entry),
           ],
-          _QuickEntryActions(
-            service: service,
-            onQuickMark: onQuickMark,
-            onEdit: onEdit,
-          ),
         ],
       ),
     );
@@ -374,18 +408,17 @@ class _EntryStatusHeader extends StatelessWidget {
 }
 
 class _LoggedEntryDetails extends StatelessWidget {
-  const _LoggedEntryDetails({
-    required this.service,
-    required this.entry,
-    required this.onEdit,
-  });
+  const _LoggedEntryDetails({required this.service, required this.entry});
 
   final HouseholdService service;
   final ServiceEntry entry;
-  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
+    final resolved = const EntryValueResolver().resolve(
+      service: service,
+      entry: entry,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -394,7 +427,7 @@ class _LoggedEntryDetails extends StatelessWidget {
           if (service.templateType == ServiceTemplateType.attendance)
             DetailRow(
               label: 'Daily Wage',
-              value: CurrencyFormatter.rupees(entry.rateCents / 100),
+              value: CurrencyFormatter.rupees(resolved.rateCents / 100),
             )
           else
             DetailRow(label: 'Quantity', value: entry.quantityLabel),
@@ -402,37 +435,30 @@ class _LoggedEntryDetails extends StatelessWidget {
             DetailRow(
               label: 'Rate',
               value:
-                  '${CurrencyFormatter.rupees(entry.rateCents / 100)}${entry.unit.isEmpty ? '' : ' / ${entry.unit}'}',
+                  '${CurrencyFormatter.rupees(resolved.rateCents / 100)}${entry.unit.isEmpty ? '' : ' / ${entry.unit}'}',
             ),
         ],
         DetailRow(
           label: 'Amount',
-          value: CurrencyFormatter.rupees(entry.amountCents / 100),
+          value: CurrencyFormatter.rupees(resolved.amountCents / 100),
         ),
         if (entry.note.isNotEmpty) DetailRow(label: 'Note', value: entry.note),
-        const SizedBox(height: AppSpacing.sm),
-        Align(
-          alignment: Alignment.centerRight,
-          child: OutlinedButton(
-            onPressed: onEdit,
-            child: const Text('Edit Entry'),
-          ),
-        ),
       ],
     );
   }
 }
 
-class _QuickEntryActions extends StatelessWidget {
-  const _QuickEntryActions({
+class QuickEntryActionCard extends StatelessWidget {
+  const QuickEntryActionCard({
     required this.service,
     required this.onQuickMark,
-    required this.onEdit,
+    required this.onCustomize,
+    super.key,
   });
 
   final HouseholdService service;
   final ValueChanged<ServiceEntryStatus> onQuickMark;
-  final VoidCallback onEdit;
+  final VoidCallback onCustomize;
 
   @override
   Widget build(BuildContext context) {
@@ -443,37 +469,92 @@ class _QuickEntryActions extends StatelessWidget {
     final missedLabel = service.templateType == ServiceTemplateType.attendance
         ? 'Absent'
         : 'Not Delivered';
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Log Entry',
-          style: Theme.of(
-            context,
-          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        Wrap(
-          spacing: AppSpacing.sm,
-          runSpacing: AppSpacing.sm,
-          children: [
-            FilledButton.tonal(
-              onPressed: () => onQuickMark(ServiceEntryStatus.delivered),
-              child: Text(deliveredLabel),
-            ),
-            FilledButton.tonal(
-              onPressed: () => onQuickMark(ServiceEntryStatus.notDelivered),
-              child: Text(missedLabel),
-            ),
-            if (service.templateType == ServiceTemplateType.attendance)
-              FilledButton.tonal(
-                onPressed: () => onQuickMark(ServiceEntryStatus.halfDay),
-                child: const Text('Half Day'),
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Log Entry',
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              Expanded(
+                child: _QuickEntryButton(
+                  label: deliveredLabel,
+                  onPressed: () => onQuickMark(ServiceEntryStatus.delivered),
+                ),
               ),
-            OutlinedButton(onPressed: onEdit, child: const Text('Customize')),
-          ],
-        ),
-      ],
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: _QuickEntryButton(
+                  label: missedLabel,
+                  onPressed: () => onQuickMark(ServiceEntryStatus.notDelivered),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          if (service.templateType == ServiceTemplateType.attendance)
+            Row(
+              children: [
+                Expanded(
+                  child: _QuickEntryButton(
+                    label: 'Half Day',
+                    onPressed: () => onQuickMark(ServiceEntryStatus.halfDay),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: _QuickEntryButton(
+                    label: 'Customize',
+                    onPressed: onCustomize,
+                    outlined: true,
+                  ),
+                ),
+              ],
+            )
+          else
+            _QuickEntryButton(
+              label: 'Customize',
+              onPressed: onCustomize,
+              outlined: true,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuickEntryButton extends StatelessWidget {
+  const _QuickEntryButton({
+    required this.label,
+    required this.onPressed,
+    this.outlined = false,
+  });
+
+  final String label;
+  final VoidCallback onPressed;
+  final bool outlined;
+
+  @override
+  Widget build(BuildContext context) {
+    final labelWidget = Text(
+      label,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      textAlign: TextAlign.center,
+    );
+    return SizedBox(
+      width: double.infinity,
+      height: 48,
+      child: outlined
+          ? OutlinedButton(onPressed: onPressed, child: labelWidget)
+          : FilledButton.tonal(onPressed: onPressed, child: labelWidget),
     );
   }
 }
@@ -492,11 +573,15 @@ class _StickyActionBarState extends State<_StickyActionBar> {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(AppRadius.lg),
         boxShadow: [
           BoxShadow(
-            color: AppColors.ink.withValues(alpha: 0.08),
+            color: Colors.black.withValues(
+              alpha: Theme.of(context).brightness == Brightness.dark
+                  ? 0.24
+                  : 0.08,
+            ),
             blurRadius: 18,
             offset: const Offset(0, -4),
           ),
@@ -535,7 +620,7 @@ class _ActionSheetGroup extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: AppColors.background,
+        color: Theme.of(context).colorScheme.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(AppRadius.lg),
       ),
       child: Column(children: children),
@@ -558,7 +643,9 @@ class _ActionSheetTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = destructive ? AppColors.danger : AppColors.ink;
+    final color = destructive
+        ? AppColors.danger
+        : Theme.of(context).colorScheme.onSurface;
     return ListTile(
       leading: Icon(icon, color: color),
       title: Text(
@@ -570,7 +657,10 @@ class _ActionSheetTile extends StatelessWidget {
       ),
       trailing: onTap == null
           ? null
-          : const Icon(Icons.chevron_right, color: AppColors.muted),
+          : Icon(
+              Icons.chevron_right,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
       onTap: onTap,
     );
   }
@@ -647,28 +737,49 @@ class ServiceDetailSummaryCard extends StatelessWidget {
         final dueLabel = _isCurrentMonth(controller.monthKey)
             ? 'Due till today'
             : 'Monthly Due';
+        final currentMonthRemaining =
+            settlement?.currentMonthRemainingCents ?? 0;
+        final previousBalance = settlement?.previousBalanceRemainingCents ?? 0;
+        final advanceApplied = settlement?.advanceUsedCents ?? 0;
+        final paidThisMonth = settlement?.paidThisMonthCents ?? 0;
         return AppCard(
           padding: const EdgeInsets.all(AppSpacing.md),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Text(
-                      service.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: AppColors.ink,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                  SummaryChip(
-                    label: service.templateType.label,
-                    value: '',
+                  ServiceIcon(
+                    icon: service.icon,
                     color: service.templateType.color,
+                    serviceName: service.name,
+                    templateType: service.templateType,
+                    size: 52,
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          service.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(
+                                color: Theme.of(context).colorScheme.onSurface,
+                                fontWeight: FontWeight.w900,
+                              ),
+                        ),
+                        const SizedBox(height: AppSpacing.xs),
+                        SummaryChip(
+                          label: service.templateType.label,
+                          value: '',
+                          color: service.templateType.color,
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -685,6 +796,44 @@ class ServiceDetailSummaryCard extends StatelessWidget {
                   ),
                   Expanded(
                     child: _StatementMetric(label: 'Activity', value: metric),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.md),
+              const Divider(height: 1),
+              const SizedBox(height: AppSpacing.md),
+              Row(
+                children: [
+                  Expanded(
+                    child: _StatementMetric(
+                      label: 'Current month',
+                      value: CurrencyFormatter.rupees(
+                        currentMonthRemaining / 100,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: _StatementMetric(
+                      label: 'Previous balance',
+                      value: CurrencyFormatter.rupees(previousBalance / 100),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Row(
+                children: [
+                  Expanded(
+                    child: _StatementMetric(
+                      label: 'Advance applied',
+                      value: CurrencyFormatter.rupees(advanceApplied / 100),
+                    ),
+                  ),
+                  Expanded(
+                    child: _StatementMetric(
+                      label: 'Paid this month',
+                      value: CurrencyFormatter.rupees(paidThisMonth / 100),
+                    ),
                   ),
                 ],
               ),
