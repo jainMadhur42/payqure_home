@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../../common/widgets/app_card.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -117,7 +118,7 @@ class PaymentHistoryScreen extends StatelessWidget {
                       (payment) => _PaymentTimelineTile(
                         isLast: payment == entry.value.last,
                         payment: payment,
-                        onView: () => _showPaymentDetails(context, payment),
+                        onView: () => controller.openPaymentDetail(payment),
                         onEdit: () => _showEditPaymentSheet(context, payment),
                         onDelete: () => controller.deletePayment(payment),
                       ),
@@ -162,42 +163,6 @@ class PaymentHistoryScreen extends StatelessWidget {
     );
   }
 
-  void _showPaymentDetails(BuildContext context, PaymentTransaction payment) {
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (_) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                CurrencyFormatter.rupees(payment.amountCents / 100),
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                '${payment.mode.label} · ${fullDateLabel(payment.paymentDate.day, payment.monthKey)}',
-              ),
-              if (payment.note.isNotEmpty) ...[
-                const SizedBox(height: AppSpacing.md),
-                Text(payment.note),
-              ],
-              if (payment.pendingSync) ...[
-                const SizedBox(height: AppSpacing.md),
-                const StatusPill(label: 'Pending Sync'),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   void _showRecordPaymentSheet(BuildContext context) {
     showModalBottomSheet<void>(
       context: context,
@@ -224,7 +189,7 @@ class PaymentHistoryScreen extends StatelessWidget {
   }
 }
 
-class _PaymentTimelineTile extends StatelessWidget {
+class _PaymentTimelineTile extends StatefulWidget {
   const _PaymentTimelineTile({
     required this.isLast,
     required this.payment,
@@ -240,107 +205,204 @@ class _PaymentTimelineTile extends StatelessWidget {
   final VoidCallback onDelete;
 
   @override
+  State<_PaymentTimelineTile> createState() => _PaymentTimelineTileState();
+}
+
+class _PaymentTimelineTileState extends State<_PaymentTimelineTile> {
+  static const _actionSize = 50.0;
+  static const _maxReveal = _actionSize + AppSpacing.md;
+  double _revealOffset = 0;
+
+  void _handleDragUpdate(DragUpdateDetails details) {
+    setState(() {
+      _revealOffset = (_revealOffset + details.delta.dx).clamp(-_maxReveal, 0);
+    });
+  }
+
+  void _handleDragEnd(DragEndDetails details) {
+    final shouldOpen =
+        details.primaryVelocity != null && details.primaryVelocity! < -250 ||
+        _revealOffset.abs() > _maxReveal * 0.42;
+    setState(() => _revealOffset = shouldOpen ? -_maxReveal : 0);
+    if (shouldOpen) {
+      HapticFeedback.selectionClick();
+    }
+  }
+
+  void _deleteFromSwipe() {
+    HapticFeedback.lightImpact();
+    setState(() => _revealOffset = 0);
+    _confirmDelete(context);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Column(
-          children: [
-            Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                color: _modeColor(payment.mode).withValues(alpha: 0.12),
-                shape: BoxShape.circle,
+    final payment = widget.payment;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppRadius.lg),
+      child: Stack(
+        alignment: Alignment.centerRight,
+        children: [
+          Positioned.fill(
+            child: Padding(
+              padding: const EdgeInsets.only(
+                right: AppSpacing.xs,
+                bottom: AppSpacing.lg,
               ),
-              child: Icon(
-                Icons.account_balance_wallet_outlined,
-                color: _modeColor(payment.mode),
-                size: 15,
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: SizedBox.square(
+                  dimension: _actionSize,
+                  child: Material(
+                    color: AppColors.danger,
+                    shape: const CircleBorder(),
+                    child: InkWell(
+                      customBorder: const CircleBorder(),
+                      onTap: _deleteFromSwipe,
+                      child: const Icon(
+                        Icons.delete_outline,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
-            if (!isLast) Container(width: 2, height: 42, color: AppColors.line),
-          ],
-        ),
-        const SizedBox(width: AppSpacing.md),
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: AppSpacing.lg),
-            child: Row(
-              children: [
-                Expanded(
-                  child: InkWell(
-                    onTap: onView,
-                    borderRadius: BorderRadius.circular(AppRadius.md),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: AppSpacing.xs,
+          ),
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOutCubic,
+            transform: Matrix4.translationValues(_revealOffset, 0, 0),
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onHorizontalDragUpdate: _handleDragUpdate,
+              onHorizontalDragEnd: _handleDragEnd,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Column(
+                    children: [
+                      Container(
+                        width: 28,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          color: _modeColor(
+                            payment.mode,
+                          ).withValues(alpha: 0.12),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.account_balance_wallet_outlined,
+                          color: _modeColor(payment.mode),
+                          size: 15,
+                        ),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      if (!widget.isLast)
+                        Container(width: 2, height: 42, color: AppColors.line),
+                    ],
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+                      child: Row(
                         children: [
-                          Text(
-                            fullDateLabel(
-                              payment.paymentDate.day,
-                              payment.monthKey,
-                            ),
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(
-                                  color: AppColors.muted,
-                                  fontWeight: FontWeight.w700,
+                          Expanded(
+                            child: InkWell(
+                              onTap: _revealOffset != 0
+                                  ? () => setState(() => _revealOffset = 0)
+                                  : widget.onView,
+                              borderRadius: BorderRadius.circular(AppRadius.md),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: AppSpacing.xs,
                                 ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            payment.mode.label,
-                            style: Theme.of(context).textTheme.labelLarge
-                                ?.copyWith(fontWeight: FontWeight.w800),
-                          ),
-                          if (payment.pendingSync)
-                            Text(
-                              'Pending sync',
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(color: AppColors.warning),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      fullDateLabel(
+                                        payment.paymentDate.day,
+                                        payment.monthKey,
+                                      ),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            color: Theme.of(
+                                              context,
+                                            ).colorScheme.onSurfaceVariant,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      payment.mode.label,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelLarge
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                    ),
+                                    if (payment.pendingSync)
+                                      Text(
+                                        'Pending sync',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(
+                                              color: AppColors.warning,
+                                            ),
+                                      ),
+                                  ],
+                                ),
+                              ),
                             ),
+                          ),
+                          PopupMenuButton<String>(
+                            onSelected: (value) {
+                              switch (value) {
+                                case 'view':
+                                  widget.onView();
+                                case 'edit':
+                                  widget.onEdit();
+                                case 'delete':
+                                  _confirmDelete(context);
+                              }
+                            },
+                            itemBuilder: (_) => const [
+                              PopupMenuItem(value: 'view', child: Text('View')),
+                              PopupMenuItem(value: 'edit', child: Text('Edit')),
+                              PopupMenuItem(
+                                value: 'delete',
+                                child: Text('Delete'),
+                              ),
+                            ],
+                          ),
+                          SizedBox(
+                            width: 84,
+                            child: Text(
+                              CurrencyFormatter.rupees(
+                                payment.amountCents / 100,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.right,
+                              style: Theme.of(context).textTheme.titleSmall
+                                  ?.copyWith(fontWeight: FontWeight.w900),
+                            ),
+                          ),
                         ],
                       ),
                     ),
                   ),
-                ),
-                PopupMenuButton<String>(
-                  onSelected: (value) {
-                    switch (value) {
-                      case 'view':
-                        onView();
-                      case 'edit':
-                        onEdit();
-                      case 'delete':
-                        _confirmDelete(context);
-                    }
-                  },
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(value: 'view', child: Text('View')),
-                    PopupMenuItem(value: 'edit', child: Text('Edit')),
-                    PopupMenuItem(value: 'delete', child: Text('Delete')),
-                  ],
-                ),
-                SizedBox(
-                  width: 84,
-                  child: Text(
-                    CurrencyFormatter.rupees(payment.amountCents / 100),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.right,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -358,7 +420,7 @@ class _PaymentTimelineTile extends StatelessWidget {
           FilledButton(
             onPressed: () {
               Navigator.of(dialogContext).pop();
-              onDelete();
+              widget.onDelete();
             },
             child: const Text('Delete'),
           ),

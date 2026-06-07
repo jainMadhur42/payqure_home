@@ -1,13 +1,18 @@
+import 'dart:async';
+
 import 'package:drift/drift.dart';
 
 import '../../../../core/utils/id_generator.dart';
 import '../../domain/entities/advance_payment.dart';
 import '../../domain/entities/household_service.dart';
 import '../../domain/entities/ledger_overview.dart';
+import '../../domain/entities/ledger_month.dart';
 import '../../domain/entities/monthly_bill.dart';
 import '../../domain/entities/monthly_settlement.dart';
 import '../../domain/entities/payment_transaction.dart';
+import '../../domain/entities/payment_settlement_preview.dart';
 import '../../domain/entities/service_entry.dart';
+import '../../domain/entities/service_metadata.dart';
 import '../../domain/entities/user_profile.dart';
 import '../../domain/repositories/ledger_repository.dart';
 import '../../domain/services/bill_calculator.dart';
@@ -16,10 +21,12 @@ import '../../domain/services/service_start_date_resolver.dart';
 import '../../domain/services/settlement_calculator.dart';
 import '../database/ledger_database.dart';
 import '../mappers/ledger_mappers.dart';
+import '../sync/drift_ledger_sync_service.dart';
+import '../sync/ledger_sync_coordinator.dart';
 import '../sync/supabase_ledger_remote_data_source.dart';
 
 class DriftLedgerRepository implements LedgerRepository {
-  static const requiredRemoteSchemaVersion = 3;
+  static const requiredRemoteSchemaVersion = 4;
 
   DriftLedgerRepository({
     required LedgerDatabase database,
@@ -33,7 +40,17 @@ class DriftLedgerRepository implements LedgerRepository {
     this._remoteDataSource,
     this._billCalculator,
     this._settlementCalculator,
-  );
+  ) {
+    _syncService = DriftLedgerSyncService(
+      database: _database,
+      remoteDataSource: _remoteDataSource,
+    );
+    _syncCoordinator = LedgerSyncCoordinator(
+      requiredSchemaVersion: requiredRemoteSchemaVersion,
+      fetchSchemaVersion: _syncService.fetchSchemaVersion,
+      performPendingSync: _syncService.performPendingSync,
+    );
+  }
 
   final LedgerDatabase _database;
   final LedgerRemoteDataSource _remoteDataSource;
@@ -43,20 +60,18 @@ class DriftLedgerRepository implements LedgerRepository {
       const PaymentAllocationCalculator();
   final ServiceStartDateResolver _serviceStartDateResolver =
       const ServiceStartDateResolver();
+  final Map<String, Future<void>> _entityOperationGates = {};
+  late final DriftLedgerSyncService _syncService;
+  late final LedgerSyncCoordinator _syncCoordinator;
 
   @override
   Stream<LedgerOverview> watchOverview({
     required String userId,
     required String monthKey,
   }) {
-    final query = _database.select(_database.serviceRecords)
-      ..where(
-        (table) => table.userId.equals(userId) & table.isDeleted.equals(false),
-      );
-
-    return query.watch().asyncMap(
-      (_) => getOverview(userId: userId, monthKey: monthKey),
-    );
+    return _watchLedgerChanges(
+      userId,
+    ).asyncMap((_) => getOverview(userId: userId, monthKey: monthKey));
   }
 
   @override
@@ -64,20 +79,12 @@ class DriftLedgerRepository implements LedgerRepository {
     required String userId,
     required String monthKey,
   }) async {
-    if (!_isLocalDevUser(userId)) {
-      await syncRemoteChanges(userId: userId, monthKey: monthKey);
-    }
     final services = await _loadServices(userId: userId, monthKey: monthKey);
-    var totalPayable = 0;
-    var advancePaid = 0;
-    for (final service in services) {
-      final bill = await getMonthlyBill(
-        serviceId: service.id,
-        monthKey: monthKey,
-      );
-      totalPayable += bill.payableAmountCents;
-      advancePaid += bill.advanceAmountCents;
-    }
+    final totals = await _loadOverviewTotals(
+      userId: userId,
+      monthKey: monthKey,
+      serviceIds: services.map((service) => service.id).toSet(),
+    );
 
     return LedgerOverview(
       profile: UserProfile(
@@ -86,12 +93,128 @@ class DriftLedgerRepository implements LedgerRepository {
         email: userId == 'local-user' ? 'local@payqure.local' : '',
         phone: '',
         emailVerified: true,
+        privacyPolicyAccepted: true,
+        privacyPolicyAcceptedAt: DateTime.now(),
+        privacyPolicyVersion: '2026-06',
       ),
       monthKey: monthKey,
       monthLabel: _monthLabel(monthKey),
       services: services,
-      totalPayableCents: totalPayable,
-      advancePaidCents: advancePaid,
+      totalPayableCents: totals.totalPayableCents,
+      advancePaidCents: totals.advancePaidCents,
+    );
+  }
+
+  Stream<void> _watchLedgerChanges(String userId) {
+    late final StreamController<void> controller;
+    final subscriptions = <StreamSubscription<dynamic>>[];
+    Timer? notificationTimer;
+
+    void emit(dynamic _) {
+      notificationTimer?.cancel();
+      notificationTimer = Timer(const Duration(milliseconds: 16), () {
+        if (!controller.isClosed) {
+          controller.add(null);
+        }
+      });
+    }
+
+    void emitError(Object error, StackTrace stackTrace) {
+      if (!controller.isClosed) {
+        controller.addError(error, stackTrace);
+      }
+    }
+
+    controller = StreamController<void>(
+      onListen: () {
+        final services = _database.select(_database.serviceRecords)
+          ..where((table) => table.userId.equals(userId));
+        final payments = _database.select(_database.paymentTransactionRecords)
+          ..where((table) => table.userId.equals(userId));
+        final settlements = _database.select(_database.monthlySettlementRecords)
+          ..where((table) => table.userId.equals(userId));
+        final entries = _database.select(_database.entryRecords).join([
+          innerJoin(
+            _database.serviceRecords,
+            _database.serviceRecords.id.equalsExp(
+              _database.entryRecords.serviceId,
+            ),
+          ),
+        ])..where(_database.serviceRecords.userId.equals(userId));
+        final advances =
+            _database.select(_database.advancePaymentRecords).join([
+              innerJoin(
+                _database.serviceRecords,
+                _database.serviceRecords.id.equalsExp(
+                  _database.advancePaymentRecords.serviceId,
+                ),
+              ),
+            ])..where(_database.serviceRecords.userId.equals(userId));
+
+        subscriptions
+          ..add(services.watch().listen(emit, onError: emitError))
+          ..add(entries.watch().listen(emit, onError: emitError))
+          ..add(advances.watch().listen(emit, onError: emitError))
+          ..add(payments.watch().listen(emit, onError: emitError))
+          ..add(settlements.watch().listen(emit, onError: emitError));
+      },
+      onCancel: () async {
+        notificationTimer?.cancel();
+        await Future.wait(
+          subscriptions.map((subscription) => subscription.cancel()),
+        );
+      },
+    );
+    return controller.stream;
+  }
+
+  Future<_OverviewTotals> _loadOverviewTotals({
+    required String userId,
+    required String monthKey,
+    required Set<String> serviceIds,
+  }) async {
+    if (serviceIds.isEmpty) {
+      return const _OverviewTotals();
+    }
+    final settlements =
+        await (_database.select(_database.monthlySettlementRecords)..where(
+              (table) =>
+                  table.userId.equals(userId) &
+                  table.monthKey.equals(monthKey) &
+                  table.serviceId.isIn(serviceIds) &
+                  table.isDeleted.equals(false),
+            ))
+            .get();
+    final followingPayments =
+        await (_database.select(_database.paymentTransactionRecords)..where(
+              (table) =>
+                  table.userId.equals(userId) &
+                  table.monthKey.isBiggerThanValue(monthKey) &
+                  table.serviceId.isIn(serviceIds) &
+                  table.isDeleted.equals(false),
+            ))
+            .get();
+    final paidFromFollowingMonth = <String, int>{};
+    for (final payment in followingPayments) {
+      paidFromFollowingMonth.update(
+        payment.serviceId,
+        (value) => value + payment.previousBalanceAmountCents,
+        ifAbsent: () => payment.previousBalanceAmountCents,
+      );
+    }
+
+    var totalPayableCents = 0;
+    var advancePaidCents = 0;
+    for (final settlement in settlements) {
+      final laterPayment = paidFromFollowingMonth[settlement.serviceId] ?? 0;
+      totalPayableCents += (settlement.remainingAmountCents - laterPayment)
+          .clamp(0, settlement.remainingAmountCents)
+          .toInt();
+      advancePaidCents += settlement.advanceUsedCents;
+    }
+    return _OverviewTotals(
+      totalPayableCents: totalPayableCents,
+      advancePaidCents: advancePaidCents,
     );
   }
 
@@ -149,7 +272,7 @@ class DriftLedgerRepository implements LedgerRepository {
       pendingSync: const Value(true),
     );
     await _database.into(_database.serviceRecords).insert(service);
-    await syncPending();
+    _scheduleSync();
     final row = await (_database.select(
       _database.serviceRecords,
     )..where((table) => table.id.equals(service.id.value))).getSingle();
@@ -182,7 +305,7 @@ class DriftLedgerRepository implements LedgerRepository {
         pendingSync: const Value(true),
       ),
     );
-    await syncPending();
+    _scheduleSync();
     final row = await (_database.select(
       _database.serviceRecords,
     )..where((table) => table.id.equals(id))).getSingle();
@@ -204,54 +327,62 @@ class DriftLedgerRepository implements LedgerRepository {
         isDeleted: const Value(true),
       ),
     );
-    await syncPending();
+    _scheduleSync();
   }
 
   @override
   Future<void> saveEntry(ServiceEntry entry) async {
-    await _database
-        .into(_database.entryRecords)
-        .insertOnConflictUpdate(
-          entry
-              .copyWith(pendingSync: true, updatedAt: DateTime.now())
-              .toCompanion(),
+    await _runForService(entry.serviceId, () async {
+      await _database.transaction(() async {
+        await _database
+            .into(_database.entryRecords)
+            .insertOnConflictUpdate(
+              entry
+                  .copyWith(pendingSync: true, updatedAt: DateTime.now())
+                  .toCompanion(),
+            );
+        await _reallocatePayments(
+          serviceId: entry.serviceId,
+          monthKey: entry.monthKey,
         );
-    await _reallocatePayments(
-      serviceId: entry.serviceId,
-      monthKey: entry.monthKey,
-    );
-    await _recalculateSettlement(
-      serviceId: entry.serviceId,
-      monthKey: entry.monthKey,
-    );
-    await syncPending();
+        await _recalculateSettlement(
+          serviceId: entry.serviceId,
+          monthKey: entry.monthKey,
+        );
+      });
+    });
+    _scheduleSync();
   }
 
   @override
   Future<void> saveAdvance(AdvancePayment advance) async {
-    await _database
-        .into(_database.advancePaymentRecords)
-        .insertOnConflictUpdate(
-          AdvancePaymentRecordsCompanion.insert(
-            id: advance.id,
-            serviceId: advance.serviceId,
-            monthKey: advance.monthKey,
-            amountCents: advance.amountCents,
-            paidOn: advance.paidOn,
-            note: Value(advance.note),
-            updatedAt: DateTime.now(),
-            pendingSync: const Value(true),
-          ),
+    await _runForService(advance.serviceId, () async {
+      await _database.transaction(() async {
+        await _database
+            .into(_database.advancePaymentRecords)
+            .insertOnConflictUpdate(
+              AdvancePaymentRecordsCompanion.insert(
+                id: advance.id,
+                serviceId: advance.serviceId,
+                monthKey: advance.monthKey,
+                amountCents: advance.amountCents,
+                paidOn: advance.paidOn,
+                note: Value(advance.note),
+                updatedAt: DateTime.now(),
+                pendingSync: const Value(true),
+              ),
+            );
+        await _reallocatePayments(
+          serviceId: advance.serviceId,
+          monthKey: advance.monthKey,
         );
-    await _reallocatePayments(
-      serviceId: advance.serviceId,
-      monthKey: advance.monthKey,
-    );
-    await _recalculateSettlement(
-      serviceId: advance.serviceId,
-      monthKey: advance.monthKey,
-    );
-    await syncPending();
+        await _recalculateSettlement(
+          serviceId: advance.serviceId,
+          monthKey: advance.monthKey,
+        );
+      });
+    });
+    _scheduleSync();
   }
 
   @override
@@ -289,42 +420,50 @@ class DriftLedgerRepository implements LedgerRepository {
   @override
   Future<void> savePayment(PaymentTransaction payment) async {
     final next = payment.copyWith(pendingSync: true, updatedAt: DateTime.now());
-    await _database
-        .into(_database.paymentTransactionRecords)
-        .insertOnConflictUpdate(next.toCompanion());
-    await _reallocatePayments(
-      serviceId: payment.serviceId,
-      monthKey: payment.monthKey,
-    );
-    await _recalculateSettlement(
-      serviceId: payment.serviceId,
-      monthKey: payment.monthKey,
-    );
-    await syncPending();
+    await _runForService(payment.serviceId, () async {
+      await _database.transaction(() async {
+        await _database
+            .into(_database.paymentTransactionRecords)
+            .insertOnConflictUpdate(next.toCompanion());
+        await _reallocatePayments(
+          serviceId: payment.serviceId,
+          monthKey: payment.monthKey,
+        );
+        await _recalculateSettlementChain(
+          serviceId: payment.serviceId,
+          fromMonthKey: payment.monthKey,
+        );
+      });
+    });
+    _scheduleSync();
   }
 
   @override
   Future<void> deletePayment(PaymentTransaction payment) async {
-    await _database
-        .into(_database.paymentTransactionRecords)
-        .insertOnConflictUpdate(
-          payment
-              .copyWith(
-                isDeleted: true,
-                pendingSync: true,
-                updatedAt: DateTime.now(),
-              )
-              .toCompanion(),
+    await _runForService(payment.serviceId, () async {
+      await _database.transaction(() async {
+        await _database
+            .into(_database.paymentTransactionRecords)
+            .insertOnConflictUpdate(
+              payment
+                  .copyWith(
+                    isDeleted: true,
+                    pendingSync: true,
+                    updatedAt: DateTime.now(),
+                  )
+                  .toCompanion(),
+            );
+        await _reallocatePayments(
+          serviceId: payment.serviceId,
+          monthKey: payment.monthKey,
         );
-    await _reallocatePayments(
-      serviceId: payment.serviceId,
-      monthKey: payment.monthKey,
-    );
-    await _recalculateSettlement(
-      serviceId: payment.serviceId,
-      monthKey: payment.monthKey,
-    );
-    await syncPending();
+        await _recalculateSettlementChain(
+          serviceId: payment.serviceId,
+          fromMonthKey: payment.monthKey,
+        );
+      });
+    });
+    _scheduleSync();
   }
 
   @override
@@ -362,6 +501,50 @@ class DriftLedgerRepository implements LedgerRepository {
               ]))
             .get();
     return rows.map((row) => row.toDomain()).toList();
+  }
+
+  @override
+  Future<PaymentSettlementPreview> getPaymentSettlementPreview({
+    required String serviceId,
+    required String monthKey,
+    required int paymentCents,
+  }) async {
+    await _recalculateSettlement(serviceId: serviceId, monthKey: monthKey);
+    final rows =
+        await (_database.select(_database.monthlySettlementRecords)
+              ..where(
+                (table) =>
+                    table.serviceId.equals(serviceId) &
+                    table.monthKey.isSmallerOrEqualValue(monthKey) &
+                    table.isDeleted.equals(false),
+              )
+              ..orderBy([(table) => OrderingTerm.asc(table.monthKey)]))
+            .get();
+
+    final dueMonths = <PaymentMonthAllocation>[];
+    var previousCumulativeRemaining = 0;
+    for (final row in rows) {
+      final effective = await _applyFollowingMonthPayments(row.toDomain());
+      final ownOutstanding =
+          (effective.remainingAmountCents - previousCumulativeRemaining).clamp(
+            0,
+            effective.remainingAmountCents,
+          );
+      previousCumulativeRemaining = effective.remainingAmountCents;
+      if (ownOutstanding > 0) {
+        dueMonths.add(
+          PaymentMonthAllocation(
+            monthKey: row.monthKey,
+            dueBeforePaymentCents: ownOutstanding,
+            allocatedCents: 0,
+          ),
+        );
+      }
+    }
+    return _paymentAllocationCalculator.previewOldestFirst(
+      paymentCents: paymentCents,
+      dueMonths: dueMonths,
+    );
   }
 
   @override
@@ -437,98 +620,24 @@ class DriftLedgerRepository implements LedgerRepository {
   }
 
   @override
-  Future<void> syncPending() async {
-    if (!_remoteDataSource.isConfigured) {
-      return;
+  Future<void> syncPending() {
+    if (!_syncService.isConfigured) {
+      return Future.value();
     }
-    await _ensureRemoteSchemaVersion();
-    final services =
-        await (_database.select(_database.serviceRecords)..where(
-              (table) =>
-                  table.pendingSync.equals(true) &
-                  table.userId.equals('local-user').not(),
-            ))
-            .get();
-    for (final row in services) {
-      await _remoteDataSource.pushService(row);
-      await (_database.update(_database.serviceRecords)
-            ..where((table) => table.id.equals(row.id)))
-          .write(const ServiceRecordsCompanion(pendingSync: Value(false)));
-    }
-
-    final entries = await (_database.select(
-      _database.entryRecords,
-    )..where((table) => table.pendingSync.equals(true))).get();
-    final localServiceIds = await _localDevServiceIds();
-    for (final row in entries) {
-      if (localServiceIds.contains(row.serviceId)) {
-        continue;
-      }
-      await _remoteDataSource.pushEntry(row);
-      await (_database.update(_database.entryRecords)
-            ..where((table) => table.id.equals(row.id)))
-          .write(const EntryRecordsCompanion(pendingSync: Value(false)));
-    }
-
-    final advances = await (_database.select(
-      _database.advancePaymentRecords,
-    )..where((table) => table.pendingSync.equals(true))).get();
-    for (final row in advances) {
-      if (localServiceIds.contains(row.serviceId)) {
-        continue;
-      }
-      await _remoteDataSource.pushAdvance(row);
-      await (_database.update(
-        _database.advancePaymentRecords,
-      )..where((table) => table.id.equals(row.id))).write(
-        const AdvancePaymentRecordsCompanion(pendingSync: Value(false)),
-      );
-    }
-
-    final payments = await (_database.select(
-      _database.paymentTransactionRecords,
-    )..where((table) => table.pendingSync.equals(true))).get();
-    for (final row in payments) {
-      if (localServiceIds.contains(row.serviceId)) {
-        continue;
-      }
-      await _remoteDataSource.pushPayment(row);
-      await (_database.update(
-        _database.paymentTransactionRecords,
-      )..where((table) => table.id.equals(row.id))).write(
-        const PaymentTransactionRecordsCompanion(pendingSync: Value(false)),
-      );
-    }
-
-    final settlements = await (_database.select(
-      _database.monthlySettlementRecords,
-    )..where((table) => table.pendingSync.equals(true))).get();
-    for (final row in settlements) {
-      if (localServiceIds.contains(row.serviceId)) {
-        continue;
-      }
-      await _remoteDataSource.pushSettlement(row);
-      await (_database.update(
-        _database.monthlySettlementRecords,
-      )..where((table) => table.id.equals(row.id))).write(
-        const MonthlySettlementRecordsCompanion(pendingSync: Value(false)),
-      );
-    }
+    return _syncCoordinator.syncPending();
   }
 
   @override
   Future<void> syncUserDataAndClearLocal({required String userId}) async {
-    if (!_remoteDataSource.isConfigured) {
+    if (!_syncService.isConfigured) {
       throw StateError('Supabase is not configured for remote sync.');
     }
-    if (_isLocalDevUser(userId)) {
+    if (_syncService.isLocalDevelopmentUser(userId)) {
       throw StateError('Sign in with Supabase before syncing local data.');
     }
 
-    await _ensureRemoteSchemaVersion();
-    await _claimLocalDevRowsForUser(userId);
-    await _pushAllRowsForUser(userId);
-    await _clearLocalData();
+    await _syncCoordinator.ensureRemoteSchemaVersion();
+    await _syncService.transferUserDataAndClearLocal(userId);
   }
 
   @override
@@ -536,171 +645,50 @@ class DriftLedgerRepository implements LedgerRepository {
     required String userId,
     required String monthKey,
   }) async {
-    if (!_remoteDataSource.isConfigured || _isLocalDevUser(userId)) {
+    if (!_syncService.isConfigured ||
+        _syncService.isLocalDevelopmentUser(userId)) {
       return;
     }
-    await _ensureRemoteSchemaVersion();
+    await _syncCoordinator.ensureRemoteSchemaVersion();
+    await _syncService.pullMonth(userId: userId, monthKey: monthKey);
+    await syncPending();
+    await _syncService.markMonthCached(userId: userId, monthKey: monthKey);
+  }
 
-    final services = await _remoteDataSource.fetchServices(
+  @override
+  Future<bool> isMonthCached({
+    required String userId,
+    required String monthKey,
+  }) {
+    return _syncService.isMonthCached(userId: userId, monthKey: monthKey);
+  }
+
+  @override
+  Future<void> hydrateMonth({
+    required String userId,
+    required String monthKey,
+    bool forceRefresh = false,
+  }) async {
+    if (!_syncService.isConfigured ||
+        _syncService.isLocalDevelopmentUser(userId)) {
+      return;
+    }
+    await _syncCoordinator.hydrateMonth(
       userId: userId,
       monthKey: monthKey,
+      forceRefresh: forceRefresh,
+      isCached: isMonthCached,
+      pullMonth: _pullAndPushMonth,
     );
-    final entries = await _remoteDataSource.fetchEntries(monthKey: monthKey);
-    final advances = await _remoteDataSource.fetchAdvances(monthKey: monthKey);
-    final payments = await _remoteDataSource.fetchPayments(monthKey: monthKey);
-    final settlements = await _remoteDataSource.fetchSettlements(
-      monthKey: monthKey,
-    );
+  }
 
-    await _database.transaction(() async {
-      for (final row in services) {
-        final updatedAt = _date(row['updated_at']);
-        final storedMonthKey = row['month_key'].toString();
-        final effectiveMonthKey = _effectiveServiceMonthKey(
-          storedMonthKey: storedMonthKey,
-          description: row['description']?.toString() ?? '',
-        );
-        if (!await _shouldApplyRemoteService(row['id'].toString(), updatedAt)) {
-          continue;
-        }
-        await _database
-            .into(_database.serviceRecords)
-            .insertOnConflictUpdate(
-              ServiceRecordsCompanion.insert(
-                id: row['id'].toString(),
-                userId: row['user_id'].toString(),
-                monthKey: effectiveMonthKey,
-                name: row['name'].toString(),
-                description: row['description'].toString(),
-                icon: row['icon'].toString(),
-                templateType: row['template_type'].toString(),
-                unit: row['unit']?.toString() ?? '',
-                defaultQuantity: Value(_double(row['default_quantity'], 1)),
-                rateCents: _int(row['rate_cents']),
-                monthlyAmountCents: Value(_int(row['monthly_amount_cents'])),
-                updatedAt: updatedAt,
-                pendingSync: Value(effectiveMonthKey != storedMonthKey),
-                isDeleted: Value(_bool(row['is_deleted'])),
-              ),
-            );
-      }
-
-      for (final row in entries) {
-        final updatedAt = _date(row['updated_at']);
-        if (!await _shouldApplyRemoteEntry(row['id'].toString(), updatedAt)) {
-          continue;
-        }
-        await _database
-            .into(_database.entryRecords)
-            .insertOnConflictUpdate(
-              EntryRecordsCompanion.insert(
-                id: row['id'].toString(),
-                serviceId: row['service_id'].toString(),
-                monthKey: row['month_key'].toString(),
-                day: _int(row['day']),
-                status: row['status'].toString(),
-                quantity: Value(_double(row['quantity'], 0)),
-                unit: Value(row['unit']?.toString() ?? ''),
-                rateCents: Value(_int(row['rate_cents'])),
-                amountCents: Value(_int(row['amount_cents'])),
-                note: Value(row['note']?.toString() ?? ''),
-                updatedAt: updatedAt,
-                pendingSync: const Value(false),
-                isDeleted: Value(_bool(row['is_deleted'])),
-              ),
-            );
-      }
-
-      for (final row in advances) {
-        final updatedAt = _date(row['updated_at']);
-        if (!await _shouldApplyRemoteAdvance(row['id'].toString(), updatedAt)) {
-          continue;
-        }
-        await _database
-            .into(_database.advancePaymentRecords)
-            .insertOnConflictUpdate(
-              AdvancePaymentRecordsCompanion.insert(
-                id: row['id'].toString(),
-                serviceId: row['service_id'].toString(),
-                monthKey: row['month_key'].toString(),
-                amountCents: _int(row['amount_cents']),
-                paidOn: _date(row['paid_on']),
-                note: Value(row['note']?.toString() ?? ''),
-                updatedAt: updatedAt,
-                pendingSync: const Value(false),
-                isDeleted: Value(_bool(row['is_deleted'])),
-              ),
-            );
-      }
-
-      for (final row in payments) {
-        final updatedAt = _date(row['updated_at']);
-        await _database
-            .into(_database.paymentTransactionRecords)
-            .insertOnConflictUpdate(
-              PaymentTransactionRecordsCompanion.insert(
-                id: row['id'].toString(),
-                userId: row['user_id'].toString(),
-                serviceId: row['service_id'].toString(),
-                monthKey: row['month_key'].toString(),
-                amountCents: _int(row['amount_cents']),
-                paymentDate: _date(row['payment_date']),
-                paymentMode: row['payment_mode'].toString(),
-                note: Value(row['note']?.toString() ?? ''),
-                currentMonthAmountCents: Value(
-                  _int(row['current_month_amount_cents']),
-                ),
-                previousBalanceAmountCents: Value(
-                  _int(row['previous_balance_amount_cents']),
-                ),
-                advanceAmountCents: Value(_int(row['advance_amount_cents'])),
-                createdAt: _date(row['created_at']),
-                updatedAt: updatedAt,
-                pendingSync: const Value(false),
-                isDeleted: Value(_bool(row['is_deleted'])),
-              ),
-            );
-      }
-
-      for (final row in settlements) {
-        final updatedAt = _date(row['updated_at']);
-        await _database
-            .into(_database.monthlySettlementRecords)
-            .insertOnConflictUpdate(
-              MonthlySettlementRecordsCompanion.insert(
-                id: row['id'].toString(),
-                userId: row['user_id'].toString(),
-                serviceId: row['service_id'].toString(),
-                monthKey: row['month_key'].toString(),
-                grossAmountCents: Value(_int(row['gross_amount_cents'])),
-                advanceUsedCents: Value(_int(row['advance_used_cents'])),
-                previousCarryForwardCents: Value(
-                  _int(row['previous_carry_forward_cents']),
-                ),
-                previousAdvanceCents: Value(
-                  _int(row['previous_advance_cents']),
-                ),
-                payableAmountCents: Value(_int(row['payable_amount_cents'])),
-                paidAmountCents: Value(_int(row['paid_amount_cents'])),
-                remainingAmountCents: Value(
-                  _int(row['remaining_amount_cents']),
-                ),
-                carryForwardToNextMonthCents: Value(
-                  _int(row['carry_forward_to_next_month_cents']),
-                ),
-                advanceToNextMonthCents: Value(
-                  _int(row['advance_to_next_month_cents']),
-                ),
-                status: row['status'].toString(),
-                generatedAt: _date(row['generated_at']),
-                updatedAt: updatedAt,
-                pendingSync: const Value(false),
-                isDeleted: Value(_bool(row['is_deleted'])),
-              ),
-            );
-      }
-    });
+  Future<void> _pullAndPushMonth({
+    required String userId,
+    required String monthKey,
+  }) async {
+    await _syncService.pullMonth(userId: userId, monthKey: monthKey);
     await syncPending();
+    await _syncService.markMonthCached(userId: userId, monthKey: monthKey);
   }
 
   Future<MonthlySettlement> _recalculateSettlement({
@@ -749,6 +737,36 @@ class DriftLedgerRepository implements LedgerRepository {
         .into(_database.monthlySettlementRecords)
         .insertOnConflictUpdate(settlement.toCompanion());
     return settlement;
+  }
+
+  Future<void> _recalculateSettlementChain({
+    required String serviceId,
+    required String fromMonthKey,
+  }) async {
+    final monthKeys = <String>{fromMonthKey};
+    final settlementRows =
+        await (_database.select(_database.monthlySettlementRecords)..where(
+              (table) =>
+                  table.serviceId.equals(serviceId) &
+                  table.monthKey.isBiggerOrEqualValue(fromMonthKey) &
+                  table.isDeleted.equals(false),
+            ))
+            .get();
+    monthKeys.addAll(settlementRows.map((row) => row.monthKey));
+    final paymentRows =
+        await (_database.select(_database.paymentTransactionRecords)..where(
+              (table) =>
+                  table.serviceId.equals(serviceId) &
+                  table.monthKey.isBiggerOrEqualValue(fromMonthKey),
+            ))
+            .get();
+    monthKeys.addAll(paymentRows.map((row) => row.monthKey));
+
+    final sortedMonthKeys = monthKeys.toList()..sort();
+    for (final monthKey in sortedMonthKeys) {
+      await _reallocatePayments(serviceId: serviceId, monthKey: monthKey);
+      await _recalculateSettlement(serviceId: serviceId, monthKey: monthKey);
+    }
   }
 
   Future<void> _reallocatePayments({
@@ -801,8 +819,8 @@ class DriftLedgerRepository implements LedgerRepository {
                 (table) => OrderingTerm.asc(table.createdAt),
               ]))
             .get();
-    var remainingCurrent = currentDue;
     var remainingPrevious = previousDue;
+    var remainingCurrent = currentDue;
     final now = DateTime.now();
     for (final row in rows) {
       if (row.isDeleted) {
@@ -824,8 +842,8 @@ class DriftLedgerRepository implements LedgerRepository {
         currentMonthDueCents: remainingCurrent,
         previousBalanceCents: remainingPrevious,
       );
-      remainingCurrent -= allocation.currentMonthCents;
       remainingPrevious -= allocation.previousBalanceCents;
+      remainingCurrent -= allocation.currentMonthCents;
       await (_database.update(
         _database.paymentTransactionRecords,
       )..where((table) => table.id.equals(row.id))).write(
@@ -843,12 +861,11 @@ class DriftLedgerRepository implements LedgerRepository {
   Future<MonthlySettlement> _applyFollowingMonthPayments(
     MonthlySettlement settlement,
   ) async {
-    final followingMonth = _nextMonthKey(settlement.monthKey);
     final rows =
         await (_database.select(_database.paymentTransactionRecords)..where(
               (table) =>
                   table.serviceId.equals(settlement.serviceId) &
-                  table.monthKey.equals(followingMonth) &
+                  table.monthKey.isBiggerThanValue(settlement.monthKey) &
                   table.isDeleted.equals(false),
             ))
             .get();
@@ -899,222 +916,6 @@ class DriftLedgerRepository implements LedgerRepository {
     return row?.toDomain();
   }
 
-  Future<bool> _shouldApplyRemoteService(String id, DateTime remoteUpdatedAt) {
-    return _shouldApplyRemote(
-      id: id,
-      remoteUpdatedAt: remoteUpdatedAt,
-      tableUpdatedAt: (id) async {
-        final row = await (_database.select(
-          _database.serviceRecords,
-        )..where((table) => table.id.equals(id))).getSingleOrNull();
-        return row == null
-            ? null
-            : _LocalSyncState(row.updatedAt, row.pendingSync);
-      },
-    );
-  }
-
-  Future<void> _ensureRemoteSchemaVersion() async {
-    final version = await _remoteDataSource.fetchSchemaVersion();
-    if (version == null || version < requiredRemoteSchemaVersion) {
-      throw StateError(
-        'Supabase ledger schema is not ready. Apply the latest migration.',
-      );
-    }
-  }
-
-  bool _isLocalDevUser(String userId) {
-    return userId == 'local-user';
-  }
-
-  Future<void> _claimLocalDevRowsForUser(String userId) async {
-    final localServices = await (_database.select(
-      _database.serviceRecords,
-    )..where((table) => table.userId.equals('local-user'))).get();
-    if (localServices.isEmpty) {
-      return;
-    }
-
-    final now = DateTime.now();
-    final localServiceIds = localServices.map((row) => row.id).toSet();
-    await _database.transaction(() async {
-      await (_database.update(
-        _database.serviceRecords,
-      )..where((table) => table.userId.equals('local-user'))).write(
-        ServiceRecordsCompanion(
-          userId: Value(userId),
-          updatedAt: Value(now),
-          pendingSync: const Value(true),
-        ),
-      );
-      await (_database.update(
-        _database.paymentTransactionRecords,
-      )..where((table) => table.userId.equals('local-user'))).write(
-        PaymentTransactionRecordsCompanion(
-          userId: Value(userId),
-          updatedAt: Value(now),
-          pendingSync: const Value(true),
-        ),
-      );
-      await (_database.update(
-        _database.monthlySettlementRecords,
-      )..where((table) => table.userId.equals('local-user'))).write(
-        MonthlySettlementRecordsCompanion(
-          userId: Value(userId),
-          updatedAt: Value(now),
-          pendingSync: const Value(true),
-        ),
-      );
-
-      if (localServiceIds.isNotEmpty) {
-        await (_database.update(
-          _database.entryRecords,
-        )..where((table) => table.serviceId.isIn(localServiceIds))).write(
-          EntryRecordsCompanion(
-            updatedAt: Value(now),
-            pendingSync: const Value(true),
-          ),
-        );
-        await (_database.update(
-          _database.advancePaymentRecords,
-        )..where((table) => table.serviceId.isIn(localServiceIds))).write(
-          AdvancePaymentRecordsCompanion(
-            updatedAt: Value(now),
-            pendingSync: const Value(true),
-          ),
-        );
-      }
-    });
-  }
-
-  Future<void> _pushAllRowsForUser(String userId) async {
-    final services = await (_database.select(
-      _database.serviceRecords,
-    )..where((table) => table.userId.equals(userId))).get();
-    final serviceIds = services.map((row) => row.id).toSet();
-
-    for (final row in services) {
-      await _remoteDataSource.pushService(row);
-      await (_database.update(_database.serviceRecords)
-            ..where((table) => table.id.equals(row.id)))
-          .write(const ServiceRecordsCompanion(pendingSync: Value(false)));
-    }
-
-    if (serviceIds.isEmpty) {
-      return;
-    }
-
-    final entries = await (_database.select(
-      _database.entryRecords,
-    )..where((table) => table.serviceId.isIn(serviceIds))).get();
-    for (final row in entries) {
-      await _remoteDataSource.pushEntry(row);
-      await (_database.update(_database.entryRecords)
-            ..where((table) => table.id.equals(row.id)))
-          .write(const EntryRecordsCompanion(pendingSync: Value(false)));
-    }
-
-    final advances = await (_database.select(
-      _database.advancePaymentRecords,
-    )..where((table) => table.serviceId.isIn(serviceIds))).get();
-    for (final row in advances) {
-      await _remoteDataSource.pushAdvance(row);
-      await (_database.update(
-        _database.advancePaymentRecords,
-      )..where((table) => table.id.equals(row.id))).write(
-        const AdvancePaymentRecordsCompanion(pendingSync: Value(false)),
-      );
-    }
-
-    final payments = await (_database.select(
-      _database.paymentTransactionRecords,
-    )..where((table) => table.userId.equals(userId))).get();
-    for (final row in payments) {
-      await _remoteDataSource.pushPayment(row);
-      await (_database.update(
-        _database.paymentTransactionRecords,
-      )..where((table) => table.id.equals(row.id))).write(
-        const PaymentTransactionRecordsCompanion(pendingSync: Value(false)),
-      );
-    }
-
-    final settlements = await (_database.select(
-      _database.monthlySettlementRecords,
-    )..where((table) => table.userId.equals(userId))).get();
-    for (final row in settlements) {
-      await _remoteDataSource.pushSettlement(row);
-      await (_database.update(
-        _database.monthlySettlementRecords,
-      )..where((table) => table.id.equals(row.id))).write(
-        const MonthlySettlementRecordsCompanion(pendingSync: Value(false)),
-      );
-    }
-  }
-
-  Future<void> _clearLocalData() async {
-    await _database.transaction(() async {
-      await _database.delete(_database.entryRecords).go();
-      await _database.delete(_database.advancePaymentRecords).go();
-      await _database.delete(_database.paymentTransactionRecords).go();
-      await _database.delete(_database.monthlySettlementRecords).go();
-      await _database.delete(_database.serviceRecords).go();
-      await _database.delete(_database.profileRecords).go();
-      await _database.delete(_database.syncMetadataRecords).go();
-    });
-  }
-
-  Future<Set<String>> _localDevServiceIds() async {
-    final rows = await (_database.select(
-      _database.serviceRecords,
-    )..where((table) => table.userId.equals('local-user'))).get();
-    return rows.map((row) => row.id).toSet();
-  }
-
-  Future<bool> _shouldApplyRemoteEntry(String id, DateTime remoteUpdatedAt) {
-    return _shouldApplyRemote(
-      id: id,
-      remoteUpdatedAt: remoteUpdatedAt,
-      tableUpdatedAt: (id) async {
-        final row = await (_database.select(
-          _database.entryRecords,
-        )..where((table) => table.id.equals(id))).getSingleOrNull();
-        return row == null
-            ? null
-            : _LocalSyncState(row.updatedAt, row.pendingSync);
-      },
-    );
-  }
-
-  Future<bool> _shouldApplyRemoteAdvance(String id, DateTime remoteUpdatedAt) {
-    return _shouldApplyRemote(
-      id: id,
-      remoteUpdatedAt: remoteUpdatedAt,
-      tableUpdatedAt: (id) async {
-        final row = await (_database.select(
-          _database.advancePaymentRecords,
-        )..where((table) => table.id.equals(id))).getSingleOrNull();
-        return row == null
-            ? null
-            : _LocalSyncState(row.updatedAt, row.pendingSync);
-      },
-    );
-  }
-
-  Future<bool> _shouldApplyRemote({
-    required String id,
-    required DateTime remoteUpdatedAt,
-    required Future<_LocalSyncState?> Function(String id) tableUpdatedAt,
-  }) async {
-    final local = await tableUpdatedAt(id);
-    if (local == null) {
-      return true;
-    }
-    if (local.pendingSync && local.updatedAt.isAfter(remoteUpdatedAt)) {
-      return false;
-    }
-    return remoteUpdatedAt.isAfter(local.updatedAt);
-  }
-
   Future<List<HouseholdService>> _loadServices({
     required String userId,
     required String monthKey,
@@ -1125,7 +926,8 @@ class DriftLedgerRepository implements LedgerRepository {
                   table.userId.equals(userId) & table.isDeleted.equals(false),
             ))
             .get();
-    final services = <HouseholdService>[];
+    final visibleRows = <ServiceRecord>[];
+    var repairedStartMonth = false;
     for (final row in rows) {
       final effectiveMonthKey = _effectiveServiceMonthKey(
         storedMonthKey: row.monthKey,
@@ -1144,12 +946,72 @@ class DriftLedgerRepository implements LedgerRepository {
             pendingSync: const Value(true),
           ),
         );
+        repairedStartMonth = true;
       }
-      final entries = await _loadEntries(row.id, monthKey);
-      services.add(row.toDomain(entries, activeMonthKey: monthKey));
+      visibleRows.add(row);
     }
-    await syncPending();
-    return services;
+    if (repairedStartMonth) {
+      _scheduleSync();
+    }
+    if (visibleRows.isEmpty) {
+      return const [];
+    }
+
+    final serviceIds = visibleRows.map((row) => row.id).toSet();
+    final entryRows =
+        await (_database.select(_database.entryRecords)..where(
+              (table) =>
+                  table.serviceId.isIn(serviceIds) &
+                  table.monthKey.equals(monthKey) &
+                  table.isDeleted.equals(false),
+            ))
+            .get();
+    final entriesByService = <String, List<ServiceEntry>>{};
+    for (final row in entryRows) {
+      entriesByService
+          .putIfAbsent(row.serviceId, () => <ServiceEntry>[])
+          .add(row.toDomain());
+    }
+
+    return visibleRows
+        .map(
+          (row) => row.toDomain(
+            entriesByService[row.id] ?? const [],
+            activeMonthKey: monthKey,
+          ),
+        )
+        .toList();
+  }
+
+  void _scheduleSync() {
+    if (_syncService.isConfigured) {
+      _syncCoordinator.schedulePendingSync();
+    }
+  }
+
+  Future<T> _runForService<T>(
+    String serviceId,
+    Future<T> Function() action,
+  ) async {
+    final previous = _entityOperationGates[serviceId];
+    final gate = Completer<void>();
+    final gateFuture = gate.future;
+    _entityOperationGates[serviceId] = gateFuture;
+    if (previous != null) {
+      try {
+        await previous;
+      } catch (_) {
+        // A failed operation must not block later local writes.
+      }
+    }
+    try {
+      return await action();
+    } finally {
+      gate.complete();
+      if (identical(_entityOperationGates[serviceId], gateFuture)) {
+        _entityOperationGates.remove(serviceId);
+      }
+    }
   }
 
   Future<HouseholdService> _loadService(String id, String monthKey) async {
@@ -1204,79 +1066,24 @@ class DriftLedgerRepository implements LedgerRepository {
     required String storedMonthKey,
     required String description,
   }) {
-    final match = RegExp(
-      r'Start date:\s*(\d{1,2})/(\d{1,2})/(\d{4})',
-      caseSensitive: false,
-    ).firstMatch(description);
-    if (match == null) {
+    final startDate = ServiceMetadata.parse(description).startDate;
+    if (startDate == null) {
       return storedMonthKey;
     }
-    final month = int.tryParse(match.group(2) ?? '');
-    final year = int.tryParse(match.group(3) ?? '');
-    if (month == null || year == null || month < 1 || month > 12) {
-      return storedMonthKey;
-    }
-    return '$year-${month.toString().padLeft(2, '0')}';
-  }
-
-  DateTime _date(Object? value) {
-    if (value is DateTime) {
-      return value;
-    }
-    if (value is String && value.isNotEmpty) {
-      return DateTime.parse(value);
-    }
-    return DateTime.now();
+    return '${startDate.year}-${startDate.month.toString().padLeft(2, '0')}';
   }
 
   String _previousMonthKey(String key) {
-    final parts = key.split('-');
-    final year = int.tryParse(parts.first) ?? DateTime.now().year;
-    final month = parts.length > 1
-        ? int.tryParse(parts[1]) ?? DateTime.now().month
-        : DateTime.now().month;
-    final previous = DateTime(year, month - 1);
-    return '${previous.year}-${previous.month.toString().padLeft(2, '0')}';
-  }
-
-  String _nextMonthKey(String key) {
-    final parts = key.split('-');
-    final year = int.tryParse(parts.first) ?? DateTime.now().year;
-    final month = parts.length > 1
-        ? int.tryParse(parts[1]) ?? DateTime.now().month
-        : DateTime.now().month;
-    final next = DateTime(year, month + 1);
-    return '${next.year}-${next.month.toString().padLeft(2, '0')}';
-  }
-
-  int _int(Object? value) {
-    if (value is int) {
-      return value;
-    }
-    if (value is num) {
-      return value.round();
-    }
-    return int.tryParse(value?.toString() ?? '') ?? 0;
-  }
-
-  double _double(Object? value, double fallback) {
-    if (value is num) {
-      return value.toDouble();
-    }
-    return double.tryParse(value?.toString() ?? '') ?? fallback;
-  }
-
-  bool _bool(Object? value) {
-    if (value is bool) {
-      return value;
-    }
-    return value?.toString() == 'true';
+    return LedgerMonth.parse(key).shift(-1).key;
   }
 }
 
-class _LocalSyncState {
-  const _LocalSyncState(this.updatedAt, this.pendingSync);
+class _OverviewTotals {
+  const _OverviewTotals({
+    this.totalPayableCents = 0,
+    this.advancePaidCents = 0,
+  });
 
-  final DateTime updatedAt;
-  final bool pendingSync;
+  final int totalPayableCents;
+  final int advancePaidCents;
 }

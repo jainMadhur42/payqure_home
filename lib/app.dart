@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -5,6 +7,7 @@ import 'core/theme/app_theme.dart';
 import 'features/ledger/data/database/ledger_database.dart';
 import 'features/ledger/data/repositories/drift_ledger_repository.dart';
 import 'features/ledger/data/repositories/supabase_auth_repository.dart';
+import 'features/ledger/data/services/local_notification_service.dart';
 import 'features/ledger/data/services/pdf_statement_service.dart';
 import 'features/ledger/data/sync/supabase_ledger_remote_data_source.dart';
 import 'features/ledger/presentation/controllers/ledger_controller.dart';
@@ -22,35 +25,48 @@ class PayqureHomeApp extends StatefulWidget {
 
 class _PayqureHomeAppState extends State<PayqureHomeApp> {
   late final LedgerController _controller;
+  late final LedgerDatabase _database;
+  late final SupabaseAuthRepository _authRepository;
+  late final bool _ownsDatabase;
 
   @override
   void initState() {
     super.initState();
-    final appDatabase = widget.database ?? LedgerDatabase.defaults();
-    final authRepository = SupabaseAuthRepository(
-      client: widget.supabaseClient,
-    );
+    _ownsDatabase = widget.database == null;
+    _database = widget.database ?? LedgerDatabase.defaults();
+    _authRepository = SupabaseAuthRepository(client: widget.supabaseClient);
     final ledgerRepository = DriftLedgerRepository(
-      database: appDatabase,
+      database: _database,
       remoteDataSource: SupabaseLedgerRemoteDataSource(widget.supabaseClient),
     );
     _controller = LedgerController(
-      authRepository: authRepository,
+      authRepository: _authRepository,
       ledgerRepository: ledgerRepository,
       pdfStatementService: const PdfStatementService(),
+      reminderScheduler: LocalNotificationService(),
     );
   }
 
   @override
+  void dispose() {
+    _controller.dispose();
+    unawaited(_authRepository.dispose());
+    if (_ownsDatabase) {
+      unawaited(_database.close());
+    }
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, _) => MaterialApp(
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: _controller.themeModeListenable,
+      builder: (context, themeMode, _) => MaterialApp(
         debugShowCheckedModeBanner: false,
         title: 'Daily Service Ledger',
         theme: AppTheme.light,
         darkTheme: AppTheme.dark,
-        themeMode: _controller.selectedThemeMode,
+        themeMode: themeMode,
         home: LedgerHomeScreen(controller: _controller),
       ),
     );

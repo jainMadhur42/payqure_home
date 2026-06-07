@@ -4,6 +4,8 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../domain/entities/household_service.dart';
+import '../../domain/entities/ledger_month.dart';
+import '../../domain/entities/service_metadata.dart';
 import '../../domain/entities/service_entry.dart';
 import '../../domain/entities/service_template.dart';
 
@@ -24,8 +26,10 @@ extension ServiceEntryStatusLabel on ServiceEntryStatus {
 }
 
 String dateLabel(int day, String monthKey) {
-  final parts = monthKey.split('-');
-  final month = parts.length > 1 ? int.tryParse(parts[1]) ?? 1 : 1;
+  final month = LedgerMonth.parse(
+    monthKey,
+    fallback: DateTime(DateTime.now().year),
+  ).month;
   const months = [
     'Jan',
     'Feb',
@@ -45,22 +49,16 @@ String dateLabel(int day, String monthKey) {
 }
 
 String fullDateLabel(int day, String monthKey) {
-  final parts = monthKey.split('-');
-  final year = parts.isNotEmpty ? parts.first : '${DateTime.now().year}';
+  final year = LedgerMonth.parse(monthKey).year;
   return '${dateLabel(day, monthKey)} $year';
 }
 
 DateTime monthDate(String monthKey) {
-  final parts = monthKey.split('-');
-  final year = int.tryParse(parts.first) ?? DateTime.now().year;
-  final month = parts.length > 1
-      ? int.tryParse(parts[1]) ?? DateTime.now().month
-      : DateTime.now().month;
-  return DateTime(year, month);
+  return LedgerMonth.parse(monthKey).firstDay;
 }
 
 String monthKeyForDate(DateTime date) {
-  return '${date.year}-${date.month.toString().padLeft(2, '0')}';
+  return LedgerMonth.fromDate(date).key;
 }
 
 String monthLabelShort(String monthKey) {
@@ -83,7 +81,7 @@ String monthLabelShort(String monthKey) {
 }
 
 String formatFullDate(DateTime date) {
-  return '${dateLabel(date.day, '${date.year}-${date.month.toString().padLeft(2, '0')}')} ${date.year}';
+  return '${dateLabel(date.day, LedgerMonth.fromDate(date).key)} ${date.year}';
 }
 
 IconData serviceIcon(String icon) {
@@ -121,20 +119,8 @@ String contactNumber(HouseholdService service) {
 }
 
 String? serviceDescriptionValue(HouseholdService service, String field) {
-  for (final item in service.description.split(' • ')) {
-    final separator = item.indexOf(':');
-    if (separator == -1) {
-      continue;
-    }
-    final label = item.substring(0, separator).trim().toLowerCase();
-    if (label == field.toLowerCase()) {
-      final value = item.substring(separator + 1).trim();
-      if (value.isNotEmpty) {
-        return value;
-      }
-    }
-  }
-  return null;
+  final value = ServiceMetadata.parse(service.description).valueFor(field);
+  return value == null || value.isEmpty ? null : value;
 }
 
 String entryStatusLabel(HouseholdService service, ServiceEntry entry) {
@@ -289,9 +275,9 @@ class DetailRow extends StatelessWidget {
           Expanded(
             child: Text(
               label,
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: AppColors.muted),
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           ),
           const SizedBox(width: AppSpacing.md),
@@ -329,15 +315,17 @@ class SettlementRow extends StatelessWidget {
           Expanded(
             child: Text(
               label,
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: AppColors.muted),
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           ),
           Text(
             CurrencyFormatter.rupees(amountCents / 100),
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: strong ? AppColors.primary : AppColors.ink,
+              color: strong
+                  ? Theme.of(context).colorScheme.primary
+                  : Theme.of(context).colorScheme.onSurface,
               fontWeight: FontWeight.w900,
             ),
           ),

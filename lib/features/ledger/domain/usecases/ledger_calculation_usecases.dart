@@ -1,5 +1,6 @@
 import '../entities/advance_payment.dart';
 import '../entities/household_service.dart';
+import '../entities/ledger_month.dart';
 import '../entities/monthly_settlement.dart';
 import '../entities/payment_transaction.dart';
 import '../entities/service_entry.dart';
@@ -58,7 +59,7 @@ class GetServiceTillDateSummaryUseCase {
     DateTime? today,
     bool autoMarkDefault = false,
   }) {
-    final monthDate = _monthDate(monthKey);
+    final monthDate = LedgerMonth.parse(monthKey).firstDay;
     final cutoff = _cutoffDateResolver.resolve(
       selectedMonth: monthDate.month,
       selectedYear: monthDate.year,
@@ -83,14 +84,5 @@ class GetServiceTillDateSummaryUseCase {
           : null,
     );
     return ServiceTillDateSummary(usage: usage, settlement: settlement);
-  }
-
-  DateTime _monthDate(String monthKey) {
-    final parts = monthKey.split('-');
-    final year = int.tryParse(parts.first) ?? DateTime.now().year;
-    final month = parts.length > 1
-        ? int.tryParse(parts[1]) ?? DateTime.now().month
-        : DateTime.now().month;
-    return DateTime(year, month);
   }
 }

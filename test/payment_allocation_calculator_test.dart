@@ -4,7 +4,7 @@ import 'package:payqure_home/features/ledger/domain/services/payment_allocation_
 void main() {
   const calculator = PaymentAllocationCalculator();
 
-  test('water payment settles current, previous, then creates advance', () {
+  test('water payment settles previous, current, then creates advance', () {
     final allocation = calculator.calculate(
       paymentCents: 110000,
       currentMonthDueCents: 80000,
@@ -23,8 +23,8 @@ void main() {
       previousBalanceCents: 30000,
     );
 
-    expect(allocation.currentMonthCents, 130000);
-    expect(allocation.previousBalanceCents, 20000);
+    expect(allocation.currentMonthCents, 120000);
+    expect(allocation.previousBalanceCents, 30000);
     expect(allocation.advanceCents, 0);
   });
 }

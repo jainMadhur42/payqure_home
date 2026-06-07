@@ -49,12 +49,12 @@ class SettlementCalculator {
     );
     final hasAllocations =
         allocatedCurrent + allocatedPrevious + allocatedAdvance > 0;
-    final currentPaid = hasAllocations
-        ? allocatedCurrent
-        : paid.clamp(0, currentDue);
     final previousPaid = hasAllocations
         ? allocatedPrevious
-        : (paid - currentPaid).clamp(0, previousDue);
+        : paid.clamp(0, previousDue);
+    final currentPaid = hasAllocations
+        ? allocatedCurrent
+        : (paid - previousPaid).clamp(0, currentDue);
     final paymentAdvance = hasAllocations
         ? allocatedAdvance
         : (paid - currentPaid - previousPaid).clamp(0, paid);

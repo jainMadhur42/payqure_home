@@ -51,7 +51,7 @@ void main() {
     );
   });
 
-  testWidgets('Splash opens dashboard with dev bypass', (
+  testWidgets('Splash opens onboarding then dashboard with dev bypass', (
     WidgetTester tester,
   ) async {
     final database = LedgerDatabase(NativeDatabase.memory());
@@ -60,11 +60,18 @@ void main() {
     await tester.pumpWidget(PayqureHomeApp(database: database));
     await tester.pump(const Duration(milliseconds: 1300));
     await tester.pump(const Duration(seconds: 1));
+    expect(find.text('Track Household\nServices Easily'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('onboarding-skip')));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Dev Bypass Login'));
     await tester.pumpAndSettle();
 
     expect(find.text('Payqure Home'), findsOneWidget);
     expect(find.text('Amount Due'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
   });
 
   test('Controller can switch months', () async {

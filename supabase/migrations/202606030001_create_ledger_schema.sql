@@ -4,6 +4,9 @@ create table if not exists public.profiles (
   email text not null,
   phone text not null unique,
   email_verified boolean not null default false,
+  privacy_policy_accepted boolean not null default false,
+  privacy_policy_accepted_at timestamptz null,
+  privacy_policy_version text null,
   updated_at timestamptz not null default now()
 );
 

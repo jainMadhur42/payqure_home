@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -5,6 +7,7 @@ import 'package:payqure_home/features/ledger/data/database/ledger_database.dart'
 import 'package:payqure_home/features/ledger/data/repositories/drift_ledger_repository.dart';
 import 'package:payqure_home/features/ledger/data/sync/supabase_ledger_remote_data_source.dart';
 import 'package:payqure_home/features/ledger/domain/entities/payment_transaction.dart';
+import 'package:payqure_home/features/ledger/domain/entities/service_entry.dart';
 
 const userId = 'user-1';
 const monthKey = '2026-05';
@@ -132,6 +135,43 @@ void main() {
         ),
       ),
     );
+  });
+
+  test('month hydration fetches once and then uses the Drift cache', () async {
+    remote.services = [
+      _remoteService(
+        name: 'Remote Milkman',
+        updatedAt: DateTime.utc(2026, 5, 2),
+      ),
+    ];
+
+    await repository.hydrateMonth(userId: userId, monthKey: monthKey);
+    await repository.hydrateMonth(userId: userId, monthKey: monthKey);
+
+    expect(remote.serviceFetches, 1);
+    expect(remote.entryFetches, 1);
+    expect(remote.advanceFetches, 1);
+    expect(remote.paymentFetches, 1);
+    expect(remote.settlementFetches, 1);
+    expect(
+      await repository.isMonthCached(userId: userId, monthKey: monthKey),
+      isTrue,
+    );
+  });
+
+  test('forced month hydration refreshes an existing cache', () async {
+    await repository.hydrateMonth(userId: userId, monthKey: monthKey);
+    await repository.hydrateMonth(
+      userId: userId,
+      monthKey: monthKey,
+      forceRefresh: true,
+    );
+
+    expect(remote.serviceFetches, 2);
+    expect(remote.entryFetches, 2);
+    expect(remote.advanceFetches, 2);
+    expect(remote.paymentFetches, 2);
+    expect(remote.settlementFetches, 2);
   });
 
   test(
@@ -325,12 +365,146 @@ void main() {
         updatedAt: now,
       ),
     );
+    await repository.syncPending();
 
     expect(remote.pushedPayments, 1);
     expect(remote.lastPushedPayment?.amountCents, 30000);
     expect(remote.lastPushedPayment?.currentMonthAmountCents, 30000);
     expect(remote.lastPushedPayment?.previousBalanceAmountCents, 0);
     expect(remote.lastPushedPayment?.advanceAmountCents, 0);
+  });
+
+  test('deleted payment is pushed to Supabase as a soft delete', () async {
+    final now = DateTime.utc(2026, 5, 25);
+    await _insertLocalService(
+      database,
+      name: 'Milkman',
+      updatedAt: now,
+      pendingSync: false,
+    );
+    final payment = PaymentTransaction(
+      id: 'payment-delete-sync',
+      userId: userId,
+      serviceId: serviceId,
+      monthKey: monthKey,
+      amountCents: 30000,
+      paymentDate: now,
+      mode: PaymentMode.upi,
+      updatedAt: now,
+    );
+
+    await repository.savePayment(payment);
+    await repository.syncPending();
+    remote.pushedPayments = 0;
+    remote.lastPushedPayment = null;
+
+    await repository.deletePayment(payment);
+    await repository.syncPending();
+
+    expect(remote.pushedPayments, 1);
+    expect(remote.lastPushedPayment?.id, 'payment-delete-sync');
+    expect(remote.lastPushedPayment?.isDeleted, isTrue);
+    expect(remote.lastPushedPayment?.currentMonthAmountCents, 0);
+    expect(remote.lastPushedPayment?.previousBalanceAmountCents, 0);
+    expect(remote.lastPushedPayment?.advanceAmountCents, 0);
+  });
+
+  test(
+    'concurrent entries for one service settle without lost updates',
+    () async {
+      final now = DateTime.utc(2026, 5, 20);
+      await _insertLocalService(
+        database,
+        name: 'Milkman',
+        updatedAt: now,
+        pendingSync: false,
+      );
+
+      await Future.wait([
+        repository.saveEntry(
+          ServiceEntry(
+            id: 'entry-concurrent-1',
+            serviceId: serviceId,
+            day: 1,
+            monthKey: monthKey,
+            status: ServiceEntryStatus.delivered,
+            quantity: 1,
+            unit: 'L',
+            rateCents: 6000,
+            amountCents: 6000,
+            updatedAt: now,
+          ),
+        ),
+        repository.saveEntry(
+          ServiceEntry(
+            id: 'entry-concurrent-2',
+            serviceId: serviceId,
+            day: 2,
+            monthKey: monthKey,
+            status: ServiceEntryStatus.delivered,
+            quantity: 1,
+            unit: 'L',
+            rateCents: 6000,
+            amountCents: 6000,
+            updatedAt: now,
+          ),
+        ),
+      ]);
+
+      final bill = await repository.getMonthlyBill(
+        serviceId: serviceId,
+        monthKey: monthKey,
+      );
+
+      expect(bill.grossAmountCents, 12000);
+      expect(bill.service.entries, hasLength(2));
+    },
+  );
+
+  test('overview stream reacts to entry changes', () async {
+    final now = DateTime.utc(2026, 5, 20);
+    await _insertLocalService(
+      database,
+      name: 'Milkman',
+      updatedAt: now,
+      pendingSync: false,
+    );
+    final values = <dynamic>[];
+    final firstOverview = Completer<void>();
+    final secondOverview = Completer<void>();
+    final subscription = repository
+        .watchOverview(userId: userId, monthKey: monthKey)
+        .listen((overview) {
+          values.add(overview);
+          if (values.length == 1) {
+            firstOverview.complete();
+          } else if (values.length == 2) {
+            secondOverview.complete();
+          }
+        });
+    addTearDown(subscription.cancel);
+
+    await firstOverview.future;
+    await database
+        .into(database.entryRecords)
+        .insert(
+          EntryRecordsCompanion.insert(
+            id: 'reactive-entry',
+            serviceId: serviceId,
+            monthKey: monthKey,
+            day: 1,
+            status: 'delivered',
+            quantity: const Value(1),
+            unit: const Value('L'),
+            rateCents: const Value(6000),
+            amountCents: const Value(6000),
+            updatedAt: now,
+          ),
+        );
+
+    await secondOverview.future;
+    expect(values.first.services.single.entries, isEmpty);
+    expect(values.last.services.single.entries, hasLength(1));
   });
 }
 
@@ -484,13 +658,18 @@ class _FakeRemoteDataSource implements LedgerRemoteDataSource {
   List<Map<String, dynamic>> advances = const [];
   List<Map<String, dynamic>> payments = const [];
   List<Map<String, dynamic>> settlements = const [];
-  int? schemaVersion = 3;
+  int? schemaVersion = 4;
   bool failOnEntryPush = false;
   int pushedServices = 0;
   int pushedEntries = 0;
   int pushedAdvances = 0;
   int pushedPayments = 0;
   int pushedSettlements = 0;
+  int serviceFetches = 0;
+  int entryFetches = 0;
+  int advanceFetches = 0;
+  int paymentFetches = 0;
+  int settlementFetches = 0;
   PaymentTransactionRecord? lastPushedPayment;
 
   @override
@@ -504,6 +683,7 @@ class _FakeRemoteDataSource implements LedgerRemoteDataSource {
     required String userId,
     required String monthKey,
   }) async {
+    serviceFetches++;
     return services;
   }
 
@@ -511,6 +691,7 @@ class _FakeRemoteDataSource implements LedgerRemoteDataSource {
   Future<List<Map<String, dynamic>>> fetchEntries({
     required String monthKey,
   }) async {
+    entryFetches++;
     return entries;
   }
 
@@ -518,6 +699,7 @@ class _FakeRemoteDataSource implements LedgerRemoteDataSource {
   Future<List<Map<String, dynamic>>> fetchAdvances({
     required String monthKey,
   }) async {
+    advanceFetches++;
     return advances;
   }
 
@@ -525,6 +707,7 @@ class _FakeRemoteDataSource implements LedgerRemoteDataSource {
   Future<List<Map<String, dynamic>>> fetchPayments({
     required String monthKey,
   }) async {
+    paymentFetches++;
     return payments;
   }
 
@@ -532,6 +715,7 @@ class _FakeRemoteDataSource implements LedgerRemoteDataSource {
   Future<List<Map<String, dynamic>>> fetchSettlements({
     required String monthKey,
   }) async {
+    settlementFetches++;
     return settlements;
   }
 

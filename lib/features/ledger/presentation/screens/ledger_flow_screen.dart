@@ -8,14 +8,15 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/utils/currency_formatter.dart';
+import '../../../legal/presentation/legal_screens.dart';
 import '../../domain/entities/app_route.dart';
 import '../../domain/entities/household_service.dart';
-import '../../domain/entities/monthly_bill.dart';
 import '../../domain/entities/service_entry.dart';
 import '../../domain/entities/service_history_item.dart';
 import '../../domain/entities/service_template.dart';
 import '../../domain/entities/service_template_catalog.dart';
 import '../controllers/ledger_controller.dart';
+import '../models/add_service_draft.dart';
 import '../widgets/ledger_bottom_nav.dart';
 import '../widgets/ledger_screen_shared.dart';
 import '../widgets/loading_skeleton.dart';
@@ -25,6 +26,7 @@ import 'currency_screen.dart';
 import 'contacts_screen.dart';
 import 'global_history_screen.dart';
 import 'home_screen.dart';
+import 'payment_detail_screen.dart';
 import 'payment_history_screen.dart';
 import 'service_detail_screen.dart';
 import 'service_template_picker_screen.dart';
@@ -91,6 +93,13 @@ class LedgerFlowScreen extends StatelessWidget {
                   controller: controller,
                   service: selectedService,
                 ),
+        LedgerRoute.paymentDetail =>
+          selectedService == null || controller.selectedPayment == null
+              ? const _EmptyLedgerView()
+              : PaymentDetailScreen(
+                  service: selectedService,
+                  payment: controller.selectedPayment!,
+                ),
         LedgerRoute.globalPaymentHistory => GlobalHistoryScreen(
           controller: controller,
           type: ServiceHistoryType.payment,
@@ -108,6 +117,13 @@ class LedgerFlowScreen extends StatelessWidget {
         LedgerRoute.profile => _ProfileView(controller: controller),
         LedgerRoute.currency => CurrencyScreen(controller: controller),
         LedgerRoute.theme => ThemeScreen(controller: controller),
+        LedgerRoute.privacyPolicy => const PrivacyPolicyView(),
+        LedgerRoute.termsDisclaimer => const TermsDisclaimerView(),
+        LedgerRoute.deleteMyData => DeleteMyDataView(
+          registeredIdentifier: controller.profile?.email.isNotEmpty == true
+              ? controller.profile!.email
+              : controller.profile?.phone ?? '',
+        ),
         _ => const SizedBox.shrink(),
       },
       bottomNavigationBar: _showBottomNav
@@ -283,6 +299,8 @@ class LedgerFlowScreen extends StatelessWidget {
             ? 'Settlement Details'
             : controller.route == LedgerRoute.paymentHistory
             ? 'Payment History'
+            : controller.route == LedgerRoute.paymentDetail
+            ? 'Payment Detail'
             : controller.route == LedgerRoute.globalPaymentHistory
             ? 'Payment History'
             : controller.route == LedgerRoute.advanceHistory
@@ -299,6 +317,12 @@ class LedgerFlowScreen extends StatelessWidget {
             ? 'Currency'
             : controller.route == LedgerRoute.theme
             ? 'Theme'
+            : controller.route == LedgerRoute.privacyPolicy
+            ? 'Privacy Policy'
+            : controller.route == LedgerRoute.termsDisclaimer
+            ? 'Terms & Disclaimer'
+            : controller.route == LedgerRoute.deleteMyData
+            ? 'Delete My Data'
             : 'Payqure Home',
       ),
       actions: [
@@ -321,11 +345,15 @@ class LedgerFlowScreen extends StatelessWidget {
         EntrySource.calendar => LedgerRoute.calendar,
       },
       LedgerRoute.settlementDetail => LedgerRoute.calendar,
+      LedgerRoute.paymentDetail => LedgerRoute.paymentHistory,
       LedgerRoute.paymentHistory => LedgerRoute.calendar,
       LedgerRoute.globalPaymentHistory ||
       LedgerRoute.advanceHistory ||
       LedgerRoute.theme => LedgerRoute.more,
       LedgerRoute.contacts => LedgerRoute.more,
+      LedgerRoute.privacyPolicy ||
+      LedgerRoute.termsDisclaimer ||
+      LedgerRoute.deleteMyData => LedgerRoute.more,
       LedgerRoute.pdfPreview => switch (controller.pdfSource) {
         PdfSource.serviceDetail => LedgerRoute.calendar,
         PdfSource.bills => LedgerRoute.dashboard,
@@ -879,23 +907,54 @@ Color _statusColor(ServiceEntryStatus status) {
   };
 }
 
-class _PdfPreview extends StatelessWidget {
+class _PdfPreview extends StatefulWidget {
   const _PdfPreview({required this.controller, required this.service});
 
   final LedgerController controller;
   final HouseholdService service;
 
   @override
+  State<_PdfPreview> createState() => _PdfPreviewState();
+}
+
+class _PdfPreviewState extends State<_PdfPreview> {
+  late Future<Uint8List?> _statementBytes;
+  late String _monthKey;
+
+  @override
+  void initState() {
+    super.initState();
+    _monthKey = widget.controller.monthKey;
+    _statementBytes = widget.controller.buildSelectedPdf();
+  }
+
+  @override
+  void didUpdateWidget(covariant _PdfPreview oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final nextMonthKey = widget.controller.monthKey;
+    if (oldWidget.service.id != widget.service.id ||
+        _monthKey != nextMonthKey) {
+      _monthKey = nextMonthKey;
+      _statementBytes = widget.controller.buildSelectedPdf();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return FutureBuilder<MonthlyBill?>(
-      future: controller.loadSelectedBill(),
+    return FutureBuilder<Uint8List?>(
+      future: _statementBytes,
       builder: (context, snapshot) {
-        final bill = snapshot.data;
-        if (bill == null) {
+        if (snapshot.hasError) {
+          return const Center(
+            child: Text('Could not generate PDF. Please try again.'),
+          );
+        }
+        final bytes = snapshot.data;
+        if (bytes == null) {
           return const Center(child: CircularProgressIndicator());
         }
         return PdfPreview(
-          build: (_) => controller.buildSelectedPdf().then((bytes) => bytes!),
+          build: (_) async => bytes,
           canChangeOrientation: false,
           canChangePageFormat: false,
           initialPageFormat: PdfPageFormat.a4,
@@ -968,15 +1027,23 @@ class _MoreView extends StatelessWidget {
           ],
         ),
         _MoreSection(
-          title: 'Support',
-          children: const [
+          title: 'Legal',
+          children: [
             _MoreTile(
               icon: Icons.privacy_tip_outlined,
               title: 'Privacy Policy',
+              onTap: () => controller.goTo(LedgerRoute.privacyPolicy),
             ),
             _MoreTile(
-              icon: Icons.description_outlined,
-              title: 'Terms & Conditions',
+              icon: Icons.gavel_outlined,
+              title: 'Terms & Disclaimer',
+              onTap: () => controller.goTo(LedgerRoute.termsDisclaimer),
+            ),
+            _MoreTile(
+              icon: Icons.delete_outline,
+              title: 'Delete My Data',
+              destructive: true,
+              onTap: () => controller.goTo(LedgerRoute.deleteMyData),
             ),
           ],
         ),
@@ -1058,23 +1125,26 @@ class _MoreTile extends StatelessWidget {
     final color = destructive
         ? AppColors.danger
         : Theme.of(context).colorScheme.onSurface;
-    return ListTile(
-      onTap: onTap,
-      leading: Icon(icon, color: color, size: 22),
-      title: Text(
-        title,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-          color: color,
-          fontWeight: destructive ? FontWeight.w800 : FontWeight.w600,
+    return Material(
+      type: MaterialType.transparency,
+      child: ListTile(
+        onTap: onTap,
+        leading: Icon(icon, color: color, size: 22),
+        title: Text(
+          title,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: color,
+            fontWeight: destructive ? FontWeight.w800 : FontWeight.w600,
+          ),
         ),
+        trailing: destructive
+            ? null
+            : Icon(
+                Icons.chevron_right,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+        visualDensity: VisualDensity.compact,
       ),
-      trailing: destructive
-          ? null
-          : Icon(
-              Icons.chevron_right,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-      visualDensity: VisualDensity.compact,
     );
   }
 }

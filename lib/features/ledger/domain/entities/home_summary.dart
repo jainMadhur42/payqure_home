@@ -1,5 +1,4 @@
 import 'household_service.dart';
-import 'monthly_bill.dart';
 
 class HomeMonthlySummary {
   const HomeMonthlySummary({
@@ -22,7 +21,6 @@ class HomeMonthlySummary {
 class HomeServiceSummary {
   const HomeServiceSummary({
     required this.service,
-    required this.bill,
     required this.metricLabel,
     required this.payableCents,
     required this.paidCents,
@@ -40,7 +38,6 @@ class HomeServiceSummary {
   });
 
   final HouseholdService service;
-  final MonthlyBill bill;
   final String metricLabel;
   final int payableCents;
   final int paidCents;

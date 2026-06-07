@@ -8,6 +8,7 @@ import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../domain/entities/home_summary.dart';
+import '../../domain/entities/ledger_month.dart';
 import '../../domain/entities/service_entry.dart';
 import '../../domain/entities/service_template.dart';
 import '../controllers/ledger_controller.dart';
@@ -16,13 +17,35 @@ import '../widgets/loading_skeleton.dart';
 import '../widgets/month_selector.dart';
 import '../widgets/service_icon.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({required this.controller, super.key});
 
   final LedgerController controller;
 
   @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.controller.ensureHomeNotificationsConfigured();
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant HomeScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.controller.ensureHomeNotificationsConfigured();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final controller = widget.controller;
     final overview = controller.overview!;
     return SafeArea(
       child: FutureBuilder<List<HomeServiceSummary>>(
@@ -34,7 +57,7 @@ class HomeScreen extends StatelessWidget {
             serviceSummaries,
           );
           return RefreshIndicator(
-            onRefresh: () async => controller.goTo(controller.route),
+            onRefresh: controller.refreshSelectedMonth,
             child: ListView(
               padding: const EdgeInsets.fromLTRB(
                 AppSpacing.lg,
@@ -150,16 +173,12 @@ class HomeScreen extends StatelessWidget {
   }
 
   int _quickLogDay(String monthKey) {
-    final parts = monthKey.split('-');
-    final year = int.tryParse(parts.first) ?? DateTime.now().year;
-    final month = parts.length > 1
-        ? int.tryParse(parts[1]) ?? DateTime.now().month
-        : DateTime.now().month;
+    final month = LedgerMonth.parse(monthKey);
     final now = DateTime.now();
-    if (year == now.year && month == now.month) {
+    if (month == LedgerMonth.fromDate(now)) {
       return now.day;
     }
-    return DateTime(year, month + 1, 0).day;
+    return month.daysInMonth;
   }
 }
 

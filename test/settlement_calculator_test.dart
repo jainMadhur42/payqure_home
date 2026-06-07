@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:payqure_home/features/ledger/domain/entities/monthly_settlement.dart';
 import 'package:payqure_home/features/ledger/domain/entities/payment_transaction.dart';
+import 'package:payqure_home/features/ledger/domain/entities/payment_settlement_preview.dart';
+import 'package:payqure_home/features/ledger/domain/services/payment_allocation_calculator.dart';
 import 'package:payqure_home/features/ledger/domain/services/settlement_calculator.dart';
 
 void main() {
@@ -141,7 +143,38 @@ void main() {
     expect(result.status, SettlementStatus.paid);
   });
 
-  test('allocated payment settles current month before previous balance', () {
+  test('unallocated payment settles previous balance before current month', () {
+    final previous = MonthlySettlement(
+      id: 'previous',
+      userId: 'user',
+      serviceId: 'service',
+      monthKey: '2026-05',
+      grossAmountCents: 90000,
+      advanceUsedCents: 0,
+      previousCarryForwardCents: 0,
+      previousAdvanceCents: 0,
+      payableAmountCents: 90000,
+      paidAmountCents: 70000,
+      remainingAmountCents: 20000,
+      carryForwardToNextMonthCents: 20000,
+      advanceToNextMonthCents: 0,
+      status: SettlementStatus.partiallyPaid,
+      generatedAt: now,
+      updatedAt: now,
+    );
+
+    final result = settlement(
+      gross: 80000,
+      payments: [payment(50000)],
+      previous: previous,
+    );
+
+    expect(result.remainingAmountCents, 50000);
+    expect(result.carryForwardToNextMonthCents, 50000);
+    expect(result.status, SettlementStatus.partiallyPaid);
+  });
+
+  test('allocated payment records previous month before current month', () {
     final previous = MonthlySettlement(
       id: 'previous',
       userId: 'user',
@@ -175,5 +208,38 @@ void main() {
     expect(result.remainingAmountCents, 0);
     expect(result.advanceToNextMonthCents, 10000);
     expect(result.status, SettlementStatus.overpaid);
+  });
+
+  test('payment preview allocates oldest pending months first', () {
+    const allocator = PaymentAllocationCalculator();
+
+    final preview = allocator.previewOldestFirst(
+      paymentCents: 350000,
+      dueMonths: const [
+        PaymentMonthAllocation(
+          monthKey: '2026-04',
+          dueBeforePaymentCents: 150000,
+          allocatedCents: 0,
+        ),
+        PaymentMonthAllocation(
+          monthKey: '2026-05',
+          dueBeforePaymentCents: 250000,
+          allocatedCents: 0,
+        ),
+        PaymentMonthAllocation(
+          monthKey: '2026-06',
+          dueBeforePaymentCents: 220000,
+          allocatedCents: 0,
+        ),
+      ],
+    );
+
+    expect(preview.totalDueCents, 620000);
+    expect(preview.months[0].allocatedCents, 150000);
+    expect(preview.months[0].remainingCents, 0);
+    expect(preview.months[1].allocatedCents, 200000);
+    expect(preview.months[1].remainingCents, 50000);
+    expect(preview.months[2].allocatedCents, 0);
+    expect(preview.advanceCents, 0);
   });
 }

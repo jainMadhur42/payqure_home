@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../domain/entities/ledger_month.dart';
 import '../database/ledger_database.dart';
 
 abstract interface class LedgerRemoteDataSource {
@@ -227,12 +228,6 @@ class SupabaseLedgerRemoteDataSource implements LedgerRemoteDataSource {
   }
 
   String _nextMonthKey(String monthKey) {
-    final parts = monthKey.split('-');
-    final year = int.tryParse(parts.first) ?? DateTime.now().year;
-    final month = parts.length > 1
-        ? int.tryParse(parts[1]) ?? DateTime.now().month
-        : DateTime.now().month;
-    final next = DateTime(year, month + 1);
-    return '${next.year}-${next.month.toString().padLeft(2, '0')}';
+    return LedgerMonth.parse(monthKey).shift(1).key;
   }
 }

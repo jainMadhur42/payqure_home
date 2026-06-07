@@ -16,6 +16,7 @@ import '../../domain/entities/service_template.dart';
 class PdfStatementService {
   const PdfStatementService();
 
+  static Future<pw.MemoryImage>? _appIconFuture;
   static const _primary = PdfColor.fromInt(0xFF4325DB);
   static const _primaryDark = PdfColor.fromInt(0xFF24109B);
   static const _ink = PdfColor.fromInt(0xFF111327);
@@ -786,8 +787,9 @@ class PdfStatementService {
   }
 
   Future<pw.MemoryImage> _loadAppIcon() async {
-    final bytes = await rootBundle.load(AppAssets.appIcon);
-    return pw.MemoryImage(bytes.buffer.asUint8List());
+    return _appIconFuture ??= rootBundle
+        .load(AppAssets.appIcon)
+        .then((bytes) => pw.MemoryImage(bytes.buffer.asUint8List()));
   }
 
   pw.Widget _header(MonthlyBill bill, pw.ImageProvider appIcon) {
@@ -1729,11 +1731,15 @@ class _StatementFonts {
 
   final pw.Font regular;
   final pw.Font bold;
+  static Future<_StatementFonts>? _cachedFonts;
 
-  static Future<_StatementFonts> load() async {
-    final bytes = await rootBundle.load('assets/fonts/Roboto-Regular.ttf');
-    final font = pw.Font.ttf(bytes);
-    return _StatementFonts(regular: font, bold: font);
+  static Future<_StatementFonts> load() {
+    return _cachedFonts ??= rootBundle
+        .load('assets/fonts/Roboto-Regular.ttf')
+        .then((bytes) {
+          final font = pw.Font.ttf(bytes);
+          return _StatementFonts(regular: font, bold: font);
+        });
   }
 }
 

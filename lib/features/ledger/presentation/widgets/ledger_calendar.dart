@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../domain/entities/ledger_month.dart';
 import '../../domain/entities/service_entry.dart';
 
 class LedgerCalendar extends StatelessWidget {
@@ -11,6 +12,7 @@ class LedgerCalendar extends StatelessWidget {
     required this.entries,
     required this.monthKey,
     required this.onDaySelected,
+    this.configuredQuantity,
     this.serviceStartDate,
     this.onBlockedDaySelected,
     this.selectedDay = 29,
@@ -20,13 +22,14 @@ class LedgerCalendar extends StatelessWidget {
   final List<ServiceEntry> entries;
   final String monthKey;
   final int selectedDay;
+  final double? configuredQuantity;
   final ValueChanged<int> onDaySelected;
   final DateTime? serviceStartDate;
   final ValueChanged<DateTime>? onBlockedDaySelected;
 
   @override
   Widget build(BuildContext context) {
-    final monthDate = _monthDate(monthKey);
+    final monthDate = LedgerMonth.parse(monthKey).firstDay;
     final leadingBlanks = List<Widget>.filled(
       monthDate.weekday % 7,
       const SizedBox.shrink(),
@@ -56,10 +59,11 @@ class LedgerCalendar extends StatelessWidget {
           final entry = entryByDay[day];
           final status = isFuture
               ? CalendarDayStatus.noEntry
-              : _calendarStatus(entry);
+              : _calendarStatus(entry, configuredQuantity);
           return SizedBox.square(
             dimension: cellSize.clamp(44.0, 58.0),
             child: CalendarDayCell(
+              key: ValueKey('calendar-day-${date.toIso8601String()}'),
               date: date,
               status: status,
               isSelected: selected && !isBlocked,
@@ -112,17 +116,19 @@ class LedgerCalendar extends StatelessWidget {
     );
   }
 
-  DateTime _monthDate(String key) {
-    final parts = key.split('-');
-    final year = int.tryParse(parts.first) ?? DateTime.now().year;
-    final month = parts.length > 1
-        ? int.tryParse(parts[1]) ?? DateTime.now().month
-        : DateTime.now().month;
-    return DateTime(year, month);
-  }
-
-  CalendarDayStatus _calendarStatus(ServiceEntry? entry) {
-    return switch (entry?.status ?? ServiceEntryStatus.noEntry) {
+  CalendarDayStatus _calendarStatus(
+    ServiceEntry? entry,
+    double? configuredQuantity,
+  ) {
+    if (entry == null) {
+      return CalendarDayStatus.noEntry;
+    }
+    if (entry.status == ServiceEntryStatus.delivered &&
+        configuredQuantity != null &&
+        (entry.quantity - configuredQuantity).abs() > 0.000001) {
+      return CalendarDayStatus.quantityChanged;
+    }
+    return switch (entry.status) {
       ServiceEntryStatus.delivered => CalendarDayStatus.delivered,
       ServiceEntryStatus.notDelivered => CalendarDayStatus.notDelivered,
       ServiceEntryStatus.rateChanged => CalendarDayStatus.quantityChanged,
@@ -154,12 +160,13 @@ class CalendarDayCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = _entryColors(status);
+    final colorScheme = Theme.of(context).colorScheme;
+    final colors = _entryColors(context, status);
     final textColor = isSelected
-        ? Colors.white
+        ? colorScheme.onPrimary
         : isBlocked
-        ? AppColors.muted.withValues(alpha: 0.55)
-        : AppColors.ink;
+        ? colorScheme.onSurfaceVariant.withValues(alpha: 0.55)
+        : colors.foreground;
 
     return InkWell(
       onTap: onTap,
@@ -173,18 +180,18 @@ class CalendarDayCell extends StatelessWidget {
         ),
         decoration: BoxDecoration(
           color: isSelected
-              ? AppColors.primary
+              ? colorScheme.primary
               : isBlocked
-              ? AppColors.background
+              ? colorScheme.surfaceContainerHighest.withValues(alpha: 0.45)
               : colors.background,
           borderRadius: BorderRadius.circular(AppRadius.md),
           border: Border.all(
             color: isBlocked
-                ? AppColors.line.withValues(alpha: 0.45)
+                ? colorScheme.outlineVariant.withValues(alpha: 0.55)
                 : isToday
-                ? AppColors.primary
+                ? colorScheme.primary
                 : isSelected
-                ? AppColors.primary
+                ? colorScheme.primary
                 : colors.border,
           ),
         ),
@@ -205,7 +212,7 @@ class CalendarDayCell extends StatelessWidget {
               Container(
                 width: 14,
                 height: 1.5,
-                color: AppColors.muted.withValues(alpha: 0.45),
+                color: colorScheme.onSurfaceVariant.withValues(alpha: 0.45),
               ),
           ],
         ),
@@ -222,7 +229,33 @@ class _StatusColors {
   final Color foreground;
 }
 
-_StatusColors _entryColors(CalendarDayStatus status) {
+_StatusColors _entryColors(BuildContext context, CalendarDayStatus status) {
+  final scheme = Theme.of(context).colorScheme;
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+  if (isDark) {
+    return switch (status) {
+      CalendarDayStatus.delivered => _StatusColors(
+        AppColors.success.withValues(alpha: 0.18),
+        AppColors.success.withValues(alpha: 0.50),
+        const Color(0xFF75E7A3),
+      ),
+      CalendarDayStatus.notDelivered => _StatusColors(
+        AppColors.danger.withValues(alpha: 0.18),
+        AppColors.danger.withValues(alpha: 0.52),
+        const Color(0xFFFF8EA1),
+      ),
+      CalendarDayStatus.quantityChanged => _StatusColors(
+        AppColors.warning.withValues(alpha: 0.18),
+        AppColors.warning.withValues(alpha: 0.52),
+        const Color(0xFFFFB181),
+      ),
+      CalendarDayStatus.noEntry => _StatusColors(
+        scheme.surfaceContainerHighest,
+        scheme.outlineVariant,
+        scheme.onSurfaceVariant,
+      ),
+    };
+  }
   return switch (status) {
     CalendarDayStatus.delivered => const _StatusColors(
       AppColors.successSoft,

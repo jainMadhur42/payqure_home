@@ -7,6 +7,7 @@ import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../domain/entities/household_service.dart';
+import '../../domain/entities/ledger_month.dart';
 import '../../domain/entities/service_entry.dart';
 import '../../domain/entities/service_template.dart';
 import '../../domain/services/service_start_date_resolver.dart';
@@ -51,6 +52,10 @@ class ServiceDetailScreen extends StatelessWidget {
               child: LedgerCalendar(
                 entries: service.entries,
                 monthKey: service.monthKey,
+                configuredQuantity:
+                    service.templateType == ServiceTemplateType.quantity
+                    ? service.defaultQuantity
+                    : null,
                 selectedDay: controller.selectedDay,
                 serviceStartDate: serviceStartDate,
                 onDaySelected: (day) => _handleDayTap(context, day),
@@ -862,11 +867,7 @@ class ServiceDetailSummaryCard extends StatelessWidget {
   }
 
   bool _isCurrentMonth(String monthKey) {
-    final parts = monthKey.split('-');
-    final year = int.tryParse(parts.first);
-    final month = parts.length > 1 ? int.tryParse(parts[1]) : null;
-    final now = DateTime.now();
-    return year == now.year && month == now.month;
+    return LedgerMonth.parse(monthKey) == LedgerMonth.fromDate(DateTime.now());
   }
 }
 
@@ -878,6 +879,7 @@ class _StatementMetric extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -885,7 +887,7 @@ class _StatementMetric extends StatelessWidget {
           label,
           style: Theme.of(
             context,
-          ).textTheme.bodySmall?.copyWith(color: AppColors.muted),
+          ).textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
         ),
         const SizedBox(height: 2),
         Text(
@@ -893,7 +895,7 @@ class _StatementMetric extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: Theme.of(context).textTheme.titleSmall?.copyWith(
-            color: AppColors.ink,
+            color: colorScheme.onSurface,
             fontWeight: FontWeight.w900,
           ),
         ),
@@ -1187,13 +1189,17 @@ class _EntryStatusSelector extends StatelessWidget {
               ),
             ),
             labelStyle: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: selected ? Colors.white : AppColors.ink,
+              color: selected
+                  ? Theme.of(context).colorScheme.onPrimary
+                  : Theme.of(context).colorScheme.onSurface,
               fontWeight: FontWeight.w900,
             ),
-            selectedColor: AppColors.primary,
-            backgroundColor: AppColors.background,
+            selectedColor: Theme.of(context).colorScheme.primary,
+            backgroundColor: Theme.of(context).colorScheme.surface,
             side: BorderSide(
-              color: selected ? AppColors.primary : AppColors.line,
+              color: selected
+                  ? Theme.of(context).colorScheme.primary
+                  : Theme.of(context).colorScheme.outlineVariant,
             ),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(AppRadius.md),

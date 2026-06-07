@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/entities/app_route.dart';
+import '../../../legal/presentation/legal_screens.dart';
+import '../../../onboarding/presentation/onboarding_screen.dart';
 import '../controllers/ledger_controller.dart';
 import 'ledger_flow_screen.dart';
 import 'login_screen.dart';
@@ -44,6 +46,7 @@ class LedgerHomeScreen extends StatelessWidget {
                 ),
                 if (controller.isLoading &&
                     controller.route != LedgerRoute.splash &&
+                    controller.route != LedgerRoute.onboarding &&
                     controller.route != LedgerRoute.dashboard)
                   const Positioned.fill(
                     child: ColoredBox(
@@ -65,6 +68,10 @@ class LedgerHomeScreen extends StatelessWidget {
         key: const ValueKey('splash'),
         onDone: controller.completeSplash,
       ),
+      LedgerRoute.onboarding => OnboardingScreen(
+        key: const ValueKey('onboarding'),
+        onComplete: controller.completeOnboarding,
+      ),
       LedgerRoute.login => LoginScreen(
         key: const ValueKey('login'),
         controller: controller,
@@ -83,6 +90,10 @@ class LedgerHomeScreen extends StatelessWidget {
       ),
       LedgerRoute.resetPasswordOtp => ResetPasswordOtpScreen(
         key: const ValueKey('reset-password-otp'),
+        controller: controller,
+      ),
+      LedgerRoute.privacyPolicyAcceptance => PrivacyPolicyAcceptanceView(
+        key: const ValueKey('privacy-policy-acceptance'),
         controller: controller,
       ),
       _ => LedgerFlowScreen(

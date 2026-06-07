@@ -11,7 +11,9 @@ abstract interface class AuthRepository {
     required String email,
     required String phone,
     required String password,
+    required bool privacyPolicyAccepted,
   });
+  Future<UserProfile> acceptPrivacyPolicy({required String version});
   Future<void> resendEmailVerification(String email);
   Future<UserProfile> verifyEmailOtp({
     required String email,

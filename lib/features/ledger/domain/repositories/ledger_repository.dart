@@ -4,6 +4,7 @@ import '../entities/ledger_overview.dart';
 import '../entities/monthly_bill.dart';
 import '../entities/monthly_settlement.dart';
 import '../entities/payment_transaction.dart';
+import '../entities/payment_settlement_preview.dart';
 import '../entities/service_entry.dart';
 
 abstract interface class LedgerRepository {
@@ -57,6 +58,11 @@ abstract interface class LedgerRepository {
   Future<List<PaymentTransaction>> getPaymentHistory({
     required String serviceId,
   });
+  Future<PaymentSettlementPreview> getPaymentSettlementPreview({
+    required String serviceId,
+    required String monthKey,
+    required int paymentCents,
+  });
   Future<MonthlySettlement> getSettlement({
     required String serviceId,
     required String monthKey,
@@ -68,6 +74,15 @@ abstract interface class LedgerRepository {
   Future<void> syncRemoteChanges({
     required String userId,
     required String monthKey,
+  });
+  Future<bool> isMonthCached({
+    required String userId,
+    required String monthKey,
+  });
+  Future<void> hydrateMonth({
+    required String userId,
+    required String monthKey,
+    bool forceRefresh = false,
   });
   Future<void> syncPending();
   Future<void> syncUserDataAndClearLocal({required String userId});

@@ -74,12 +74,12 @@ class TillDateSettlementCalculator {
     );
     final hasAllocations =
         allocatedCurrent + allocatedPrevious + allocatedPaymentAdvance > 0;
-    final currentPaid = hasAllocations
-        ? allocatedCurrent
-        : paid.clamp(0, currentDue);
     final previousPaid = hasAllocations
         ? allocatedPrevious
-        : (paid - currentPaid).clamp(0, previousDue);
+        : paid.clamp(0, previousDue);
+    final currentPaid = hasAllocations
+        ? allocatedCurrent
+        : (paid - previousPaid).clamp(0, currentDue);
     final paymentAdvance = hasAllocations
         ? allocatedPaymentAdvance
         : (paid - currentPaid - previousPaid).clamp(0, paid);

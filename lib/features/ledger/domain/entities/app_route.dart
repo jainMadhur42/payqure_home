@@ -1,5 +1,6 @@
 enum LedgerRoute {
   splash,
+  onboarding,
   login,
   register,
   emailVerificationPending,
@@ -13,6 +14,7 @@ enum LedgerRoute {
   entry,
   settlementDetail,
   paymentHistory,
+  paymentDetail,
   globalPaymentHistory,
   advanceHistory,
   pdfPreview,
@@ -21,4 +23,8 @@ enum LedgerRoute {
   profile,
   currency,
   theme,
+  privacyPolicy,
+  termsDisclaimer,
+  deleteMyData,
+  privacyPolicyAcceptance,
 }

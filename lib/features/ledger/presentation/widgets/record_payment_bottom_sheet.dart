@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
@@ -5,8 +7,8 @@ import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../domain/entities/household_service.dart';
-import '../../domain/entities/monthly_bill.dart';
 import '../../domain/entities/payment_transaction.dart';
+import '../../domain/entities/payment_settlement_preview.dart';
 import '../controllers/ledger_controller.dart';
 import 'ledger_screen_shared.dart';
 
@@ -33,6 +35,8 @@ class _RecordPaymentBottomSheetState extends State<RecordPaymentBottomSheet> {
   DateTime _paymentDate = DateTime.now();
   PaymentMode _mode = PaymentMode.upi;
   String? _amountError;
+  Timer? _previewTimer;
+  late Future<PaymentSettlementPreview> _previewFuture;
 
   @override
   void initState() {
@@ -46,30 +50,25 @@ class _RecordPaymentBottomSheetState extends State<RecordPaymentBottomSheet> {
       _paymentDate = payment.paymentDate;
       _mode = payment.mode;
     }
+    _previewFuture = _loadPreview();
   }
 
   @override
   void dispose() {
     _amountController.dispose();
     _noteController.dispose();
+    _previewTimer?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
-    return FutureBuilder<MonthlyBill>(
-      future: widget.controller.loadBillForService(widget.service),
+    return FutureBuilder<PaymentSettlementPreview>(
+      future: _previewFuture,
       builder: (context, snapshot) {
-        final settlement = snapshot.data?.settlement;
-        final remaining = settlement?.remainingAmountCents ?? 0;
-        final effectiveRemaining =
-            remaining + (widget.payment?.amountCents ?? 0);
-        if (_amountController.text.isEmpty && remaining > 0) {
-          _amountController.text = (remaining / 100).toStringAsFixed(
-            remaining % 100 == 0 ? 0 : 2,
-          );
-        }
+        final preview = snapshot.data;
+        final remaining = preview?.totalDueCents ?? 0;
         return DecoratedBox(
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surface,
@@ -119,7 +118,9 @@ class _RecordPaymentBottomSheetState extends State<RecordPaymentBottomSheet> {
                     ),
                     const SizedBox(height: AppSpacing.md),
                     Text(
-                      'Remaining Due',
+                      preview == null
+                          ? 'Loading outstanding balance...'
+                          : _dueLabel(preview),
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
@@ -135,7 +136,9 @@ class _RecordPaymentBottomSheetState extends State<RecordPaymentBottomSheet> {
                     const SizedBox(height: AppSpacing.md),
                     TextField(
                       controller: _amountController,
-                      keyboardType: TextInputType.number,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
                       decoration: InputDecoration(
                         labelText: 'Payment Amount',
                         prefixText: '${CurrencyFormatter.symbol} ',
@@ -146,12 +149,12 @@ class _RecordPaymentBottomSheetState extends State<RecordPaymentBottomSheet> {
                                 icon: const Icon(Icons.cancel, size: 18),
                                 onPressed: () {
                                   _amountController.clear();
-                                  setState(() {});
+                                  _schedulePreview();
                                 },
                               ),
                         errorText: _amountError,
                       ),
-                      onChanged: (_) => setState(() {}),
+                      onChanged: (_) => _schedulePreview(),
                     ),
                     const SizedBox(height: AppSpacing.md),
                     Text(
@@ -248,7 +251,7 @@ class _RecordPaymentBottomSheetState extends State<RecordPaymentBottomSheet> {
                           const SizedBox(width: AppSpacing.sm),
                           Expanded(
                             child: Text(
-                              _paymentHelperText(effectiveRemaining),
+                              _paymentHelperText(preview),
                               style: Theme.of(context).textTheme.bodySmall
                                   ?.copyWith(
                                     color: AppColors.ink.withValues(
@@ -261,12 +264,16 @@ class _RecordPaymentBottomSheetState extends State<RecordPaymentBottomSheet> {
                         ],
                       ),
                     ),
+                    if (preview != null && preview.months.isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      _SettlementPreviewCard(preview: preview),
+                    ],
                     const SizedBox(height: AppSpacing.lg),
                     SizedBox(
                       width: double.infinity,
                       height: 50,
                       child: FilledButton(
-                        onPressed: settlement == null ? null : _save,
+                        onPressed: preview == null ? null : _save,
                         child: Text(
                           widget.payment == null
                               ? 'Save Payment'
@@ -288,19 +295,58 @@ class _RecordPaymentBottomSheetState extends State<RecordPaymentBottomSheet> {
     return fullDateLabel(_paymentDate.day, monthKeyForDate(_paymentDate));
   }
 
-  String _paymentHelperText(int remainingCents) {
+  Future<PaymentSettlementPreview> _loadPreview() {
+    return widget.controller.loadPaymentSettlementPreview(
+      service: widget.service,
+      paymentCents: _enteredAmountCents,
+    );
+  }
+
+  int get _enteredAmountCents =>
+      ((double.tryParse(_amountController.text.trim()) ?? 0) * 100).round();
+
+  void _schedulePreview() {
+    _previewTimer?.cancel();
+    setState(() {});
+    _previewTimer = Timer(const Duration(milliseconds: 180), () {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _previewFuture = _loadPreview());
+    });
+  }
+
+  String _dueLabel(PaymentSettlementPreview preview) {
+    final labels = preview.months
+        .map((month) => monthLabelShort(month.monthKey))
+        .toList();
+    if (labels.isEmpty) {
+      return 'No pending amount is due.';
+    }
+    final months = labels.length == 1
+        ? labels.first
+        : labels.length == 2
+        ? '${labels.first} and ${labels.last}'
+        : '${labels.sublist(0, labels.length - 1).join(', ')} and ${labels.last}';
+    return 'For $months, ${CurrencyFormatter.rupees(preview.totalDueCents / 100)} is due.';
+  }
+
+  String _paymentHelperText(PaymentSettlementPreview? preview) {
     final entered =
         ((double.tryParse(_amountController.text.trim()) ?? 0) * 100).round();
     if (entered <= 0) {
-      return 'Enter the amount paid for this month.';
+      return 'Enter a custom payment amount to preview its settlement.';
     }
-    if (entered < remainingCents) {
-      return '${CurrencyFormatter.rupees((remainingCents - entered) / 100)} will remain due and carry forward.';
+    if (preview == null) {
+      return 'Calculating settlement...';
     }
-    if (entered == remainingCents) {
-      return 'This bill will be marked Paid.';
+    if (preview.remainingDueCents > 0) {
+      return '${CurrencyFormatter.rupees(preview.remainingDueCents / 100)} will remain due after settling the oldest months first.';
     }
-    return '${CurrencyFormatter.rupees((entered - remainingCents) / 100)} will be added as advance.';
+    if (preview.advanceCents == 0) {
+      return 'All pending months will be marked paid.';
+    }
+    return '${CurrencyFormatter.rupees(preview.advanceCents / 100)} will be added as advance.';
   }
 
   Future<void> _pickPaymentDate() async {
@@ -393,5 +439,95 @@ class _PaymentModeChip extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _SettlementPreviewCard extends StatelessWidget {
+  const _SettlementPreviewCard({required this.preview});
+
+  final PaymentSettlementPreview preview;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Settlement details',
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          ...preview.months.map(
+            (month) => Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      monthLabelShort(month.monthKey),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    _allocationLabel(month),
+                    textAlign: TextAlign.end,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (preview.advanceCents > 0) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Advance balance',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                Text(
+                  CurrencyFormatter.rupees(preview.advanceCents / 100),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.success,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _allocationLabel(PaymentMonthAllocation month) {
+    if (preview.paymentCents <= 0) {
+      return 'Due ${CurrencyFormatter.rupees(month.dueBeforePaymentCents / 100)}';
+    }
+    if (month.allocatedCents == 0) {
+      return 'Still due ${CurrencyFormatter.rupees(month.dueBeforePaymentCents / 100)}';
+    }
+    if (month.remainingCents == 0) {
+      return 'Settled ${CurrencyFormatter.rupees(month.allocatedCents / 100)}';
+    }
+    return '${CurrencyFormatter.rupees(month.allocatedCents / 100)} paid · ${CurrencyFormatter.rupees(month.remainingCents / 100)} left';
   }
 }

@@ -20,12 +20,14 @@ class RegisterUser {
     required String email,
     required String phone,
     required String password,
+    required bool privacyPolicyAccepted,
   }) {
     return _repository.register(
       name: name,
       email: email,
       phone: phone,
       password: password,
+      privacyPolicyAccepted: privacyPolicyAccepted,
     );
   }
 }

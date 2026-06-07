@@ -17,6 +17,8 @@ extension ProfileMapper on ProfileRecord {
       email: email,
       phone: phone,
       emailVerified: emailVerified,
+      privacyPolicyAccepted: false,
+      privacyPolicyVersion: '',
     );
   }
 }

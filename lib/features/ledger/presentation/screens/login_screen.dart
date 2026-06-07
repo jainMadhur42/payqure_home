@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/auth/auth_validators.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../legal/domain/legal_content.dart';
+import '../../../legal/presentation/legal_screens.dart';
 import '../../domain/entities/app_route.dart';
 import '../controllers/ledger_controller.dart';
 import '../widgets/service_icon.dart';
@@ -116,6 +120,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  bool _privacyPolicyAccepted = false;
 
   @override
   void dispose() {
@@ -172,12 +177,40 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ? null
                     : 'Passwords must match',
               ),
+              const SizedBox(height: AppSpacing.md),
+              CheckboxListTile(
+                key: const ValueKey('signup-privacy-checkbox'),
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                value: _privacyPolicyAccepted,
+                onChanged: (value) {
+                  setState(() => _privacyPolicyAccepted = value ?? false);
+                },
+                title: Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    const Text('I have read and agree to the '),
+                    InkWell(
+                      onTap: _openPrivacyPolicy,
+                      child: Text(
+                        'Privacy Policy.',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.primary,
+                          fontWeight: FontWeight.w800,
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
         const SizedBox(height: AppSpacing.xl),
         FilledButton(
-          onPressed: widget.controller.isLoading
+          key: const ValueKey('register-submit'),
+          onPressed: widget.controller.isLoading || !_privacyPolicyAccepted
               ? null
               : () {
                   if (_formKey.currentState?.validate() != true) {
@@ -188,6 +221,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     email: _emailController.text,
                     phone: _phoneController.text,
                     password: _passwordController.text,
+                    privacyPolicyAccepted: _privacyPolicyAccepted,
                   );
                 },
           child: const Text('Register'),
@@ -197,6 +231,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
           child: const Text('Back to Login'),
         ),
       ],
+    );
+  }
+
+  void _openPrivacyPolicy() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => Scaffold(
+          appBar: AppBar(title: const Text('Privacy Policy')),
+          body: const PrivacyPolicyView(),
+        ),
+      ),
     );
   }
 }
@@ -279,6 +324,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
           onPressed: widget.controller.resendEmailVerification,
           child: const Text('Resend OTP'),
         ),
+        const _OtpLimitNotice(),
         TextButton(
           onPressed: () => widget.controller.goTo(LedgerRoute.login),
           child: const Text('Back to Login'),
@@ -339,6 +385,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 },
           child: const Text('Send OTP'),
         ),
+        const SizedBox(height: AppSpacing.sm),
+        const _OtpLimitNotice(),
       ],
     );
   }
@@ -496,8 +544,70 @@ class _AuthScaffold extends StatelessWidget {
           ],
           const SizedBox(height: AppSpacing.xl),
           ...children,
+          const SizedBox(height: AppSpacing.xl),
+          const _AuthSupportFooter(),
         ],
       ),
+    );
+  }
+}
+
+class _AuthSupportFooter extends StatelessWidget {
+  const _AuthSupportFooter();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(
+          'Need help with account access?',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        TextButton.icon(
+          onPressed: () => _contactSupport(context),
+          icon: const Icon(Icons.support_agent_outlined, size: 18),
+          label: const Text(LegalContent.supportEmail),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _contactSupport(BuildContext context) async {
+    final uri = Uri(
+      scheme: 'mailto',
+      path: LegalContent.supportEmail,
+      queryParameters: {'subject': 'Payqure Home account access support'},
+    );
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+      return;
+    }
+    await Clipboard.setData(
+      const ClipboardData(text: LegalContent.supportEmail),
+    );
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Support email copied.')));
+  }
+}
+
+class _OtpLimitNotice extends StatelessWidget {
+  const _OtpLimitNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      'Maximum 3 OTP requests. Additional requests require support review.',
+      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
+      ),
+      textAlign: TextAlign.center,
     );
   }
 }
