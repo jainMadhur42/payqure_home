@@ -65,7 +65,7 @@ class _SplashScreenState extends State<SplashScreen> {
               const AppLogoMark(size: 104),
               const SizedBox(height: AppSpacing.xl),
               Text(
-                'Daily Service Ledger',
+                'Payqure Home',
                 style: theme.textTheme.headlineMedium?.copyWith(
                   color: colorScheme.onSurface,
                 ),

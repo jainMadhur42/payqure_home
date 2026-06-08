@@ -21,7 +21,7 @@ void main() {
 
     await tester.pumpWidget(PayqureHomeApp(database: database));
 
-    expect(find.text('Daily Service Ledger'), findsOneWidget);
+    expect(find.text('Payqure Home'), findsOneWidget);
     expect(
       find.text('Track daily services. Settle monthly bills easily.'),
       findsOneWidget,
@@ -46,7 +46,7 @@ void main() {
 
     expect(gradient.colors.first, const Color(0xFF101117));
     expect(
-      tester.widget<Text>(find.text('Daily Service Ledger')).style?.color,
+      tester.widget<Text>(find.text('Payqure Home')).style?.color,
       AppTheme.dark.colorScheme.onSurface,
     );
   });
