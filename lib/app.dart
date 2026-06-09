@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'common/widgets/keyboard_done_accessory.dart';
 import 'core/theme/app_theme.dart';
 import 'features/ledger/data/database/ledger_database.dart';
 import 'features/ledger/data/repositories/drift_ledger_repository.dart';
@@ -67,6 +68,8 @@ class _PayqureHomeAppState extends State<PayqureHomeApp> {
         theme: AppTheme.light,
         darkTheme: AppTheme.dark,
         themeMode: themeMode,
+        builder: (context, child) =>
+            KeyboardDoneAccessory(child: child ?? const SizedBox.shrink()),
         home: LedgerHomeScreen(controller: _controller),
       ),
     );
