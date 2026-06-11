@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'common/widgets/keyboard_done_accessory.dart';
+import 'core/analytics/app_analytics.dart';
+import 'core/app_info/app_version_provider.dart';
 import 'core/theme/app_theme.dart';
+import 'common/widgets/keyboard_done_accessory.dart';
 import 'features/ledger/data/database/ledger_database.dart';
 import 'features/ledger/data/repositories/drift_ledger_repository.dart';
 import 'features/ledger/data/repositories/supabase_auth_repository.dart';
@@ -15,10 +17,16 @@ import 'features/ledger/presentation/controllers/ledger_controller.dart';
 import 'features/ledger/presentation/screens/ledger_home_screen.dart';
 
 class PayqureHomeApp extends StatefulWidget {
-  const PayqureHomeApp({this.supabaseClient, this.database, super.key});
+  const PayqureHomeApp({
+    this.supabaseClient,
+    this.database,
+    this.analytics,
+    super.key,
+  });
 
   final SupabaseClient? supabaseClient;
   final LedgerDatabase? database;
+  final AppAnalytics? analytics;
 
   @override
   State<PayqureHomeApp> createState() => _PayqureHomeAppState();
@@ -36,15 +44,19 @@ class _PayqureHomeAppState extends State<PayqureHomeApp> {
     _ownsDatabase = widget.database == null;
     _database = widget.database ?? LedgerDatabase.defaults();
     _authRepository = SupabaseAuthRepository(client: widget.supabaseClient);
+    final analytics = widget.analytics ?? AppAnalytics.disabled();
     final ledgerRepository = DriftLedgerRepository(
       database: _database,
       remoteDataSource: SupabaseLedgerRemoteDataSource(widget.supabaseClient),
+      analytics: analytics,
     );
     _controller = LedgerController(
       authRepository: _authRepository,
       ledgerRepository: ledgerRepository,
       pdfStatementService: const PdfStatementService(),
       reminderScheduler: LocalNotificationService(),
+      analytics: analytics,
+      appVersionProvider: const PackageInfoAppVersionProvider(),
     );
   }
 

@@ -4,10 +4,14 @@ import '../../../../common/widgets/app_card.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/utils/currency_formatter.dart';
+import '../../domain/entities/app_route.dart';
 import '../../domain/entities/service_history_item.dart';
 import '../../domain/entities/service_template.dart';
 import '../controllers/ledger_controller.dart';
+import '../widgets/ledger_screen_shared.dart';
+import '../widgets/record_payment_bottom_sheet.dart';
 import '../widgets/service_icon.dart';
+import 'payment_history_screen.dart';
 
 class GlobalHistoryScreen extends StatelessWidget {
   const GlobalHistoryScreen({
@@ -33,6 +37,12 @@ class GlobalHistoryScreen extends StatelessWidget {
         if (items.isEmpty) {
           return _HistoryEmptyState(type: type);
         }
+        if (type == ServiceHistoryType.payment) {
+          return _GlobalPaymentHistoryList(
+            controller: controller,
+            items: items,
+          );
+        }
         return ListView.separated(
           padding: const EdgeInsets.fromLTRB(
             AppSpacing.lg,
@@ -46,6 +56,138 @@ class GlobalHistoryScreen extends StatelessWidget {
               ServiceHistoryCard(item: items[index]),
         );
       },
+    );
+  }
+}
+
+class _GlobalPaymentHistoryList extends StatelessWidget {
+  const _GlobalPaymentHistoryList({
+    required this.controller,
+    required this.items,
+  });
+
+  final LedgerController controller;
+  final List<ServiceHistoryItem> items;
+
+  @override
+  Widget build(BuildContext context) {
+    final grouped = <String, List<ServiceHistoryItem>>{};
+    for (final item in items) {
+      final payment = item.payment;
+      final monthKey = payment?.monthKey ?? monthKeyForDate(item.date);
+      grouped.putIfAbsent(monthKey, () => []).add(item);
+    }
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.md,
+        AppSpacing.lg,
+        AppSpacing.xl,
+      ),
+      children: [
+        ...grouped.entries.map(
+          (entry) => Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  monthLabelShort(entry.key),
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                ...entry.value.map((item) {
+                  final payment = item.payment;
+                  if (payment == null) {
+                    return ServiceHistoryCard(item: item);
+                  }
+                  return PaymentHistoryCard(
+                    service: item.service,
+                    payment: payment,
+                    showServiceName: true,
+                    onEdit: () =>
+                        _showEditPaymentSheet(context, serviceItem: item),
+                    onDelete: () => controller.deletePayment(
+                      payment,
+                      service: item.service,
+                      source: 'global_payment_history',
+                      returnRoute: LedgerRoute.globalPaymentHistory,
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+        ),
+        const _SecurePaymentsCard(),
+      ],
+    );
+  }
+
+  void _showEditPaymentSheet(
+    BuildContext context, {
+    required ServiceHistoryItem serviceItem,
+  }) {
+    final payment = serviceItem.payment;
+    if (payment == null) {
+      return;
+    }
+    controller.trackRecordPaymentStarted(
+      service: serviceItem.service,
+      source: 'global_payment_history',
+    );
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => RecordPaymentBottomSheet(
+        controller: controller,
+        service: serviceItem.service,
+        payment: payment,
+        source: 'global_payment_history',
+        returnRoute: LedgerRoute.globalPaymentHistory,
+      ),
+    );
+  }
+}
+
+class _SecurePaymentsCard extends StatelessWidget {
+  const _SecurePaymentsCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: AppColors.primarySoft,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(
+              Icons.lock_outline,
+              color: AppColors.primary,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Text(
+              'All payments are securely stored and synced across your devices.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

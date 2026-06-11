@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
@@ -8,6 +10,8 @@ import '../../domain/entities/household_service.dart';
 import '../../domain/services/service_reminder_planner.dart';
 
 abstract interface class ServiceReminderScheduler {
+  Stream<String> get serviceReminderTaps;
+  Future<String?> consumeLaunchServiceId();
   Future<bool> requestPermission();
   Future<void> scheduleServices(List<HouseholdService> services);
   Future<void> cancelServiceReminders();
@@ -15,6 +19,12 @@ abstract interface class ServiceReminderScheduler {
 
 class NoopServiceReminderScheduler implements ServiceReminderScheduler {
   const NoopServiceReminderScheduler();
+
+  @override
+  Stream<String> get serviceReminderTaps => const Stream.empty();
+
+  @override
+  Future<String?> consumeLaunchServiceId() async => null;
 
   @override
   Future<void> cancelServiceReminders() async {}
@@ -38,7 +48,13 @@ class LocalNotificationService implements ServiceReminderScheduler {
 
   final FlutterLocalNotificationsPlugin _plugin;
   final ServiceReminderPlanner _planner;
+  final StreamController<String> _tapController =
+      StreamController<String>.broadcast();
   Future<void>? _initialization;
+  bool _launchPayloadConsumed = false;
+
+  @override
+  Stream<String> get serviceReminderTaps => _tapController.stream;
 
   Future<void> _initialize() {
     return _initialization ??= _initializePlugin();
@@ -60,7 +76,26 @@ class LocalNotificationService implements ServiceReminderScheduler {
         requestSoundPermission: false,
       ),
     );
-    await _plugin.initialize(settings);
+    await _plugin.initialize(
+      settings,
+      onDidReceiveNotificationResponse: _handleNotificationResponse,
+      onDidReceiveBackgroundNotificationResponse:
+          notificationTapBackgroundHandler,
+    );
+  }
+
+  @override
+  Future<String?> consumeLaunchServiceId() async {
+    if (kIsWeb || _launchPayloadConsumed) {
+      return null;
+    }
+    await _initialize();
+    _launchPayloadConsumed = true;
+    final launchDetails = await _plugin.getNotificationAppLaunchDetails();
+    if (!(launchDetails?.didNotificationLaunchApp ?? false)) {
+      return null;
+    }
+    return _serviceIdFromPayload(launchDetails?.notificationResponse?.payload);
   }
 
   @override
@@ -142,4 +177,24 @@ class LocalNotificationService implements ServiceReminderScheduler {
     }
     return next;
   }
+
+  void _handleNotificationResponse(NotificationResponse response) {
+    final serviceId = _serviceIdFromPayload(response.payload);
+    if (serviceId != null) {
+      _tapController.add(serviceId);
+    }
+  }
+
+  static String? _serviceIdFromPayload(String? payload) {
+    if (payload == null || !payload.startsWith(_payloadPrefix)) {
+      return null;
+    }
+    final serviceId = payload.substring(_payloadPrefix.length).trim();
+    return serviceId.isEmpty ? null : serviceId;
+  }
+}
+
+@pragma('vm:entry-point')
+void notificationTapBackgroundHandler(NotificationResponse response) {
+  // The foreground isolate handles routing once the app is resumed/launched.
 }

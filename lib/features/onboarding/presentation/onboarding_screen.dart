@@ -8,9 +8,18 @@ import '../../../core/theme/app_spacing.dart';
 import '../domain/onboarding_page_model.dart';
 
 class OnboardingScreen extends StatefulWidget {
-  const OnboardingScreen({required this.onComplete, super.key});
+  const OnboardingScreen({
+    required this.onComplete,
+    this.onStarted,
+    this.onScreenViewed,
+    this.onSkipped,
+    super.key,
+  });
 
   final Future<void> Function() onComplete;
+  final VoidCallback? onStarted;
+  final void Function(int index, String title)? onScreenViewed;
+  final void Function(int index, String title)? onSkipped;
 
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -49,6 +58,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _pageController = PageController();
 
   @override
+  void initState() {
+    super.initState();
+    widget.onStarted?.call();
+    widget.onScreenViewed?.call(0, _pages.first.title);
+  }
+
+  @override
   void dispose() {
     _pageController.dispose();
     super.dispose();
@@ -71,6 +87,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   itemCount: _pages.length,
                   onPageChanged: (index) {
                     setState(() => _selectedPage = index);
+                    widget.onScreenViewed?.call(index, _pages[index].title);
                   },
                   itemBuilder: (context, index) {
                     if (index == 0) {
@@ -85,7 +102,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 selectedPage: _selectedPage,
                 isLastPage: _selectedPage == _pages.length - 1,
                 isLoading: _isCompleting,
-                onSkip: _complete,
+                onSkip: _skip,
                 onNext: _nextPage,
                 onComplete: _complete,
               ),
@@ -108,6 +125,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     setState(() => _isCompleting = true);
     await widget.onComplete();
     if (mounted) setState(() => _isCompleting = false);
+  }
+
+  Future<void> _skip() async {
+    widget.onSkipped?.call(_selectedPage, _pages[_selectedPage].title);
+    await _complete();
   }
 }
 

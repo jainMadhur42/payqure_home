@@ -70,9 +70,9 @@ class ServiceDetailScreen extends StatelessWidget {
               service: service,
               onQuickMark: (status) =>
                   _saveQuickAction(day: controller.selectedDay, status: status),
-              onCustomize: () => controller.selectDayForEdit(
-                controller.selectedDay,
-                source: EntrySource.calendar,
+              onCustomize: () => controller.customizeEntryForService(
+                service: service,
+                day: controller.selectedDay,
               ),
             ),
             const SizedBox(height: AppSpacing.md),
@@ -228,6 +228,10 @@ class ServiceDetailScreen extends StatelessWidget {
   }
 
   void _showRecordPaymentSheet(BuildContext context) {
+    controller.trackRecordPaymentStarted(
+      service: service,
+      source: 'service_detail',
+    );
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,

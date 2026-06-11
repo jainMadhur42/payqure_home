@@ -55,7 +55,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 controller: _passwordController,
                 hintText: 'Password',
                 obscureText: true,
-                validator: AuthValidators.password,
+                validator: (value) =>
+                    AuthValidators.requiredText(value, 'Password'),
               ),
             ],
           ),
@@ -81,12 +82,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   );
                 },
           child: const Text('Login'),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        OutlinedButton.icon(
-          onPressed: widget.controller.bypassLoginForDevelopment,
-          icon: const Icon(Icons.lock_open_outlined),
-          label: const Text('Dev Bypass Login'),
         ),
         const SizedBox(height: AppSpacing.lg),
         Row(
@@ -496,9 +491,17 @@ class _AuthScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       body: ListView(
-        padding: const EdgeInsets.all(AppSpacing.xl),
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.xl,
+          AppSpacing.xl,
+          AppSpacing.xl,
+          keyboardOpen ? 88 : AppSpacing.xl,
+        ),
         children: [
           SizedBox(
             height: 44,
@@ -612,7 +615,7 @@ class _OtpLimitNotice extends StatelessWidget {
   }
 }
 
-class _LabeledField extends StatelessWidget {
+class _LabeledField extends StatefulWidget {
   const _LabeledField({
     required this.label,
     required this.controller,
@@ -628,17 +631,59 @@ class _LabeledField extends StatelessWidget {
   final FormFieldValidator<String>? validator;
 
   @override
+  State<_LabeledField> createState() => _LabeledFieldState();
+}
+
+class _LabeledFieldState extends State<_LabeledField> {
+  late bool _isObscured;
+
+  @override
+  void initState() {
+    super.initState();
+    _isObscured = widget.obscureText;
+  }
+
+  @override
+  void didUpdateWidget(covariant _LabeledField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.obscureText != widget.obscureText) {
+      _isObscured = widget.obscureText;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: Theme.of(context).textTheme.labelLarge),
+        Text(widget.label, style: Theme.of(context).textTheme.labelLarge),
         const SizedBox(height: AppSpacing.sm),
         TextFormField(
-          controller: controller,
-          obscureText: obscureText,
-          validator: validator,
-          decoration: InputDecoration(hintText: hintText ?? label),
+          controller: widget.controller,
+          obscureText: widget.obscureText && _isObscured,
+          validator: widget.validator,
+          scrollPadding: const EdgeInsets.only(bottom: 120),
+          enableSuggestions: !widget.obscureText,
+          autocorrect: !widget.obscureText,
+          decoration: InputDecoration(
+            hintText: widget.hintText ?? widget.label,
+            suffixIcon: widget.obscureText
+                ? IconButton(
+                    key: ValueKey(
+                      '${widget.label.toLowerCase().replaceAll(' ', '-')}-visibility',
+                    ),
+                    tooltip: _isObscured ? 'Show password' : 'Hide password',
+                    onPressed: () {
+                      setState(() => _isObscured = !_isObscured);
+                    },
+                    icon: Icon(
+                      _isObscured
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                    ),
+                  )
+                : null,
+          ),
         ),
       ],
     );

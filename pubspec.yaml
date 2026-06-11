@@ -36,9 +36,13 @@ dependencies:
   cupertino_icons: ^1.0.8
   drift: ^2.33.0
   drift_flutter: ^0.3.0
+  firebase_analytics: ^12.1.0
+  firebase_core: ^4.3.0
+  firebase_crashlytics: ^5.0.6
   flutter_local_notifications: ^19.5.0
   flutter_timezone: ^5.0.1
   pdf: ^3.11.3
+  package_info_plus: ^9.0.0
   printing: ^5.14.2
   sqlite3_flutter_libs: ^0.6.0+eol
   supabase_flutter: ^2.12.4

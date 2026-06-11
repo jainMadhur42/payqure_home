@@ -18,11 +18,13 @@ abstract final class AuthValidators {
     if (trimmed.isEmpty) {
       return 'Email or phone is required';
     }
-    if (trimmed.contains('@')) {
+    // Treat anything with '@' or letters as an email attempt so a mistyped
+    // email gets an email hint instead of a misleading phone-number error.
+    if (trimmed.contains('@') || RegExp('[A-Za-z]').hasMatch(trimmed)) {
       return email(trimmed);
     }
     final digits = trimmed.replaceAll(RegExp('[^0-9]'), '');
-    return digits.length >= 10 ? null : 'Enter a valid phone number';
+    return digits.length >= 10 ? null : 'Enter a valid email or phone number';
   }
 
   static String? phone(String? value) {
@@ -49,6 +51,6 @@ abstract final class AuthValidators {
     if (digits.isEmpty) {
       return 'OTP is required';
     }
-    return digits.length >= 6 ? null : 'Enter the 6 digit OTP';
+    return digits.length == 6 ? null : 'Enter the 6-digit OTP';
   }
 }

@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app.dart';
+import 'core/analytics/app_analytics.dart';
 import 'core/config/app_config.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  final analytics = await AppAnalytics.initialize();
   final config = AppConfig.fromEnvironment();
   SupabaseClient? supabaseClient;
 
@@ -20,5 +22,5 @@ Future<void> main() async {
     supabaseClient = Supabase.instance.client;
   }
 
-  runApp(PayqureHomeApp(supabaseClient: supabaseClient));
+  runApp(PayqureHomeApp(supabaseClient: supabaseClient, analytics: analytics));
 }

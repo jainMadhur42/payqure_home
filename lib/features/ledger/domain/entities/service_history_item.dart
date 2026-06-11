@@ -1,4 +1,5 @@
 import 'household_service.dart';
+import 'payment_transaction.dart';
 
 enum ServiceHistoryType { payment, advance }
 
@@ -12,6 +13,7 @@ class ServiceHistoryItem {
     required this.modeLabel,
     required this.note,
     required this.pendingSync,
+    this.payment,
   });
 
   final String id;
@@ -22,4 +24,5 @@ class ServiceHistoryItem {
   final String modeLabel;
   final String note;
   final bool pendingSync;
+  final PaymentTransaction? payment;
 }

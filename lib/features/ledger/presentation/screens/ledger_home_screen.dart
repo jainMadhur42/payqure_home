@@ -71,6 +71,9 @@ class LedgerHomeScreen extends StatelessWidget {
       LedgerRoute.onboarding => OnboardingScreen(
         key: const ValueKey('onboarding'),
         onComplete: controller.completeOnboarding,
+        onStarted: controller.trackOnboardingStarted,
+        onScreenViewed: controller.trackOnboardingScreenViewed,
+        onSkipped: controller.trackOnboardingSkipped,
       ),
       LedgerRoute.login => LoginScreen(
         key: const ValueKey('login'),

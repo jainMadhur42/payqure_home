@@ -9,6 +9,7 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../domain/entities/home_summary.dart';
 import '../../domain/entities/ledger_month.dart';
+import '../../domain/entities/app_route.dart';
 import '../../domain/entities/service_entry.dart';
 import '../../domain/entities/service_template.dart';
 import '../controllers/ledger_controller.dart';
@@ -16,6 +17,7 @@ import '../widgets/ledger_screen_shared.dart';
 import '../widgets/loading_skeleton.dart';
 import '../widgets/month_selector.dart';
 import '../widgets/service_icon.dart';
+import '../widgets/service_contribution_stats.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({required this.controller, super.key});
@@ -105,6 +107,32 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: AppSpacing.lg),
                 ],
+                if (serviceSummaries.isNotEmpty) ...[
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Spending Stats',
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(fontWeight: FontWeight.w900),
+                        ),
+                      ),
+                      if (serviceSummaries.length > 3)
+                        TextButton(
+                          onPressed: () =>
+                              controller.goTo(LedgerRoute.contributionStats),
+                          child: const Text('View all'),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  ServiceContributionStatsCard(
+                    summaries: serviceSummaries,
+                    maxItems: 3,
+                    compact: true,
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
                 if (overview.services.isEmpty)
                   AppCard(
                     child: Column(
@@ -153,13 +181,10 @@ class _HomeScreenState extends State<HomeScreen> {
                               day: _quickLogDay(controller.monthKey),
                               status: status,
                             ),
-                        onCustomize: () {
-                          controller.selectService(summary.service);
-                          controller.selectDayForEdit(
-                            _quickLogDay(controller.monthKey),
-                            source: EntrySource.calendar,
-                          );
-                        },
+                        onCustomize: () => controller.customizeEntryForService(
+                          service: summary.service,
+                          day: _quickLogDay(controller.monthKey),
+                        ),
                       ),
                     ),
                   ),

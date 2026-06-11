@@ -115,10 +115,9 @@ class PaymentHistoryScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: AppSpacing.md),
                     ...entry.value.map(
-                      (payment) => _PaymentTimelineTile(
-                        isLast: payment == entry.value.last,
+                      (payment) => PaymentHistoryCard(
+                        service: service,
                         payment: payment,
-                        onView: () => controller.openPaymentDetail(payment),
                         onEdit: () => _showEditPaymentSheet(context, payment),
                         onDelete: () => controller.deletePayment(payment),
                       ),
@@ -164,6 +163,10 @@ class PaymentHistoryScreen extends StatelessWidget {
   }
 
   void _showRecordPaymentSheet(BuildContext context) {
+    controller.trackRecordPaymentStarted(
+      service: service,
+      source: 'payment_history',
+    );
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -175,6 +178,10 @@ class PaymentHistoryScreen extends StatelessWidget {
   }
 
   void _showEditPaymentSheet(BuildContext context, PaymentTransaction payment) {
+    controller.trackRecordPaymentStarted(
+      service: service,
+      source: 'payment_history',
+    );
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -189,28 +196,29 @@ class PaymentHistoryScreen extends StatelessWidget {
   }
 }
 
-class _PaymentTimelineTile extends StatefulWidget {
-  const _PaymentTimelineTile({
-    required this.isLast,
+class PaymentHistoryCard extends StatefulWidget {
+  const PaymentHistoryCard({
+    required this.service,
     required this.payment,
-    required this.onView,
     required this.onEdit,
     required this.onDelete,
+    this.showServiceName = false,
+    super.key,
   });
 
-  final bool isLast;
+  final HouseholdService service;
   final PaymentTransaction payment;
-  final VoidCallback onView;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+  final bool showServiceName;
 
   @override
-  State<_PaymentTimelineTile> createState() => _PaymentTimelineTileState();
+  State<PaymentHistoryCard> createState() => _PaymentHistoryCardState();
 }
 
-class _PaymentTimelineTileState extends State<_PaymentTimelineTile> {
+class _PaymentHistoryCardState extends State<PaymentHistoryCard> {
   static const _actionSize = 50.0;
-  static const _maxReveal = _actionSize + AppSpacing.md;
+  static const _maxReveal = (_actionSize * 2) + AppSpacing.md;
   double _revealOffset = 0;
 
   void _handleDragUpdate(DragUpdateDetails details) {
@@ -229,15 +237,11 @@ class _PaymentTimelineTileState extends State<_PaymentTimelineTile> {
     }
   }
 
-  void _deleteFromSwipe() {
-    HapticFeedback.lightImpact();
-    setState(() => _revealOffset = 0);
-    _confirmDelete(context);
-  }
-
   @override
   Widget build(BuildContext context) {
     final payment = widget.payment;
+    final scheme = Theme.of(context).colorScheme;
+    final allocationLines = _allocationLines(payment);
     return ClipRRect(
       borderRadius: BorderRadius.circular(AppRadius.lg),
       child: Stack(
@@ -247,24 +251,25 @@ class _PaymentTimelineTileState extends State<_PaymentTimelineTile> {
             child: Padding(
               padding: const EdgeInsets.only(
                 right: AppSpacing.xs,
-                bottom: AppSpacing.lg,
+                bottom: AppSpacing.md,
               ),
               child: Align(
                 alignment: Alignment.centerRight,
-                child: SizedBox.square(
-                  dimension: _actionSize,
-                  child: Material(
-                    color: AppColors.danger,
-                    shape: const CircleBorder(),
-                    child: InkWell(
-                      customBorder: const CircleBorder(),
-                      onTap: _deleteFromSwipe,
-                      child: const Icon(
-                        Icons.delete_outline,
-                        color: Colors.white,
-                      ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _SwipeActionButton(
+                      color: AppColors.primary,
+                      icon: Icons.edit_outlined,
+                      onTap: _editFromSwipe,
                     ),
-                  ),
+                    const SizedBox(width: AppSpacing.md),
+                    _SwipeActionButton(
+                      color: AppColors.danger,
+                      icon: Icons.delete_outline,
+                      onTap: _deleteFromSwipe,
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -275,135 +280,219 @@ class _PaymentTimelineTileState extends State<_PaymentTimelineTile> {
             transform: Matrix4.translationValues(_revealOffset, 0, 0),
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
+              onTap: () {
+                if (_revealOffset != 0) {
+                  setState(() => _revealOffset = 0);
+                }
+              },
               onHorizontalDragUpdate: _handleDragUpdate,
               onHorizontalDragEnd: _handleDragEnd,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Column(
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                child: AppCard(
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        width: 28,
-                        height: 28,
-                        decoration: BoxDecoration(
-                          color: _modeColor(
-                            payment.mode,
-                          ).withValues(alpha: 0.12),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          Icons.account_balance_wallet_outlined,
-                          color: _modeColor(payment.mode),
-                          size: 15,
-                        ),
-                      ),
-                      if (!widget.isLast)
-                        Container(width: 2, height: 42, color: AppColors.line),
-                    ],
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.only(bottom: AppSpacing.lg),
-                      child: Row(
+                      Row(
                         children: [
+                          ServiceIcon(
+                            icon: widget.service.icon,
+                            color: widget.service.templateType.color,
+                            serviceName: widget.service.name,
+                            templateType: widget.service.templateType,
+                            size: 46,
+                          ),
+                          const SizedBox(width: AppSpacing.md),
                           Expanded(
-                            child: InkWell(
-                              onTap: _revealOffset != 0
-                                  ? () => setState(() => _revealOffset = 0)
-                                  : widget.onView,
-                              borderRadius: BorderRadius.circular(AppRadius.md),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: AppSpacing.xs,
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      fullDateLabel(
-                                        payment.paymentDate.day,
-                                        payment.monthKey,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  CurrencyFormatter.rupees(
+                                    payment.amountCents / 100,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headlineSmall
+                                      ?.copyWith(
+                                        color: scheme.primary,
+                                        fontWeight: FontWeight.w900,
                                       ),
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodySmall
-                                          ?.copyWith(
-                                            color: Theme.of(
-                                              context,
-                                            ).colorScheme.onSurfaceVariant,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      payment.mode.label,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .labelLarge
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.w800,
-                                          ),
-                                    ),
-                                    if (payment.pendingSync)
-                                      Text(
-                                        'Pending sync',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodySmall
-                                            ?.copyWith(
-                                              color: AppColors.warning,
-                                            ),
-                                      ),
-                                  ],
                                 ),
-                              ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  widget.showServiceName
+                                      ? widget.service.name
+                                      : '${payment.mode.label} · ${fullDateLabel(payment.paymentDate.day, monthKeyForDate(payment.paymentDate))}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(
+                                        color: widget.showServiceName
+                                            ? scheme.onSurface
+                                            : scheme.onSurfaceVariant,
+                                        fontWeight: widget.showServiceName
+                                            ? FontWeight.w900
+                                            : FontWeight.w600,
+                                      ),
+                                ),
+                                if (widget.showServiceName) ...[
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '${payment.mode.label} · ${fullDateLabel(payment.paymentDate.day, monthKeyForDate(payment.paymentDate))}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(
+                                          color: scheme.onSurfaceVariant,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                  ),
+                                ],
+                              ],
                             ),
                           ),
-                          PopupMenuButton<String>(
-                            onSelected: (value) {
-                              switch (value) {
-                                case 'view':
-                                  widget.onView();
-                                case 'edit':
-                                  widget.onEdit();
-                                case 'delete':
-                                  _confirmDelete(context);
-                              }
-                            },
-                            itemBuilder: (_) => const [
-                              PopupMenuItem(value: 'view', child: Text('View')),
-                              PopupMenuItem(value: 'edit', child: Text('Edit')),
-                              PopupMenuItem(
-                                value: 'delete',
-                                child: Text('Delete'),
+                          if (payment.pendingSync)
+                            const StatusPill(label: 'Sync'),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      Text(
+                        'Settlement Description',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(
+                        'Applied to oldest pending balance first, then current month. Extra amount becomes advance.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                          height: 1.35,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      if (allocationLines.isEmpty)
+                        _SettlementAllocationRow(
+                          line: _SettlementLine(
+                            icon: Icons.receipt_long_outlined,
+                            title: 'Applied to bill',
+                            subtitle:
+                                'Legacy payment without detailed allocation',
+                            amountCents: payment.amountCents,
+                            color: AppColors.primary,
+                          ),
+                          totalCents: payment.amountCents,
+                        )
+                      else
+                        ...allocationLines.map(
+                          (line) => _SettlementAllocationRow(
+                            line: line,
+                            totalCents: payment.amountCents,
+                          ),
+                        ),
+                      if (payment.note.isNotEmpty) ...[
+                        const SizedBox(height: AppSpacing.sm),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(AppSpacing.md),
+                          decoration: BoxDecoration(
+                            color: scheme.surfaceContainerHighest.withValues(
+                              alpha: 0.45,
+                            ),
+                            borderRadius: BorderRadius.circular(AppRadius.md),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Note',
+                                style: Theme.of(context).textTheme.labelMedium
+                                    ?.copyWith(
+                                      color: scheme.onSurfaceVariant,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                payment.note,
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(color: scheme.onSurface),
                               ),
                             ],
                           ),
-                          SizedBox(
-                            width: 84,
-                            child: Text(
-                              CurrencyFormatter.rupees(
-                                payment.amountCents / 100,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.right,
-                              style: Theme.of(context).textTheme.titleSmall
-                                  ?.copyWith(fontWeight: FontWeight.w900),
-                            ),
+                        ),
+                      ],
+                      const SizedBox(height: AppSpacing.xs),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          Icon(
+                            Icons.swipe_left,
+                            size: 16,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(width: AppSpacing.xs),
+                          Text(
+                            'Swipe left to edit or delete',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: scheme.onSurfaceVariant),
                           ),
                         ],
                       ),
-                    ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ),
         ],
       ),
     );
+  }
+
+  List<_SettlementLine> _allocationLines(PaymentTransaction payment) {
+    return [
+      if (payment.previousBalanceAmountCents > 0)
+        _SettlementLine(
+          icon: Icons.history_outlined,
+          title: 'Previous balance',
+          subtitle: 'Settled oldest pending month dues',
+          amountCents: payment.previousBalanceAmountCents,
+          color: AppColors.warning,
+        ),
+      if (payment.currentMonthAmountCents > 0)
+        _SettlementLine(
+          icon: Icons.calendar_month_outlined,
+          title: 'Current month',
+          subtitle: '${monthLabelShort(payment.monthKey)} charges',
+          amountCents: payment.currentMonthAmountCents,
+          color: AppColors.info,
+        ),
+      if (payment.advanceAmountCents > 0)
+        _SettlementLine(
+          icon: Icons.account_balance_wallet_outlined,
+          title: 'Advance balance',
+          subtitle: 'Extra amount carried forward',
+          amountCents: payment.advanceAmountCents,
+          color: AppColors.success,
+        ),
+    ];
+  }
+
+  void _editFromSwipe() {
+    HapticFeedback.selectionClick();
+    setState(() => _revealOffset = 0);
+    widget.onEdit();
+  }
+
+  void _deleteFromSwipe() {
+    HapticFeedback.lightImpact();
+    setState(() => _revealOffset = 0);
+    _confirmDelete(context);
   }
 
   void _confirmDelete(BuildContext context) {
@@ -430,18 +519,135 @@ class _PaymentTimelineTileState extends State<_PaymentTimelineTile> {
   }
 }
 
+class _SwipeActionButton extends StatelessWidget {
+  const _SwipeActionButton({
+    required this.color,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final Color color;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.square(
+      dimension: _PaymentHistoryCardState._actionSize,
+      child: Material(
+        color: color,
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: Icon(icon, color: Colors.white),
+        ),
+      ),
+    );
+  }
+}
+
+class _SettlementAllocationRow extends StatelessWidget {
+  const _SettlementAllocationRow({
+    required this.line,
+    required this.totalCents,
+  });
+
+  final _SettlementLine line;
+  final int totalCents;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final percent = totalCents <= 0 ? 0.0 : line.amountCents / totalCents;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: line.color.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+                child: Icon(line.icon, color: line.color, size: 19),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      line.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: scheme.onSurface,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      line.subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Text(
+                CurrencyFormatter.rupees(line.amountCents / 100),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w900),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            child: LinearProgressIndicator(
+              value: percent.clamp(0, 1),
+              minHeight: 5,
+              backgroundColor: line.color.withValues(alpha: 0.10),
+              valueColor: AlwaysStoppedAnimation(line.color),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SettlementLine {
+  const _SettlementLine({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.amountCents,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final int amountCents;
+  final Color color;
+}
+
 Color _templateAccent(ServiceTemplateType type) {
   return switch (type) {
     ServiceTemplateType.quantity => AppColors.success,
     ServiceTemplateType.attendance => AppColors.warning,
     ServiceTemplateType.fixedMonthly => AppColors.info,
-  };
-}
-
-Color _modeColor(PaymentMode mode) {
-  return switch (mode) {
-    PaymentMode.cash => AppColors.success,
-    PaymentMode.upi => AppColors.primary,
-    PaymentMode.other => AppColors.warning,
   };
 }

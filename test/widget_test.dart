@@ -9,6 +9,7 @@ import 'package:payqure_home/features/ledger/data/repositories/supabase_auth_rep
 import 'package:payqure_home/features/ledger/data/services/pdf_statement_service.dart';
 import 'package:payqure_home/features/ledger/data/sync/supabase_ledger_remote_data_source.dart';
 import 'package:payqure_home/features/ledger/presentation/controllers/ledger_controller.dart';
+import 'package:payqure_home/features/ledger/presentation/screens/login_screen.dart';
 import 'package:payqure_home/features/ledger/presentation/screens/splash_screen.dart';
 import 'package:payqure_home/core/theme/app_theme.dart';
 
@@ -51,27 +52,26 @@ void main() {
     );
   });
 
-  testWidgets('Splash opens onboarding then dashboard with dev bypass', (
+  testWidgets('Login does not expose developer bypass', (
     WidgetTester tester,
   ) async {
     final database = LedgerDatabase(NativeDatabase.memory());
     addTearDown(database.close);
+    final controller = LedgerController(
+      authRepository: SupabaseAuthRepository(client: null),
+      ledgerRepository: DriftLedgerRepository(
+        database: database,
+        remoteDataSource: SupabaseLedgerRemoteDataSource(null),
+      ),
+      pdfStatementService: const PdfStatementService(),
+    );
+    addTearDown(controller.dispose);
 
-    await tester.pumpWidget(PayqureHomeApp(database: database));
-    await tester.pump(const Duration(milliseconds: 1300));
-    await tester.pump(const Duration(seconds: 1));
-    expect(find.text('Track Household\nServices Easily'), findsOneWidget);
-
-    await tester.tap(find.byKey(const ValueKey('onboarding-skip')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Dev Bypass Login'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Payqure Home'), findsOneWidget);
-    expect(find.text('Amount Due'), findsOneWidget);
-
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump(const Duration(milliseconds: 1));
+    await tester.pumpWidget(
+      MaterialApp(home: LoginScreen(controller: controller)),
+    );
+    expect(find.text('Welcome Back!'), findsOneWidget);
+    expect(find.text('Dev Bypass Login'), findsNothing);
   });
 
   test('Controller can switch months', () async {

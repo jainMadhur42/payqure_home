@@ -122,6 +122,40 @@ void main() {
     },
   );
 
+  test('new local entry is stored in monthly JSON log', () async {
+    await _insertLocalService(
+      database,
+      name: 'Milkman',
+      updatedAt: DateTime.utc(2026, 5),
+      pendingSync: false,
+    );
+
+    await repository.saveEntry(
+      ServiceEntry(
+        id: 'entry-json-1',
+        serviceId: serviceId,
+        day: 4,
+        monthKey: monthKey,
+        status: ServiceEntryStatus.delivered,
+        quantity: 1.5,
+        unit: 'L',
+        rateCents: 6000,
+        amountCents: 9000,
+        updatedAt: DateTime.utc(2026, 5, 4),
+      ),
+    );
+
+    final legacyEntries = await database.select(database.entryRecords).get();
+    final monthLog = await database
+        .select(database.serviceMonthLogRecords)
+        .getSingle();
+    expect(legacyEntries, isEmpty);
+    expect(monthLog.id, '$serviceId:$monthKey');
+    expect(monthLog.entriesJson, contains('"4"'));
+    expect(monthLog.entriesJson, contains('"quantity":1.5'));
+    expect(monthLog.pendingSync, isTrue);
+  });
+
   test('remote sync fails clearly when backend schema is missing', () {
     remote.schemaVersion = null;
 
@@ -374,40 +408,114 @@ void main() {
     expect(remote.lastPushedPayment?.advanceAmountCents, 0);
   });
 
-  test('deleted payment is pushed to Supabase as a soft delete', () async {
-    final now = DateTime.utc(2026, 5, 25);
-    await _insertLocalService(
-      database,
-      name: 'Milkman',
-      updatedAt: now,
-      pendingSync: false,
-    );
-    final payment = PaymentTransaction(
-      id: 'payment-delete-sync',
-      userId: userId,
-      serviceId: serviceId,
-      monthKey: monthKey,
-      amountCents: 30000,
-      paymentDate: now,
-      mode: PaymentMode.upi,
-      updatedAt: now,
-    );
+  test(
+    'future payment settles previous month and appears in previous month history',
+    () async {
+      final mayDate = DateTime.utc(2026, 5, 31);
+      final juneDate = DateTime.utc(2026, 6, 8);
+      await _insertLocalService(
+        database,
+        name: 'Milkman',
+        updatedAt: mayDate,
+        pendingSync: false,
+      );
+      await database
+          .into(database.entryRecords)
+          .insert(
+            EntryRecordsCompanion.insert(
+              id: 'entry-may-due',
+              serviceId: serviceId,
+              monthKey: monthKey,
+              day: 31,
+              status: 'delivered',
+              quantity: const Value(1),
+              unit: const Value('L'),
+              rateCents: const Value(98000),
+              amountCents: const Value(98000),
+              updatedAt: mayDate,
+            ),
+          );
 
-    await repository.savePayment(payment);
-    await repository.syncPending();
-    remote.pushedPayments = 0;
-    remote.lastPushedPayment = null;
+      final mayBeforePayment = await repository.getMonthlyBill(
+        serviceId: serviceId,
+        monthKey: monthKey,
+      );
+      expect(mayBeforePayment.payableAmountCents, 98000);
 
-    await repository.deletePayment(payment);
-    await repository.syncPending();
+      await repository.savePayment(
+        PaymentTransaction(
+          id: 'payment-june-settles-may',
+          userId: userId,
+          serviceId: serviceId,
+          monthKey: '2026-06',
+          amountCents: 100000,
+          paymentDate: juneDate,
+          mode: PaymentMode.upi,
+          updatedAt: juneDate,
+        ),
+      );
 
-    expect(remote.pushedPayments, 1);
-    expect(remote.lastPushedPayment?.id, 'payment-delete-sync');
-    expect(remote.lastPushedPayment?.isDeleted, isTrue);
-    expect(remote.lastPushedPayment?.currentMonthAmountCents, 0);
-    expect(remote.lastPushedPayment?.previousBalanceAmountCents, 0);
-    expect(remote.lastPushedPayment?.advanceAmountCents, 0);
-  });
+      final mayAfterPayment = await repository.getMonthlyBill(
+        serviceId: serviceId,
+        monthKey: monthKey,
+      );
+      final mayPayments = await repository.getPayments(
+        serviceId: serviceId,
+        monthKey: monthKey,
+      );
+
+      expect(mayAfterPayment.payableAmountCents, 0);
+      expect(mayAfterPayment.settlement?.paidAmountCents, 98000);
+      expect(mayPayments, hasLength(1));
+      expect(mayPayments.single.paymentDate.year, juneDate.year);
+      expect(mayPayments.single.paymentDate.month, juneDate.month);
+      expect(mayPayments.single.paymentDate.day, juneDate.day);
+      expect(mayPayments.single.amountCents, 98000);
+
+      final juneRows = await database
+          .select(database.paymentTransactionRecords)
+          .get();
+      final junePayment = juneRows.singleWhere(
+        (row) => row.id == 'payment-june-settles-may',
+      );
+      expect(junePayment.previousBalanceAmountCents, 98000);
+      expect(junePayment.advanceAmountCents, 2000);
+    },
+  );
+
+  test(
+    'deleted payment is removed locally and deleted from Supabase',
+    () async {
+      final now = DateTime.utc(2026, 5, 25);
+      await _insertLocalService(
+        database,
+        name: 'Milkman',
+        updatedAt: now,
+        pendingSync: false,
+      );
+      final payment = PaymentTransaction(
+        id: 'payment-delete-sync',
+        userId: userId,
+        serviceId: serviceId,
+        monthKey: monthKey,
+        amountCents: 30000,
+        paymentDate: now,
+        mode: PaymentMode.upi,
+        updatedAt: now,
+      );
+
+      await repository.savePayment(payment);
+      await repository.syncPending();
+
+      await repository.deletePayment(payment);
+
+      final rows = await database
+          .select(database.paymentTransactionRecords)
+          .get();
+      expect(rows.where((row) => row.id == 'payment-delete-sync'), isEmpty);
+      expect(remote.deletedPaymentIds, ['payment-delete-sync']);
+    },
+  );
 
   test(
     'concurrent entries for one service settle without lost updates',
@@ -654,23 +762,27 @@ Map<String, dynamic> _remoteService({
 
 class _FakeRemoteDataSource implements LedgerRemoteDataSource {
   List<Map<String, dynamic>> services = const [];
+  List<Map<String, dynamic>> monthLogs = const [];
   List<Map<String, dynamic>> entries = const [];
   List<Map<String, dynamic>> advances = const [];
   List<Map<String, dynamic>> payments = const [];
   List<Map<String, dynamic>> settlements = const [];
-  int? schemaVersion = 4;
+  int? schemaVersion = 5;
   bool failOnEntryPush = false;
   int pushedServices = 0;
+  int pushedMonthLogs = 0;
   int pushedEntries = 0;
   int pushedAdvances = 0;
   int pushedPayments = 0;
   int pushedSettlements = 0;
   int serviceFetches = 0;
+  int monthLogFetches = 0;
   int entryFetches = 0;
   int advanceFetches = 0;
   int paymentFetches = 0;
   int settlementFetches = 0;
   PaymentTransactionRecord? lastPushedPayment;
+  final deletedPaymentIds = <String>[];
 
   @override
   bool get isConfigured => true;
@@ -693,6 +805,14 @@ class _FakeRemoteDataSource implements LedgerRemoteDataSource {
   }) async {
     entryFetches++;
     return entries;
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> fetchMonthLogs({
+    required String monthKey,
+  }) async {
+    monthLogFetches++;
+    return monthLogs;
   }
 
   @override
@@ -733,9 +853,19 @@ class _FakeRemoteDataSource implements LedgerRemoteDataSource {
   }
 
   @override
+  Future<void> pushMonthLog(ServiceMonthLogRecord row) async {
+    pushedMonthLogs++;
+  }
+
+  @override
   Future<void> pushPayment(PaymentTransactionRecord row) async {
     pushedPayments++;
     lastPushedPayment = row;
+  }
+
+  @override
+  Future<void> deletePayment(String id) async {
+    deletedPaymentIds.add(id);
   }
 
   @override

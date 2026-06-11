@@ -2,7 +2,6 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:payqure_home/app.dart';
 import 'package:payqure_home/features/legal/domain/legal_content.dart';
 import 'package:payqure_home/features/ledger/data/database/ledger_database.dart';
 import 'package:payqure_home/features/ledger/data/repositories/drift_ledger_repository.dart';
@@ -13,6 +12,7 @@ import 'package:payqure_home/features/ledger/domain/entities/app_route.dart';
 import 'package:payqure_home/features/ledger/domain/entities/user_profile.dart';
 import 'package:payqure_home/features/ledger/domain/repositories/auth_repository.dart';
 import 'package:payqure_home/features/ledger/presentation/controllers/ledger_controller.dart';
+import 'package:payqure_home/features/ledger/presentation/screens/ledger_home_screen.dart';
 import 'package:payqure_home/features/ledger/presentation/screens/login_screen.dart';
 
 void main() {
@@ -131,12 +131,15 @@ void main() {
   testWidgets('More shows Legal and opens Delete My Data', (tester) async {
     final database = LedgerDatabase(NativeDatabase.memory());
     addTearDown(database.close);
-    await tester.pumpWidget(PayqureHomeApp(database: database));
-    await tester.pump(const Duration(milliseconds: 1300));
-    await tester.pump(const Duration(seconds: 1));
-    await tester.tap(find.byKey(const ValueKey('onboarding-skip')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Dev Bypass Login'));
+    final controller = _controller(
+      database: database,
+      authRepository: SupabaseAuthRepository(client: null),
+    );
+    addTearDown(controller.dispose);
+    await controller.bypassLoginForDevelopment();
+    await tester.pumpWidget(
+      MaterialApp(home: LedgerHomeScreen(controller: controller)),
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('More'));

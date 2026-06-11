@@ -6,6 +6,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/utils/currency_formatter.dart';
+import '../../domain/entities/app_route.dart';
 import '../../domain/entities/household_service.dart';
 import '../../domain/entities/payment_transaction.dart';
 import '../../domain/entities/payment_settlement_preview.dart';
@@ -17,12 +18,16 @@ class RecordPaymentBottomSheet extends StatefulWidget {
     required this.controller,
     required this.service,
     this.payment,
+    this.returnRoute,
+    this.source = 'payment_history',
     super.key,
   });
 
   final LedgerController controller;
   final HouseholdService service;
   final PaymentTransaction? payment;
+  final LedgerRoute? returnRoute;
+  final String source;
 
   @override
   State<RecordPaymentBottomSheet> createState() =>
@@ -383,6 +388,9 @@ class _RecordPaymentBottomSheetState extends State<RecordPaymentBottomSheet> {
         paymentDate: _paymentDate,
         mode: _mode,
         note: _noteController.text.trim(),
+        service: widget.service,
+        source: widget.source,
+        returnRoute: widget.returnRoute ?? LedgerRoute.paymentHistory,
       );
     }
     if (mounted) {

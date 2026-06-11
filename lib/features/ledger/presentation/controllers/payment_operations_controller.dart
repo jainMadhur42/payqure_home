@@ -111,6 +111,7 @@ class PaymentOperationsController {
             modeLabel: payment.mode.label,
             note: payment.note,
             pendingSync: payment.pendingSync,
+            payment: payment,
           ),
         ),
       );

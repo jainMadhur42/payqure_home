@@ -9,6 +9,7 @@ import 'package:payqure_home/features/ledger/domain/services/home_summary_builde
 import 'package:payqure_home/features/ledger/domain/services/monthly_usage_calculator.dart';
 import 'package:payqure_home/features/ledger/domain/services/till_date_settlement_calculator.dart';
 import 'package:payqure_home/features/ledger/domain/usecases/ledger_calculation_usecases.dart';
+import 'package:payqure_home/features/ledger/presentation/widgets/service_contribution_stats.dart';
 
 void main() {
   const builder = HomeSummaryBuilder();
@@ -75,13 +76,36 @@ void main() {
     expect(summary.usageCents, 3700);
     expect(summary.serviceCount, 2);
   });
+
+  test('service contribution stats use charges, not only paid amount', () {
+    final milkman = _homeSummary(
+      _service(id: 'milkman', name: 'Milkman'),
+      remaining: 6000,
+      usage: 6000,
+    );
+    final maid = _homeSummary(
+      _service(id: 'maid', name: 'Maid'),
+      remaining: 12000,
+      usage: 12000,
+    );
+
+    final items = ServiceContributionStatsData.fromSummaries([milkman, maid]);
+
+    expect(items, hasLength(2));
+    expect(items.map((item) => item.summary.service.name), ['Maid', 'Milkman']);
+    expect(items.map((item) => item.amountCents), [12000, 6000]);
+  });
 }
 
-HouseholdService _service({List<ServiceEntry> entries = const []}) {
+HouseholdService _service({
+  String id = 'service',
+  String name = 'Milkman',
+  List<ServiceEntry> entries = const [],
+}) {
   return HouseholdService(
-    id: 'service',
+    id: id,
     userId: 'user',
-    name: 'Milkman',
+    name: name,
     description: '',
     icon: 'milk',
     templateType: ServiceTemplateType.quantity,

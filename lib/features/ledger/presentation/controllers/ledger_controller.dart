@@ -3,6 +3,8 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import '../../../../core/analytics/app_analytics.dart';
+import '../../../../core/app_info/app_version_provider.dart';
 import '../../../../core/utils/error_message_mapper.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../../legal/domain/legal_content.dart';
@@ -48,11 +50,15 @@ class LedgerController extends ChangeNotifier {
     required PdfStatementService pdfStatementService,
     ServiceReminderScheduler reminderScheduler =
         const NoopServiceReminderScheduler(),
+    AppAnalytics? analytics,
+    AppVersionProvider appVersionProvider = const FallbackAppVersionProvider(),
   }) : this._(
          authRepository,
          ledgerRepository,
          pdfStatementService,
          reminderScheduler,
+         analytics ?? AppAnalytics.disabled(),
+         appVersionProvider,
        );
 
   LedgerController._(
@@ -60,15 +66,20 @@ class LedgerController extends ChangeNotifier {
     this._ledgerRepository,
     this._pdfStatementService,
     this._reminderScheduler,
+    this._analytics,
+    this._appVersionProvider,
   ) : _sessionController = SessionController(authRepository),
       _monthDataController = MonthDataController(_ledgerRepository),
       _entryOperations = EntryOperationsController(_ledgerRepository),
       _paymentOperations = PaymentOperationsController(_ledgerRepository) {
     unawaited(restoreCurrencyPreference());
     unawaited(restoreThemePreference());
+    unawaited(_loadAppVersion());
     _authSubscription = _sessionController.watchProfile().listen(
       (nextProfile) => unawaited(_handleProfileChange(nextProfile)),
     );
+    _notificationTapSubscription = _reminderScheduler.serviceReminderTaps
+        .listen(_openServiceFromReminder);
   }
 
   static String defaultMonthKey() {
@@ -78,6 +89,8 @@ class LedgerController extends ChangeNotifier {
   final LedgerRepository _ledgerRepository;
   final PdfStatementService _pdfStatementService;
   final ServiceReminderScheduler _reminderScheduler;
+  final AppAnalytics _analytics;
+  final AppVersionProvider _appVersionProvider;
   final SessionController _sessionController;
   final MonthDataController _monthDataController;
   final EntryOperationsController _entryOperations;
@@ -90,6 +103,7 @@ class LedgerController extends ChangeNotifier {
       const ServiceStartDateResolver();
   final HomeSummaryBuilder _homeSummaryBuilder = const HomeSummaryBuilder();
   StreamSubscription<UserProfile?>? _authSubscription;
+  StreamSubscription<String>? _notificationTapSubscription;
   Future<List<HomeServiceSummary>>? _homeSummariesFuture;
   int _homeSummariesRevision = 0;
   int _homeSummariesFutureRevision = -1;
@@ -97,13 +111,17 @@ class LedgerController extends ChangeNotifier {
   bool _disposed = false;
   bool _notificationPermissionRequested = false;
   String _scheduledReminderSignature = '';
+  String? _pendingReminderServiceId;
+  AppVersionInfo _appVersionInfo = const AppVersionInfo(
+    version: '1.0.0',
+    buildNumber: '1',
+  );
 
   LedgerRoute route = LedgerRoute.splash;
   bool isBackwardNavigation = false;
   LedgerOverview? overview;
   UserProfile? profile;
   HouseholdService? selectedService;
-  PaymentTransaction? selectedPayment;
   int selectedDay = 29;
   EntrySource entrySource = EntrySource.calendar;
   PdfSource pdfSource = PdfSource.serviceDetail;
@@ -116,6 +134,8 @@ class LedgerController extends ChangeNotifier {
   String pendingPasswordResetEmail = '';
   AddServiceDraft? addServiceDraft;
   HouseholdService? editingService;
+
+  String get appVersionLabel => _appVersionInfo.label;
   AppCurrency selectedCurrency = AppCurrency.usd;
   final ValueNotifier<ThemeMode> themeModeListenable = ValueNotifier(
     ThemeMode.system,
@@ -165,11 +185,24 @@ class LedgerController extends ChangeNotifier {
       key: _currencyPreferenceKey,
       value: currency.code,
     );
+    _setAnalyticsUserProperties();
+  }
+
+  Future<void> _loadAppVersion() async {
+    try {
+      _appVersionInfo = await _appVersionProvider.load();
+      notifyListeners();
+    } catch (_) {
+      // Keep the fallback label if platform package metadata is unavailable.
+    }
   }
 
   Future<void> completeSplash() async {
     await _run(() async {
       try {
+        _pendingReminderServiceId =
+            await _reminderScheduler.consumeLaunchServiceId() ??
+            _pendingReminderServiceId;
         final hasSeenOnboarding = await _ledgerRepository.getLocalPreference(
           _onboardingPreferenceKey,
         );
@@ -205,12 +238,40 @@ class LedgerController extends ChangeNotifier {
         value: 'true',
       );
       profile = null;
+      _analytics.logEvent(AnalyticsEvents.onboardingCompleted);
       _setRoute(LedgerRoute.login);
     });
   }
 
+  void trackOnboardingStarted() {
+    _analytics.logEvent(AnalyticsEvents.onboardingStarted);
+  }
+
+  void trackOnboardingScreenViewed(int index, String screenName) {
+    _analytics.logEvent(
+      AnalyticsEvents.onboardingScreenViewed,
+      parameters: {
+        AnalyticsParams.screenIndex: index,
+        AnalyticsParams.screenName: _analyticsLabel(screenName),
+      },
+    );
+  }
+
+  void trackOnboardingSkipped(int index, String screenName) {
+    _analytics.logEvent(
+      AnalyticsEvents.onboardingSkipped,
+      parameters: {
+        AnalyticsParams.screenIndex: index,
+        AnalyticsParams.screenName: _analyticsLabel(screenName),
+      },
+    );
+  }
+
   Future<void> restoreSession() async {
     await _run(() async {
+      _pendingReminderServiceId =
+          await _reminderScheduler.consumeLaunchServiceId() ??
+          _pendingReminderServiceId;
       profile = await _sessionController.restore();
       if (profile == null) {
         _setRoute(LedgerRoute.splash);
@@ -234,6 +295,15 @@ class LedgerController extends ChangeNotifier {
 
   void reviewAddService(AddServiceDraft draft) {
     addServiceDraft = draft;
+    _analytics.logEvent(
+      AnalyticsEvents.serviceTemplateSelected,
+      parameters: {
+        AnalyticsParams.serviceType: _analyticsLabel(draft.serviceIcon),
+        AnalyticsParams.templateType: draft.templateType.name,
+        AnalyticsParams.unitType: draft.unit,
+        AnalyticsParams.currencyCode: selectedCurrency.code,
+      },
+    );
     _setRoute(LedgerRoute.createServiceReview);
     errorMessage = null;
     successMessage = null;
@@ -243,6 +313,7 @@ class LedgerController extends ChangeNotifier {
   void startCreateService() {
     editingService = null;
     addServiceDraft = null;
+    _analytics.logEvent(AnalyticsEvents.addServiceStarted);
     _setRoute(LedgerRoute.createService);
     notifyListeners();
   }
@@ -308,6 +379,10 @@ class LedgerController extends ChangeNotifier {
         identifier: identifier,
         password: password,
       );
+      _analytics.logEvent(
+        AnalyticsEvents.loginCompleted,
+        parameters: const {AnalyticsParams.method: 'email_password'},
+      );
       if (!profile!.emailVerified &&
           !_sessionController.isLocalDevelopmentProfile(profile!)) {
         _setRoute(LedgerRoute.emailVerificationPending);
@@ -342,12 +417,20 @@ class LedgerController extends ChangeNotifier {
     required bool privacyPolicyAccepted,
   }) async {
     await _run(() async {
+      _analytics.logEvent(
+        AnalyticsEvents.signUpStarted,
+        parameters: const {AnalyticsParams.method: 'email_password'},
+      );
       profile = await _sessionController.register(
         name: name,
         email: email,
         phone: phone,
         password: password,
         privacyPolicyAccepted: privacyPolicyAccepted,
+      );
+      _analytics.logEvent(
+        AnalyticsEvents.signUpCompleted,
+        parameters: const {AnalyticsParams.method: 'email_password'},
       );
       pendingVerificationEmail = profile!.email;
       _setRoute(LedgerRoute.emailVerificationPending);
@@ -414,6 +497,10 @@ class LedgerController extends ChangeNotifier {
 
   Future<void> requestPasswordReset(String email) async {
     await _run(() async {
+      _analytics.logEvent(
+        AnalyticsEvents.forgotPasswordStarted,
+        parameters: const {AnalyticsParams.method: 'email_password'},
+      );
       await _sessionController.requestPasswordReset(email);
       pendingPasswordResetEmail = email.trim();
       _setRoute(LedgerRoute.resetPasswordOtp);
@@ -430,6 +517,10 @@ class LedgerController extends ChangeNotifier {
         email: email,
         token: token,
         newPassword: newPassword,
+      );
+      _analytics.logEvent(
+        AnalyticsEvents.forgotPasswordCompleted,
+        parameters: const {AnalyticsParams.method: 'email_password'},
       );
       pendingPasswordResetEmail = '';
       successMessage = 'Password updated. Sign in with your new password.';
@@ -458,8 +549,30 @@ class LedgerController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void customizeEntryForService({
+    required HouseholdService service,
+    required int day,
+    EntrySource source = EntrySource.calendar,
+  }) {
+    selectedService = service;
+    selectedDay = _validEntryDayForService(service, day);
+    entrySource = source;
+    _setRoute(LedgerRoute.entry);
+    notifyListeners();
+  }
+
   void selectDayInline(int day) {
     selectedDay = day;
+    final service = selectedService;
+    if (service != null) {
+      _analytics.logEvent(
+        AnalyticsEvents.calendarDateTapped,
+        parameters: {
+          ..._serviceAnalyticsParameters(service),
+          AnalyticsParams.isPastDate: _isPastDay(day),
+        },
+      );
+    }
     notifyListeners();
   }
 
@@ -477,20 +590,38 @@ class LedgerController extends ChangeNotifier {
 
   void openPaymentHistory(HouseholdService service) {
     selectedService = service;
-    selectedPayment = null;
+    _analytics.logEvent(
+      AnalyticsEvents.paymentHistoryViewed,
+      parameters: _serviceAnalyticsParameters(service),
+    );
     _setRoute(LedgerRoute.paymentHistory);
     notifyListeners();
   }
 
-  void openPaymentDetail(PaymentTransaction payment) {
-    selectedPayment = payment;
-    _setRoute(LedgerRoute.paymentDetail);
-    notifyListeners();
+  void trackRecordPaymentStarted({
+    required HouseholdService service,
+    String source = 'service_detail',
+  }) {
+    _analytics.logEvent(
+      AnalyticsEvents.recordPaymentStarted,
+      parameters: {
+        ..._serviceAnalyticsParameters(service),
+        AnalyticsParams.source: source,
+        AnalyticsParams.currencyCode: selectedCurrency.code,
+      },
+    );
   }
 
   Future<void> openQuickLog({DateTime? date}) async {
     final targetDate = date ?? DateTime.now();
     quickLogDate = DateTime(targetDate.year, targetDate.month, targetDate.day);
+    _analytics.logEvent(
+      AnalyticsEvents.quickLogOpened,
+      parameters: {
+        AnalyticsParams.entrySource: date == null ? 'quick_log' : 'past_date',
+        AnalyticsParams.isPastDate: _isPastDate(quickLogDate),
+      },
+    );
     selectedDay = quickLogDate.day;
     final targetMonthKey = _monthKeyForDate(quickLogDate);
     final userId = profile?.id ?? overview?.profile.id;
@@ -613,6 +744,11 @@ class LedgerController extends ChangeNotifier {
         rateCents: rateCents,
         monthlyAmountCents: monthlyAmountCents,
       );
+      _analytics.logEvent(
+        AnalyticsEvents.serviceCreated,
+        parameters: _serviceAnalyticsParameters(selectedService!),
+      );
+      _setAnalyticsUserProperties();
       _setRoute(routeAfterSave);
     });
   }
@@ -639,6 +775,11 @@ class LedgerController extends ChangeNotifier {
         rateCents: rateCents,
         monthlyAmountCents: monthlyAmountCents,
       );
+      _analytics.logEvent(
+        AnalyticsEvents.serviceUpdated,
+        parameters: _serviceAnalyticsParameters(selectedService!),
+      );
+      _setAnalyticsUserProperties();
       final userId = profile?.id ?? overview?.profile.id;
       if (userId != null) {
         await _startLedger(userId, resetSelection: false);
@@ -653,6 +794,10 @@ class LedgerController extends ChangeNotifier {
         serviceId: service.id,
         monthKey: monthKey,
       );
+      _analytics.logEvent(
+        AnalyticsEvents.serviceDeleted,
+        parameters: _serviceAnalyticsParameters(service),
+      );
       selectedService = null;
       addServiceDraft = null;
       editingService = null;
@@ -660,6 +805,7 @@ class LedgerController extends ChangeNotifier {
       if (userId != null) {
         await _startLedger(userId, resetSelection: true);
       }
+      _setAnalyticsUserProperties();
       _setRoute(LedgerRoute.dashboard);
     });
   }
@@ -676,7 +822,7 @@ class LedgerController extends ChangeNotifier {
       return;
     }
     await _run(() async {
-      await _entryOperations.save(
+      final entry = await _entryOperations.save(
         service: service,
         monthKey: monthKey,
         day: selectedDay,
@@ -687,6 +833,7 @@ class LedgerController extends ChangeNotifier {
         note: note,
         onPrepared: (entry) => _applyOptimisticEntry(service.id, entry),
       );
+      _logEntrySaved(entry, service: service, source: entrySource.name);
       await _refreshLedgerState(resetSelection: false);
       _setRoute(_entryReturnRoute());
     });
@@ -698,13 +845,14 @@ class LedgerController extends ChangeNotifier {
     ServiceEntryStatus? status,
   }) async {
     await _run(() async {
-      await _entryOperations.saveDefault(
+      final entry = await _entryOperations.saveDefault(
         service: service,
         monthKey: monthKey,
         day: day,
         status: status,
         onPrepared: (entry) => _applyOptimisticEntry(service.id, entry),
       );
+      _logEntrySaved(entry, service: service, source: 'calendar');
       await _refreshLedgerState(resetSelection: false);
     });
   }
@@ -715,13 +863,14 @@ class LedgerController extends ChangeNotifier {
     required ServiceEntryStatus status,
   }) async {
     try {
-      await _entryOperations.saveDefault(
+      final entry = await _entryOperations.saveDefault(
         service: service,
         monthKey: monthKey,
         day: day,
         status: status,
         onPrepared: (entry) => _applyOptimisticEntry(service.id, entry),
       );
+      _logEntrySaved(entry, service: service, source: 'quick_log');
       await _refreshLedgerState(resetSelection: false);
     } catch (error) {
       errorMessage = ErrorMessageMapper.userFacing(error);
@@ -738,11 +887,19 @@ class LedgerController extends ChangeNotifier {
     required int day,
   }) async {
     try {
-      await _entryOperations.clear(
+      final entry = await _entryOperations.clear(
         service: service,
         monthKey: monthKey,
         day: day,
         onPrepared: (entry) => _applyOptimisticEntry(service.id, entry),
+      );
+      _analytics.logEvent(
+        AnalyticsEvents.entryDeleted,
+        parameters: _entryAnalyticsParameters(
+          entry,
+          service: service,
+          source: 'quick_log',
+        ),
       );
       await _refreshLedgerState(resetSelection: false);
     } catch (error) {
@@ -757,14 +914,22 @@ class LedgerController extends ChangeNotifier {
   }) async {
     await _run(() async {
       for (final service in services) {
-        await _entryOperations.saveDefault(
+        final entry = await _entryOperations.saveDefault(
           service: service,
           monthKey: monthKey,
           day: day,
           status: ServiceEntryStatus.delivered,
           onPrepared: (entry) => _applyOptimisticEntry(service.id, entry),
         );
+        _logEntrySaved(entry, service: service, source: 'quick_log');
       }
+      _analytics.logEvent(
+        AnalyticsEvents.quickLogCompleted,
+        parameters: {
+          AnalyticsParams.serviceCount: services.length,
+          AnalyticsParams.entrySource: 'quick_log',
+        },
+      );
       await _refreshLedgerState(resetSelection: false);
     });
   }
@@ -774,11 +939,19 @@ class LedgerController extends ChangeNotifier {
     required int day,
   }) async {
     await _run(() async {
-      await _entryOperations.clear(
+      final entry = await _entryOperations.clear(
         service: service,
         monthKey: monthKey,
         day: day,
         onPrepared: (entry) => _applyOptimisticEntry(service.id, entry),
+      );
+      _analytics.logEvent(
+        AnalyticsEvents.entryDeleted,
+        parameters: _entryAnalyticsParameters(
+          entry,
+          service: service,
+          source: 'calendar',
+        ),
       );
       await _refreshLedgerState(resetSelection: false);
     });
@@ -800,6 +973,16 @@ class LedgerController extends ChangeNotifier {
         amountCents: amountCents,
         paidOn: paidOn ?? DateTime.now(),
         note: note,
+      );
+      _analytics.logEvent(
+        AnalyticsEvents.advanceAdded,
+        parameters: {
+          ..._serviceAnalyticsParameters(service),
+          AnalyticsParams.amountBucket: AmountAnalyticsHelper.centsBucket(
+            amountCents,
+          ),
+          AnalyticsParams.currencyCode: selectedCurrency.code,
+        },
       );
       _invalidateHomeSummaries();
     });
@@ -826,6 +1009,15 @@ class LedgerController extends ChangeNotifier {
         mode: mode,
         note: note,
       );
+      _analytics.logEvent(
+        AnalyticsEvents.paymentRecorded,
+        parameters: _paymentAnalyticsParameters(
+          service,
+          amountCents: amountCents,
+          mode: mode,
+          source: 'service_detail',
+        ),
+      );
       _invalidateHomeSummaries();
       successMessage = 'Payment recorded.';
       _setRoute(LedgerRoute.calendar);
@@ -837,6 +1029,9 @@ class LedgerController extends ChangeNotifier {
     required int amountCents,
     required DateTime paymentDate,
     required PaymentMode mode,
+    HouseholdService? service,
+    String source = 'payment_history',
+    LedgerRoute returnRoute = LedgerRoute.paymentHistory,
     String note = '',
   }) async {
     await _run(() async {
@@ -847,20 +1042,47 @@ class LedgerController extends ChangeNotifier {
         mode: mode,
         note: note,
       );
+      final analyticsService = service ?? selectedService;
+      if (analyticsService != null) {
+        _analytics.logEvent(
+          AnalyticsEvents.paymentUpdated,
+          parameters: _paymentAnalyticsParameters(
+            analyticsService,
+            amountCents: amountCents,
+            mode: mode,
+            source: source,
+          ),
+        );
+      }
       _invalidateHomeSummaries();
-      selectedPayment = null;
       successMessage = 'Payment updated.';
-      _setRoute(LedgerRoute.paymentHistory);
+      _setRoute(returnRoute);
     });
   }
 
-  Future<void> deletePayment(PaymentTransaction payment) async {
+  Future<void> deletePayment(
+    PaymentTransaction payment, {
+    HouseholdService? service,
+    String source = 'payment_history',
+    LedgerRoute returnRoute = LedgerRoute.paymentHistory,
+  }) async {
     await _run(() async {
       await _paymentOperations.deletePayment(payment);
+      final analyticsService = service ?? selectedService;
+      if (analyticsService != null) {
+        _analytics.logEvent(
+          AnalyticsEvents.paymentDeleted,
+          parameters: _paymentAnalyticsParameters(
+            analyticsService,
+            amountCents: payment.amountCents,
+            mode: payment.mode,
+            source: source,
+          ),
+        );
+      }
       _invalidateHomeSummaries();
-      selectedPayment = null;
       successMessage = 'Payment deleted.';
-      _setRoute(LedgerRoute.paymentHistory);
+      _setRoute(returnRoute);
     });
   }
 
@@ -1004,7 +1226,30 @@ class LedgerController extends ChangeNotifier {
     if (bill == null) {
       return null;
     }
-    return _pdfStatementService.buildStatement(bill);
+    _analytics.logEvent(
+      AnalyticsEvents.pdfGenerateStarted,
+      parameters: _pdfAnalyticsParameters(bill.service),
+    );
+    try {
+      final bytes = await _pdfStatementService.buildStatement(bill);
+      _analytics.logEvent(
+        AnalyticsEvents.pdfGenerated,
+        parameters: _pdfAnalyticsParameters(bill.service),
+      );
+      return bytes;
+    } catch (error, stackTrace) {
+      _analytics.logEvent(
+        AnalyticsEvents.pdfGenerationFailed,
+        parameters: _pdfAnalyticsParameters(bill.service),
+      );
+      _analytics.logErrorContext(
+        error,
+        stackTrace: stackTrace,
+        reason: AnalyticsEvents.pdfGenerationFailed,
+        keys: _pdfAnalyticsParameters(bill.service),
+      );
+      rethrow;
+    }
   }
 
   Future<void> signOut() async {
@@ -1079,7 +1324,10 @@ class LedgerController extends ChangeNotifier {
       useCacheOnFailure: true,
     );
     await _startLedger(current.id, resetSelection: true);
-    _setRoute(LedgerRoute.dashboard);
+    _setAnalyticsUserProperties();
+    if (route != LedgerRoute.calendar) {
+      _setRoute(LedgerRoute.dashboard);
+    }
   }
 
   Future<void> _startLedger(
@@ -1099,8 +1347,10 @@ class LedgerController extends ChangeNotifier {
           nextOverview,
           resetSelection: resetSelection,
         );
+        _openPendingReminderServiceIfPossible(nextOverview);
         resetSelection = false;
         _invalidateHomeSummaries();
+        _setAnalyticsUserProperties();
         notifyListeners();
       },
     );
@@ -1129,8 +1379,10 @@ class LedgerController extends ChangeNotifier {
           nextOverview,
           resetSelection: resetSelection,
         );
+        _openPendingReminderServiceIfPossible(nextOverview);
         resetSelection = false;
         _invalidateHomeSummaries();
+        _setAnalyticsUserProperties();
         notifyListeners();
       },
     );
@@ -1154,6 +1406,41 @@ class LedgerController extends ChangeNotifier {
     return nextOverview.services.first;
   }
 
+  void _openServiceFromReminder(String serviceId) {
+    _pendingReminderServiceId = serviceId;
+    final currentOverview = overview;
+    if (currentOverview == null) {
+      return;
+    }
+    _openPendingReminderServiceIfPossible(currentOverview);
+    notifyListeners();
+  }
+
+  void _openPendingReminderServiceIfPossible(LedgerOverview currentOverview) {
+    final serviceId = _pendingReminderServiceId;
+    if (serviceId == null) {
+      return;
+    }
+    final matches = currentOverview.services.where(
+      (service) => service.id == serviceId,
+    );
+    if (matches.isEmpty) {
+      return;
+    }
+    final service = matches.first;
+    selectedService = service;
+    final startDate = _serviceStartDateResolver.resolve(service);
+    final selectedMonth = _dateForMonthKey(monthKey);
+    if (startDate != null &&
+        startDate.year == selectedMonth.year &&
+        startDate.month == selectedMonth.month &&
+        selectedDay < startDate.day) {
+      selectedDay = startDate.day;
+    }
+    _pendingReminderServiceId = null;
+    _setRoute(LedgerRoute.calendar);
+  }
+
   Future<void> _refreshLedgerState({required bool resetSelection}) async {
     final userId = profile?.id ?? overview?.profile.id;
     if (userId == null) {
@@ -1172,6 +1459,7 @@ class LedgerController extends ChangeNotifier {
       overview!,
       resetSelection: resetSelection,
     );
+    _openPendingReminderServiceIfPossible(overview!);
     _invalidateHomeSummaries();
     notifyListeners();
   }
@@ -1239,6 +1527,7 @@ class LedgerController extends ChangeNotifier {
   void _setRoute(LedgerRoute nextRoute) {
     isBackwardNavigation = _routeDepth(nextRoute) < _routeDepth(route);
     route = nextRoute;
+    _analytics.logScreenView(_screenNameForRoute(nextRoute));
   }
 
   int _routeDepth(LedgerRoute route) {
@@ -1252,6 +1541,7 @@ class LedgerController extends ChangeNotifier {
       LedgerRoute.resetPasswordOtp => 1,
       LedgerRoute.privacyPolicyAcceptance => 2,
       LedgerRoute.dashboard || LedgerRoute.more => 2,
+      LedgerRoute.contributionStats ||
       LedgerRoute.quickLog ||
       LedgerRoute.createService ||
       LedgerRoute.paymentHistory ||
@@ -1266,8 +1556,7 @@ class LedgerController extends ChangeNotifier {
       LedgerRoute.deleteMyData => 3,
       LedgerRoute.createServiceReview ||
       LedgerRoute.calendar ||
-      LedgerRoute.settlementDetail ||
-      LedgerRoute.paymentDetail => 4,
+      LedgerRoute.settlementDetail => 4,
       LedgerRoute.entry => 5,
       LedgerRoute.pdfPreview => 6,
     };
@@ -1290,10 +1579,271 @@ class LedgerController extends ChangeNotifier {
     }
   }
 
+  void _logEntrySaved(
+    ServiceEntry entry, {
+    required HouseholdService service,
+    required String source,
+  }) {
+    final existing = service.entries.any(
+      (candidate) =>
+          candidate.day == entry.day && candidate.monthKey == entry.monthKey,
+    );
+    _analytics.logEvent(
+      existing ? AnalyticsEvents.entryUpdated : AnalyticsEvents.entryCreated,
+      parameters: _entryAnalyticsParameters(
+        entry,
+        service: service,
+        source: source,
+      ),
+    );
+  }
+
+  Map<String, Object?> _serviceAnalyticsParameters(HouseholdService service) {
+    final base = <String, Object?>{
+      AnalyticsParams.serviceType: _safeServiceType(service),
+      AnalyticsParams.templateType: service.templateType.name,
+      AnalyticsParams.unitType: service.unit,
+      AnalyticsParams.currencyCode: selectedCurrency.code,
+      AnalyticsParams.autoMarkEnabled: false,
+      AnalyticsParams.defaultQuantity: service.defaultQuantity,
+    };
+    switch (service.templateType) {
+      case ServiceTemplateType.quantity:
+        final unitPrice = service.rateCents / 100;
+        return {
+          ...base,
+          AnalyticsParams.unitPrice: unitPrice,
+          AnalyticsParams.unitPriceBucket: AmountAnalyticsHelper.centsBucket(
+            service.rateCents,
+          ),
+        };
+      case ServiceTemplateType.attendance:
+        final dailyWage = service.rateCents / 100;
+        return {
+          ...base,
+          AnalyticsParams.dailyWage: dailyWage,
+          AnalyticsParams.dailyWageBucket: AmountAnalyticsHelper.centsBucket(
+            service.rateCents,
+          ),
+          AnalyticsParams.allowHalfDay: true,
+        };
+      case ServiceTemplateType.fixedMonthly:
+        final monthlyAmount = service.monthlyAmountCents / 100;
+        return {
+          ...base,
+          AnalyticsParams.monthlyAmount: monthlyAmount,
+          AnalyticsParams.monthlyAmountBucket:
+              AmountAnalyticsHelper.centsBucket(service.monthlyAmountCents),
+        };
+    }
+  }
+
+  Map<String, Object?> _entryAnalyticsParameters(
+    ServiceEntry entry, {
+    required HouseholdService service,
+    required String source,
+  }) {
+    final base = <String, Object?>{
+      ..._serviceAnalyticsParameters(service),
+      AnalyticsParams.entryStatus: entry.status.name,
+      AnalyticsParams.entrySource: source,
+      AnalyticsParams.isPastDate: _isPastDay(entry.day),
+      AnalyticsParams.quantityChanged:
+          entry.quantity != service.defaultQuantity &&
+          entry.status != ServiceEntryStatus.notDelivered &&
+          entry.status != ServiceEntryStatus.noEntry,
+      AnalyticsParams.rateChanged:
+          entry.rateCents != service.rateCents &&
+          service.templateType != ServiceTemplateType.fixedMonthly,
+      AnalyticsParams.entryAmountBucket: AmountAnalyticsHelper.centsBucket(
+        entry.amountCents,
+      ),
+    };
+    if (service.templateType == ServiceTemplateType.quantity) {
+      return {
+        ...base,
+        AnalyticsParams.quantity: entry.quantity,
+        AnalyticsParams.unitPrice: entry.rateCents / 100,
+        AnalyticsParams.unitPriceBucket: AmountAnalyticsHelper.centsBucket(
+          entry.rateCents,
+        ),
+      };
+    }
+    if (service.templateType == ServiceTemplateType.attendance) {
+      return {
+        ...base,
+        AnalyticsParams.dailyWage: entry.rateCents / 100,
+        AnalyticsParams.dailyWageBucket: AmountAnalyticsHelper.centsBucket(
+          entry.rateCents,
+        ),
+      };
+    }
+    return base;
+  }
+
+  Map<String, Object?> _paymentAnalyticsParameters(
+    HouseholdService service, {
+    required int amountCents,
+    required PaymentMode mode,
+    required String source,
+  }) {
+    return {
+      ..._serviceAnalyticsParameters(service),
+      AnalyticsParams.paymentMode: mode.name,
+      AnalyticsParams.paymentResult: _paymentResultForAmount(amountCents),
+      AnalyticsParams.source: source,
+      AnalyticsParams.amountBucket: AmountAnalyticsHelper.centsBucket(
+        amountCents,
+      ),
+      AnalyticsParams.currencyCode: selectedCurrency.code,
+    };
+  }
+
+  Map<String, Object?> _pdfAnalyticsParameters(HouseholdService service) {
+    return {
+      ..._serviceAnalyticsParameters(service),
+      AnalyticsParams.monthType: _monthType(monthKey),
+      AnalyticsParams.currencyCode: selectedCurrency.code,
+    };
+  }
+
+  void _setAnalyticsUserProperties() {
+    final services = overview?.services ?? const <HouseholdService>[];
+    _analytics.setUserProperties({
+      AnalyticsParams.serviceCount: services.length,
+      AnalyticsParams.hasQuantityService: services.any(
+        (service) => service.templateType == ServiceTemplateType.quantity,
+      ),
+      AnalyticsParams.hasAttendanceService: services.any(
+        (service) => service.templateType == ServiceTemplateType.attendance,
+      ),
+      AnalyticsParams.hasFixedMonthlyService: services.any(
+        (service) => service.templateType == ServiceTemplateType.fixedMonthly,
+      ),
+      AnalyticsParams.currencyCode: selectedCurrency.code,
+      AnalyticsParams.countryCode: _countryCodeForCurrency(selectedCurrency),
+      AnalyticsParams.appLanguage: 'en',
+      AnalyticsParams.signupMethod: 'email_password',
+      AnalyticsParams.appVersion:
+          '${_appVersionInfo.version}+${_appVersionInfo.buildNumber}',
+    });
+  }
+
+  bool _isPastDay(int day) {
+    final month = LedgerMonth.parse(monthKey);
+    return _isPastDate(DateTime(month.year, month.month, day));
+  }
+
+  int _validEntryDayForService(HouseholdService service, int day) {
+    final startDate = _serviceStartDateResolver.resolve(service);
+    final selectedMonth = _dateForMonthKey(monthKey);
+    if (startDate != null &&
+        startDate.year == selectedMonth.year &&
+        startDate.month == selectedMonth.month &&
+        day < startDate.day) {
+      return startDate.day;
+    }
+    return day;
+  }
+
+  bool _isPastDate(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final target = DateTime(date.year, date.month, date.day);
+    return target.isBefore(today);
+  }
+
+  String _monthType(String key) {
+    final month = LedgerMonth.parse(key);
+    final now = DateTime.now();
+    if (month.year == now.year && month.month == now.month) {
+      return 'current';
+    }
+    return DateTime(
+          month.year,
+          month.month,
+        ).isBefore(DateTime(now.year, now.month))
+        ? 'past'
+        : 'future';
+  }
+
+  String _paymentResultForAmount(int amountCents) {
+    final due = selectedService?.entries.fold<int>(
+      0,
+      (sum, entry) => sum + entry.amountCents,
+    );
+    if (due == null || due == 0) return 'paid';
+    if (amountCents < due) return 'partial';
+    if (amountCents > due) return 'overpaid';
+    return 'paid';
+  }
+
+  String _safeServiceType(HouseholdService service) {
+    final normalized = service.icon.trim().isNotEmpty
+        ? service.icon.trim()
+        : service.templateType.name;
+    return _analyticsLabel(normalized);
+  }
+
+  String _analyticsLabel(String value) {
+    return value
+        .replaceAll(RegExp(r'[^a-zA-Z0-9_]+'), '_')
+        .replaceAll(RegExp(r'_+'), '_')
+        .replaceAll(RegExp(r'^_|_$'), '')
+        .toLowerCase();
+  }
+
+  String _countryCodeForCurrency(AppCurrency currency) {
+    return switch (currency.code) {
+      'INR' => 'IN',
+      'USD' => 'US',
+      'GBP' => 'GB',
+      'AED' => 'AE',
+      'AUD' => 'AU',
+      'CAD' => 'CA',
+      'SGD' => 'SG',
+      _ => '',
+    };
+  }
+
+  String _screenNameForRoute(LedgerRoute route) {
+    return switch (route) {
+      LedgerRoute.splash => 'splash',
+      LedgerRoute.onboarding => 'onboarding',
+      LedgerRoute.login => 'login',
+      LedgerRoute.register => 'register',
+      LedgerRoute.emailVerificationPending => 'email_verification_pending',
+      LedgerRoute.forgotPassword => 'forgot_password',
+      LedgerRoute.resetPasswordOtp => 'reset_password_otp',
+      LedgerRoute.dashboard => 'home',
+      LedgerRoute.contributionStats => 'spending_stats',
+      LedgerRoute.quickLog => 'quick_log',
+      LedgerRoute.createService ||
+      LedgerRoute.createServiceReview => 'add_service',
+      LedgerRoute.calendar => 'service_detail',
+      LedgerRoute.entry => 'add_entry',
+      LedgerRoute.settlementDetail => 'settlement_detail',
+      LedgerRoute.paymentHistory ||
+      LedgerRoute.globalPaymentHistory => 'payment_history',
+      LedgerRoute.advanceHistory => 'advance_history',
+      LedgerRoute.pdfPreview => 'pdf_preview',
+      LedgerRoute.contacts => 'contacts',
+      LedgerRoute.more => 'more',
+      LedgerRoute.profile => 'profile',
+      LedgerRoute.currency => 'currency_picker',
+      LedgerRoute.theme => 'theme_picker',
+      LedgerRoute.privacyPolicy => 'privacy_policy',
+      LedgerRoute.termsDisclaimer => 'terms_disclaimer',
+      LedgerRoute.deleteMyData => 'delete_my_data',
+      LedgerRoute.privacyPolicyAcceptance => 'privacy_policy_acceptance',
+    };
+  }
+
   @override
   void dispose() {
     _disposed = true;
     unawaited(_authSubscription?.cancel());
+    unawaited(_notificationTapSubscription?.cancel());
     _monthDataController.dispose();
     themeModeListenable.dispose();
     super.dispose();

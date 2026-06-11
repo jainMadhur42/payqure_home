@@ -26,9 +26,9 @@ import 'currency_screen.dart';
 import 'contacts_screen.dart';
 import 'global_history_screen.dart';
 import 'home_screen.dart';
-import 'payment_detail_screen.dart';
 import 'payment_history_screen.dart';
 import 'service_detail_screen.dart';
+import 'service_contribution_screen.dart';
 import 'service_template_picker_screen.dart';
 import 'settlement_detail_screen.dart';
 import 'theme_screen.dart';
@@ -63,6 +63,9 @@ class LedgerFlowScreen extends StatelessWidget {
           : _appBar(context, selectedService),
       body: switch (controller.route) {
         LedgerRoute.dashboard => HomeScreen(controller: controller),
+        LedgerRoute.contributionStats => ServiceContributionScreen(
+          controller: controller,
+        ),
         LedgerRoute.quickLog => _QuickLogView(controller: controller),
         LedgerRoute.createService => _CreateServiceView(controller: controller),
         LedgerRoute.createServiceReview => _CreateServiceReviewView(
@@ -92,13 +95,6 @@ class LedgerFlowScreen extends StatelessWidget {
               : PaymentHistoryScreen(
                   controller: controller,
                   service: selectedService,
-                ),
-        LedgerRoute.paymentDetail =>
-          selectedService == null || controller.selectedPayment == null
-              ? const _EmptyLedgerView()
-              : PaymentDetailScreen(
-                  service: selectedService,
-                  payment: controller.selectedPayment!,
                 ),
         LedgerRoute.globalPaymentHistory => GlobalHistoryScreen(
           controller: controller,
@@ -299,10 +295,10 @@ class LedgerFlowScreen extends StatelessWidget {
             ? 'Settlement Details'
             : controller.route == LedgerRoute.paymentHistory
             ? 'Payment History'
-            : controller.route == LedgerRoute.paymentDetail
-            ? 'Payment Detail'
             : controller.route == LedgerRoute.globalPaymentHistory
             ? 'Payment History'
+            : controller.route == LedgerRoute.contributionStats
+            ? 'Spending Stats'
             : controller.route == LedgerRoute.advanceHistory
             ? 'Advance History'
             : isQuickLog
@@ -340,12 +336,12 @@ class LedgerFlowScreen extends StatelessWidget {
             ? LedgerRoute.calendar
             : LedgerRoute.dashboard,
       LedgerRoute.quickLog => LedgerRoute.dashboard,
+      LedgerRoute.contributionStats => LedgerRoute.dashboard,
       LedgerRoute.entry => switch (controller.entrySource) {
         EntrySource.quickLog => LedgerRoute.quickLog,
         EntrySource.calendar => LedgerRoute.calendar,
       },
       LedgerRoute.settlementDetail => LedgerRoute.calendar,
-      LedgerRoute.paymentDetail => LedgerRoute.paymentHistory,
       LedgerRoute.paymentHistory => LedgerRoute.calendar,
       LedgerRoute.globalPaymentHistory ||
       LedgerRoute.advanceHistory ||
@@ -1058,6 +1054,7 @@ class _MoreView extends StatelessWidget {
             ),
           ],
         ),
+        _AppVersionFooter(versionLabel: controller.appVersionLabel),
       ],
     );
   }
@@ -1068,6 +1065,44 @@ class _MoreView extends StatelessWidget {
       ThemeMode.dark => 'Dark',
       ThemeMode.system => 'System',
     };
+  }
+}
+
+class _AppVersionFooter extends StatelessWidget {
+  const _AppVersionFooter({required this.versionLabel});
+
+  final String versionLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final mutedColor = Theme.of(context).colorScheme.onSurfaceVariant;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        0,
+        AppSpacing.md,
+        AppSpacing.xl,
+      ),
+      child: Column(
+        children: [
+          Text(
+            'Payqure Home',
+            textAlign: TextAlign.center,
+            style: textTheme.labelLarge?.copyWith(
+              color: mutedColor,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            versionLabel,
+            textAlign: TextAlign.center,
+            style: textTheme.bodySmall?.copyWith(color: mutedColor),
+          ),
+        ],
+      ),
+    );
   }
 }
 

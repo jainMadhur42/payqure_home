@@ -2034,6 +2034,535 @@ class EntryRecordsCompanion extends UpdateCompanion<EntryRecord> {
   }
 }
 
+class $ServiceMonthLogRecordsTable extends ServiceMonthLogRecords
+    with TableInfo<$ServiceMonthLogRecordsTable, ServiceMonthLogRecord> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ServiceMonthLogRecordsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _serviceIdMeta = const VerificationMeta(
+    'serviceId',
+  );
+  @override
+  late final GeneratedColumn<String> serviceId = GeneratedColumn<String>(
+    'service_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _monthKeyMeta = const VerificationMeta(
+    'monthKey',
+  );
+  @override
+  late final GeneratedColumn<String> monthKey = GeneratedColumn<String>(
+    'month_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _schemaVersionMeta = const VerificationMeta(
+    'schemaVersion',
+  );
+  @override
+  late final GeneratedColumn<int> schemaVersion = GeneratedColumn<int>(
+    'schema_version',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _entriesJsonMeta = const VerificationMeta(
+    'entriesJson',
+  );
+  @override
+  late final GeneratedColumn<String> entriesJson = GeneratedColumn<String>(
+    'entries_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('{"schemaVersion":1,"overrides":{}}'),
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _pendingSyncMeta = const VerificationMeta(
+    'pendingSync',
+  );
+  @override
+  late final GeneratedColumn<bool> pendingSync = GeneratedColumn<bool>(
+    'pending_sync',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("pending_sync" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _isDeletedMeta = const VerificationMeta(
+    'isDeleted',
+  );
+  @override
+  late final GeneratedColumn<bool> isDeleted = GeneratedColumn<bool>(
+    'is_deleted',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_deleted" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    serviceId,
+    monthKey,
+    schemaVersion,
+    entriesJson,
+    updatedAt,
+    pendingSync,
+    isDeleted,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'service_month_log_records';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ServiceMonthLogRecord> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('service_id')) {
+      context.handle(
+        _serviceIdMeta,
+        serviceId.isAcceptableOrUnknown(data['service_id']!, _serviceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_serviceIdMeta);
+    }
+    if (data.containsKey('month_key')) {
+      context.handle(
+        _monthKeyMeta,
+        monthKey.isAcceptableOrUnknown(data['month_key']!, _monthKeyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_monthKeyMeta);
+    }
+    if (data.containsKey('schema_version')) {
+      context.handle(
+        _schemaVersionMeta,
+        schemaVersion.isAcceptableOrUnknown(
+          data['schema_version']!,
+          _schemaVersionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('entries_json')) {
+      context.handle(
+        _entriesJsonMeta,
+        entriesJson.isAcceptableOrUnknown(
+          data['entries_json']!,
+          _entriesJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('pending_sync')) {
+      context.handle(
+        _pendingSyncMeta,
+        pendingSync.isAcceptableOrUnknown(
+          data['pending_sync']!,
+          _pendingSyncMeta,
+        ),
+      );
+    }
+    if (data.containsKey('is_deleted')) {
+      context.handle(
+        _isDeletedMeta,
+        isDeleted.isAcceptableOrUnknown(data['is_deleted']!, _isDeletedMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  ServiceMonthLogRecord map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ServiceMonthLogRecord(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      serviceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}service_id'],
+      )!,
+      monthKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}month_key'],
+      )!,
+      schemaVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}schema_version'],
+      )!,
+      entriesJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}entries_json'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      pendingSync: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}pending_sync'],
+      )!,
+      isDeleted: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_deleted'],
+      )!,
+    );
+  }
+
+  @override
+  $ServiceMonthLogRecordsTable createAlias(String alias) {
+    return $ServiceMonthLogRecordsTable(attachedDatabase, alias);
+  }
+}
+
+class ServiceMonthLogRecord extends DataClass
+    implements Insertable<ServiceMonthLogRecord> {
+  final String id;
+  final String serviceId;
+  final String monthKey;
+  final int schemaVersion;
+  final String entriesJson;
+  final DateTime updatedAt;
+  final bool pendingSync;
+  final bool isDeleted;
+  const ServiceMonthLogRecord({
+    required this.id,
+    required this.serviceId,
+    required this.monthKey,
+    required this.schemaVersion,
+    required this.entriesJson,
+    required this.updatedAt,
+    required this.pendingSync,
+    required this.isDeleted,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['service_id'] = Variable<String>(serviceId);
+    map['month_key'] = Variable<String>(monthKey);
+    map['schema_version'] = Variable<int>(schemaVersion);
+    map['entries_json'] = Variable<String>(entriesJson);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    map['pending_sync'] = Variable<bool>(pendingSync);
+    map['is_deleted'] = Variable<bool>(isDeleted);
+    return map;
+  }
+
+  ServiceMonthLogRecordsCompanion toCompanion(bool nullToAbsent) {
+    return ServiceMonthLogRecordsCompanion(
+      id: Value(id),
+      serviceId: Value(serviceId),
+      monthKey: Value(monthKey),
+      schemaVersion: Value(schemaVersion),
+      entriesJson: Value(entriesJson),
+      updatedAt: Value(updatedAt),
+      pendingSync: Value(pendingSync),
+      isDeleted: Value(isDeleted),
+    );
+  }
+
+  factory ServiceMonthLogRecord.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ServiceMonthLogRecord(
+      id: serializer.fromJson<String>(json['id']),
+      serviceId: serializer.fromJson<String>(json['serviceId']),
+      monthKey: serializer.fromJson<String>(json['monthKey']),
+      schemaVersion: serializer.fromJson<int>(json['schemaVersion']),
+      entriesJson: serializer.fromJson<String>(json['entriesJson']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      pendingSync: serializer.fromJson<bool>(json['pendingSync']),
+      isDeleted: serializer.fromJson<bool>(json['isDeleted']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'serviceId': serializer.toJson<String>(serviceId),
+      'monthKey': serializer.toJson<String>(monthKey),
+      'schemaVersion': serializer.toJson<int>(schemaVersion),
+      'entriesJson': serializer.toJson<String>(entriesJson),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'pendingSync': serializer.toJson<bool>(pendingSync),
+      'isDeleted': serializer.toJson<bool>(isDeleted),
+    };
+  }
+
+  ServiceMonthLogRecord copyWith({
+    String? id,
+    String? serviceId,
+    String? monthKey,
+    int? schemaVersion,
+    String? entriesJson,
+    DateTime? updatedAt,
+    bool? pendingSync,
+    bool? isDeleted,
+  }) => ServiceMonthLogRecord(
+    id: id ?? this.id,
+    serviceId: serviceId ?? this.serviceId,
+    monthKey: monthKey ?? this.monthKey,
+    schemaVersion: schemaVersion ?? this.schemaVersion,
+    entriesJson: entriesJson ?? this.entriesJson,
+    updatedAt: updatedAt ?? this.updatedAt,
+    pendingSync: pendingSync ?? this.pendingSync,
+    isDeleted: isDeleted ?? this.isDeleted,
+  );
+  ServiceMonthLogRecord copyWithCompanion(
+    ServiceMonthLogRecordsCompanion data,
+  ) {
+    return ServiceMonthLogRecord(
+      id: data.id.present ? data.id.value : this.id,
+      serviceId: data.serviceId.present ? data.serviceId.value : this.serviceId,
+      monthKey: data.monthKey.present ? data.monthKey.value : this.monthKey,
+      schemaVersion: data.schemaVersion.present
+          ? data.schemaVersion.value
+          : this.schemaVersion,
+      entriesJson: data.entriesJson.present
+          ? data.entriesJson.value
+          : this.entriesJson,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      pendingSync: data.pendingSync.present
+          ? data.pendingSync.value
+          : this.pendingSync,
+      isDeleted: data.isDeleted.present ? data.isDeleted.value : this.isDeleted,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ServiceMonthLogRecord(')
+          ..write('id: $id, ')
+          ..write('serviceId: $serviceId, ')
+          ..write('monthKey: $monthKey, ')
+          ..write('schemaVersion: $schemaVersion, ')
+          ..write('entriesJson: $entriesJson, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('pendingSync: $pendingSync, ')
+          ..write('isDeleted: $isDeleted')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    serviceId,
+    monthKey,
+    schemaVersion,
+    entriesJson,
+    updatedAt,
+    pendingSync,
+    isDeleted,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ServiceMonthLogRecord &&
+          other.id == this.id &&
+          other.serviceId == this.serviceId &&
+          other.monthKey == this.monthKey &&
+          other.schemaVersion == this.schemaVersion &&
+          other.entriesJson == this.entriesJson &&
+          other.updatedAt == this.updatedAt &&
+          other.pendingSync == this.pendingSync &&
+          other.isDeleted == this.isDeleted);
+}
+
+class ServiceMonthLogRecordsCompanion
+    extends UpdateCompanion<ServiceMonthLogRecord> {
+  final Value<String> id;
+  final Value<String> serviceId;
+  final Value<String> monthKey;
+  final Value<int> schemaVersion;
+  final Value<String> entriesJson;
+  final Value<DateTime> updatedAt;
+  final Value<bool> pendingSync;
+  final Value<bool> isDeleted;
+  final Value<int> rowid;
+  const ServiceMonthLogRecordsCompanion({
+    this.id = const Value.absent(),
+    this.serviceId = const Value.absent(),
+    this.monthKey = const Value.absent(),
+    this.schemaVersion = const Value.absent(),
+    this.entriesJson = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.pendingSync = const Value.absent(),
+    this.isDeleted = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ServiceMonthLogRecordsCompanion.insert({
+    required String id,
+    required String serviceId,
+    required String monthKey,
+    this.schemaVersion = const Value.absent(),
+    this.entriesJson = const Value.absent(),
+    required DateTime updatedAt,
+    this.pendingSync = const Value.absent(),
+    this.isDeleted = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       serviceId = Value(serviceId),
+       monthKey = Value(monthKey),
+       updatedAt = Value(updatedAt);
+  static Insertable<ServiceMonthLogRecord> custom({
+    Expression<String>? id,
+    Expression<String>? serviceId,
+    Expression<String>? monthKey,
+    Expression<int>? schemaVersion,
+    Expression<String>? entriesJson,
+    Expression<DateTime>? updatedAt,
+    Expression<bool>? pendingSync,
+    Expression<bool>? isDeleted,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (serviceId != null) 'service_id': serviceId,
+      if (monthKey != null) 'month_key': monthKey,
+      if (schemaVersion != null) 'schema_version': schemaVersion,
+      if (entriesJson != null) 'entries_json': entriesJson,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (pendingSync != null) 'pending_sync': pendingSync,
+      if (isDeleted != null) 'is_deleted': isDeleted,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ServiceMonthLogRecordsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? serviceId,
+    Value<String>? monthKey,
+    Value<int>? schemaVersion,
+    Value<String>? entriesJson,
+    Value<DateTime>? updatedAt,
+    Value<bool>? pendingSync,
+    Value<bool>? isDeleted,
+    Value<int>? rowid,
+  }) {
+    return ServiceMonthLogRecordsCompanion(
+      id: id ?? this.id,
+      serviceId: serviceId ?? this.serviceId,
+      monthKey: monthKey ?? this.monthKey,
+      schemaVersion: schemaVersion ?? this.schemaVersion,
+      entriesJson: entriesJson ?? this.entriesJson,
+      updatedAt: updatedAt ?? this.updatedAt,
+      pendingSync: pendingSync ?? this.pendingSync,
+      isDeleted: isDeleted ?? this.isDeleted,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (serviceId.present) {
+      map['service_id'] = Variable<String>(serviceId.value);
+    }
+    if (monthKey.present) {
+      map['month_key'] = Variable<String>(monthKey.value);
+    }
+    if (schemaVersion.present) {
+      map['schema_version'] = Variable<int>(schemaVersion.value);
+    }
+    if (entriesJson.present) {
+      map['entries_json'] = Variable<String>(entriesJson.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (pendingSync.present) {
+      map['pending_sync'] = Variable<bool>(pendingSync.value);
+    }
+    if (isDeleted.present) {
+      map['is_deleted'] = Variable<bool>(isDeleted.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ServiceMonthLogRecordsCompanion(')
+          ..write('id: $id, ')
+          ..write('serviceId: $serviceId, ')
+          ..write('monthKey: $monthKey, ')
+          ..write('schemaVersion: $schemaVersion, ')
+          ..write('entriesJson: $entriesJson, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('pendingSync: $pendingSync, ')
+          ..write('isDeleted: $isDeleted, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $AdvancePaymentRecordsTable extends AdvancePaymentRecords
     with TableInfo<$AdvancePaymentRecordsTable, AdvancePaymentRecord> {
   @override
@@ -4855,6 +5384,8 @@ abstract class _$LedgerDatabase extends GeneratedDatabase {
   late final $ProfileRecordsTable profileRecords = $ProfileRecordsTable(this);
   late final $ServiceRecordsTable serviceRecords = $ServiceRecordsTable(this);
   late final $EntryRecordsTable entryRecords = $EntryRecordsTable(this);
+  late final $ServiceMonthLogRecordsTable serviceMonthLogRecords =
+      $ServiceMonthLogRecordsTable(this);
   late final $AdvancePaymentRecordsTable advancePaymentRecords =
       $AdvancePaymentRecordsTable(this);
   late final $PaymentTransactionRecordsTable paymentTransactionRecords =
@@ -4871,6 +5402,7 @@ abstract class _$LedgerDatabase extends GeneratedDatabase {
     profileRecords,
     serviceRecords,
     entryRecords,
+    serviceMonthLogRecords,
     advancePaymentRecords,
     paymentTransactionRecords,
     monthlySettlementRecords,
@@ -5867,6 +6399,288 @@ typedef $$EntryRecordsTableProcessedTableManager =
         BaseReferences<_$LedgerDatabase, $EntryRecordsTable, EntryRecord>,
       ),
       EntryRecord,
+      PrefetchHooks Function()
+    >;
+typedef $$ServiceMonthLogRecordsTableCreateCompanionBuilder =
+    ServiceMonthLogRecordsCompanion Function({
+      required String id,
+      required String serviceId,
+      required String monthKey,
+      Value<int> schemaVersion,
+      Value<String> entriesJson,
+      required DateTime updatedAt,
+      Value<bool> pendingSync,
+      Value<bool> isDeleted,
+      Value<int> rowid,
+    });
+typedef $$ServiceMonthLogRecordsTableUpdateCompanionBuilder =
+    ServiceMonthLogRecordsCompanion Function({
+      Value<String> id,
+      Value<String> serviceId,
+      Value<String> monthKey,
+      Value<int> schemaVersion,
+      Value<String> entriesJson,
+      Value<DateTime> updatedAt,
+      Value<bool> pendingSync,
+      Value<bool> isDeleted,
+      Value<int> rowid,
+    });
+
+class $$ServiceMonthLogRecordsTableFilterComposer
+    extends Composer<_$LedgerDatabase, $ServiceMonthLogRecordsTable> {
+  $$ServiceMonthLogRecordsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get serviceId => $composableBuilder(
+    column: $table.serviceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get monthKey => $composableBuilder(
+    column: $table.monthKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get schemaVersion => $composableBuilder(
+    column: $table.schemaVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get entriesJson => $composableBuilder(
+    column: $table.entriesJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get pendingSync => $composableBuilder(
+    column: $table.pendingSync,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isDeleted => $composableBuilder(
+    column: $table.isDeleted,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ServiceMonthLogRecordsTableOrderingComposer
+    extends Composer<_$LedgerDatabase, $ServiceMonthLogRecordsTable> {
+  $$ServiceMonthLogRecordsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get serviceId => $composableBuilder(
+    column: $table.serviceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get monthKey => $composableBuilder(
+    column: $table.monthKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get schemaVersion => $composableBuilder(
+    column: $table.schemaVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get entriesJson => $composableBuilder(
+    column: $table.entriesJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get pendingSync => $composableBuilder(
+    column: $table.pendingSync,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isDeleted => $composableBuilder(
+    column: $table.isDeleted,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ServiceMonthLogRecordsTableAnnotationComposer
+    extends Composer<_$LedgerDatabase, $ServiceMonthLogRecordsTable> {
+  $$ServiceMonthLogRecordsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get serviceId =>
+      $composableBuilder(column: $table.serviceId, builder: (column) => column);
+
+  GeneratedColumn<String> get monthKey =>
+      $composableBuilder(column: $table.monthKey, builder: (column) => column);
+
+  GeneratedColumn<int> get schemaVersion => $composableBuilder(
+    column: $table.schemaVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get entriesJson => $composableBuilder(
+    column: $table.entriesJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<bool> get pendingSync => $composableBuilder(
+    column: $table.pendingSync,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isDeleted =>
+      $composableBuilder(column: $table.isDeleted, builder: (column) => column);
+}
+
+class $$ServiceMonthLogRecordsTableTableManager
+    extends
+        RootTableManager<
+          _$LedgerDatabase,
+          $ServiceMonthLogRecordsTable,
+          ServiceMonthLogRecord,
+          $$ServiceMonthLogRecordsTableFilterComposer,
+          $$ServiceMonthLogRecordsTableOrderingComposer,
+          $$ServiceMonthLogRecordsTableAnnotationComposer,
+          $$ServiceMonthLogRecordsTableCreateCompanionBuilder,
+          $$ServiceMonthLogRecordsTableUpdateCompanionBuilder,
+          (
+            ServiceMonthLogRecord,
+            BaseReferences<
+              _$LedgerDatabase,
+              $ServiceMonthLogRecordsTable,
+              ServiceMonthLogRecord
+            >,
+          ),
+          ServiceMonthLogRecord,
+          PrefetchHooks Function()
+        > {
+  $$ServiceMonthLogRecordsTableTableManager(
+    _$LedgerDatabase db,
+    $ServiceMonthLogRecordsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ServiceMonthLogRecordsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$ServiceMonthLogRecordsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$ServiceMonthLogRecordsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> serviceId = const Value.absent(),
+                Value<String> monthKey = const Value.absent(),
+                Value<int> schemaVersion = const Value.absent(),
+                Value<String> entriesJson = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<bool> pendingSync = const Value.absent(),
+                Value<bool> isDeleted = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ServiceMonthLogRecordsCompanion(
+                id: id,
+                serviceId: serviceId,
+                monthKey: monthKey,
+                schemaVersion: schemaVersion,
+                entriesJson: entriesJson,
+                updatedAt: updatedAt,
+                pendingSync: pendingSync,
+                isDeleted: isDeleted,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String serviceId,
+                required String monthKey,
+                Value<int> schemaVersion = const Value.absent(),
+                Value<String> entriesJson = const Value.absent(),
+                required DateTime updatedAt,
+                Value<bool> pendingSync = const Value.absent(),
+                Value<bool> isDeleted = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ServiceMonthLogRecordsCompanion.insert(
+                id: id,
+                serviceId: serviceId,
+                monthKey: monthKey,
+                schemaVersion: schemaVersion,
+                entriesJson: entriesJson,
+                updatedAt: updatedAt,
+                pendingSync: pendingSync,
+                isDeleted: isDeleted,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ServiceMonthLogRecordsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$LedgerDatabase,
+      $ServiceMonthLogRecordsTable,
+      ServiceMonthLogRecord,
+      $$ServiceMonthLogRecordsTableFilterComposer,
+      $$ServiceMonthLogRecordsTableOrderingComposer,
+      $$ServiceMonthLogRecordsTableAnnotationComposer,
+      $$ServiceMonthLogRecordsTableCreateCompanionBuilder,
+      $$ServiceMonthLogRecordsTableUpdateCompanionBuilder,
+      (
+        ServiceMonthLogRecord,
+        BaseReferences<
+          _$LedgerDatabase,
+          $ServiceMonthLogRecordsTable,
+          ServiceMonthLogRecord
+        >,
+      ),
+      ServiceMonthLogRecord,
       PrefetchHooks Function()
     >;
 typedef $$AdvancePaymentRecordsTableCreateCompanionBuilder =
@@ -7271,6 +8085,11 @@ class $LedgerDatabaseManager {
       $$ServiceRecordsTableTableManager(_db, _db.serviceRecords);
   $$EntryRecordsTableTableManager get entryRecords =>
       $$EntryRecordsTableTableManager(_db, _db.entryRecords);
+  $$ServiceMonthLogRecordsTableTableManager get serviceMonthLogRecords =>
+      $$ServiceMonthLogRecordsTableTableManager(
+        _db,
+        _db.serviceMonthLogRecords,
+      );
   $$AdvancePaymentRecordsTableTableManager get advancePaymentRecords =>
       $$AdvancePaymentRecordsTableTableManager(_db, _db.advancePaymentRecords);
   $$PaymentTransactionRecordsTableTableManager get paymentTransactionRecords =>
