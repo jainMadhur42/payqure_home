@@ -128,7 +128,7 @@ void main() {
     },
   );
 
-  testWidgets('More shows Legal and opens Delete My Data', (tester) async {
+  testWidgets('Profile shows Legal and opens Delete My Data', (tester) async {
     final database = LedgerDatabase(NativeDatabase.memory());
     addTearDown(database.close);
     final controller = _controller(
@@ -142,8 +142,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('More'));
+    await tester.tap(find.byKey(const ValueKey('home-profile-button')));
     await tester.pumpAndSettle();
+
+    expect(find.text('Profile'), findsOneWidget);
+    expect(find.text('Change Password'), findsOneWidget);
 
     await tester.scrollUntilVisible(
       find.text('Legal'),
@@ -154,15 +157,59 @@ void main() {
     expect(find.text('Privacy Policy'), findsOneWidget);
     expect(find.text('Terms & Disclaimer'), findsOneWidget);
     expect(find.text('Delete My Data'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Logout'),
+      180,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Logout'), findsOneWidget);
 
-    await tester.ensureVisible(find.text('Delete My Data'));
-    await tester.tap(find.text('Delete My Data'));
+    await tester.scrollUntilVisible(
+      find.text('Delete My Data'),
+      180,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, -100));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ListTile, 'Delete My Data'));
     await tester.pumpAndSettle();
 
     expect(find.text('Request Data Deletion'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('Home profile button opens Profile and back returns Home', (
+    tester,
+  ) async {
+    final database = LedgerDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final controller = _controller(
+      database: database,
+      authRepository: SupabaseAuthRepository(client: null),
+    );
+    addTearDown(controller.dispose);
+    await controller.bypassLoginForDevelopment();
+    await tester.pumpWidget(
+      MaterialApp(home: LedgerHomeScreen(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Good day'), findsOneWidget);
+    expect(find.text('Local User'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('home-profile-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Profile'), findsOneWidget);
+    expect(find.text('Change Password'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Good day'), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-profile-button')), findsOneWidget);
   });
 }
 

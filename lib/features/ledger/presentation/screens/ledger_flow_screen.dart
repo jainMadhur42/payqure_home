@@ -26,6 +26,7 @@ import 'currency_screen.dart';
 import 'contacts_screen.dart';
 import 'global_history_screen.dart';
 import 'home_screen.dart';
+import 'manage_service_screen.dart';
 import 'payment_history_screen.dart';
 import 'service_detail_screen.dart';
 import 'service_contribution_screen.dart';
@@ -78,6 +79,13 @@ class LedgerFlowScreen extends StatelessWidget {
                   controller: controller,
                   service: selectedService,
                 ),
+        LedgerRoute.manageService =>
+          selectedService == null
+              ? const _EmptyLedgerView()
+              : ManageServiceScreen(
+                  controller: controller,
+                  service: selectedService,
+                ),
         LedgerRoute.entry =>
           selectedService == null
               ? const _EmptyLedgerView()
@@ -109,7 +117,7 @@ class LedgerFlowScreen extends StatelessWidget {
               ? const _EmptyLedgerView()
               : _PdfPreview(controller: controller, service: selectedService),
         LedgerRoute.contacts => ContactsScreen(services: overview.services),
-        LedgerRoute.more => _MoreView(controller: controller),
+        LedgerRoute.more => _SettingsView(controller: controller),
         LedgerRoute.profile => _ProfileView(controller: controller),
         LedgerRoute.currency => CurrencyScreen(controller: controller),
         LedgerRoute.theme => ThemeScreen(controller: controller),
@@ -275,7 +283,7 @@ class LedgerFlowScreen extends StatelessWidget {
           ? null
           : IconButton(
               tooltip: 'Back',
-              onPressed: () => controller.goTo(_backRoute()),
+              onPressed: () => controller.goBackTo(_backRoute()),
               icon: const Icon(Icons.arrow_back),
             ),
       title: Text(
@@ -289,12 +297,18 @@ class LedgerFlowScreen extends StatelessWidget {
                   : 'Service Details'
             : isServiceDetail
             ? selectedService?.name ?? 'Service Details'
+            : controller.route == LedgerRoute.manageService
+            ? 'Manage Service'
             : isEntryDetail
             ? selectedService?.name ?? 'Entry'
             : controller.route == LedgerRoute.settlementDetail
-            ? 'Settlement Details'
+            ? controller.serviceActionReturnRoute == LedgerRoute.manageService
+                  ? 'Billing Summary'
+                  : 'Settlement Details'
             : controller.route == LedgerRoute.paymentHistory
-            ? 'Payment History'
+            ? controller.serviceActionReturnRoute == LedgerRoute.manageService
+                  ? 'Transaction History'
+                  : 'Payment History'
             : controller.route == LedgerRoute.globalPaymentHistory
             ? 'Payment History'
             : controller.route == LedgerRoute.contributionStats
@@ -304,7 +318,7 @@ class LedgerFlowScreen extends StatelessWidget {
             : isQuickLog
             ? 'Quick Log'
             : controller.route == LedgerRoute.more
-            ? 'More'
+            ? 'Settings'
             : controller.route == LedgerRoute.contacts
             ? 'Contacts (${ContactsScreen.contactCount(controller.overview?.services ?? const [])})'
             : controller.route == LedgerRoute.profile
@@ -333,7 +347,7 @@ class LedgerFlowScreen extends StatelessWidget {
       LedgerRoute.createServiceReview => LedgerRoute.createService,
       LedgerRoute.createService =>
         controller.isEditingService
-            ? LedgerRoute.calendar
+            ? controller.serviceEditReturnRoute
             : LedgerRoute.dashboard,
       LedgerRoute.quickLog => LedgerRoute.dashboard,
       LedgerRoute.contributionStats => LedgerRoute.dashboard,
@@ -341,20 +355,22 @@ class LedgerFlowScreen extends StatelessWidget {
         EntrySource.quickLog => LedgerRoute.quickLog,
         EntrySource.calendar => LedgerRoute.calendar,
       },
-      LedgerRoute.settlementDetail => LedgerRoute.calendar,
-      LedgerRoute.paymentHistory => LedgerRoute.calendar,
+      LedgerRoute.manageService => LedgerRoute.calendar,
+      LedgerRoute.settlementDetail ||
+      LedgerRoute.paymentHistory => controller.serviceActionReturnRoute,
       LedgerRoute.globalPaymentHistory ||
       LedgerRoute.advanceHistory ||
       LedgerRoute.theme => LedgerRoute.more,
       LedgerRoute.contacts => LedgerRoute.more,
       LedgerRoute.privacyPolicy ||
       LedgerRoute.termsDisclaimer ||
-      LedgerRoute.deleteMyData => LedgerRoute.more,
+      LedgerRoute.deleteMyData => LedgerRoute.profile,
       LedgerRoute.pdfPreview => switch (controller.pdfSource) {
         PdfSource.serviceDetail => LedgerRoute.calendar,
+        PdfSource.manageService => LedgerRoute.manageService,
         PdfSource.bills => LedgerRoute.dashboard,
       },
-      LedgerRoute.profile => LedgerRoute.more,
+      LedgerRoute.profile => LedgerRoute.dashboard,
       LedgerRoute.currency => LedgerRoute.more,
       _ => LedgerRoute.dashboard,
     };
@@ -960,8 +976,8 @@ class _PdfPreviewState extends State<_PdfPreview> {
   }
 }
 
-class _MoreView extends StatelessWidget {
-  const _MoreView({required this.controller});
+class _SettingsView extends StatelessWidget {
+  const _SettingsView({required this.controller});
 
   final LedgerController controller;
 
@@ -970,21 +986,6 @@ class _MoreView extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.lg),
       children: [
-        _MoreSection(
-          title: 'Account',
-          children: [
-            _MoreTile(
-              icon: Icons.person_outline,
-              title: 'Profile',
-              onTap: () => controller.goTo(LedgerRoute.profile),
-            ),
-            _MoreTile(
-              icon: Icons.lock_outline,
-              title: 'Change Password',
-              onTap: () => controller.goTo(LedgerRoute.forgotPassword),
-            ),
-          ],
-        ),
         _MoreSection(
           title: 'Records',
           children: [
@@ -1019,38 +1020,6 @@ class _MoreView extends StatelessWidget {
               icon: Icons.palette_outlined,
               title: 'Theme (${_themeLabel(controller.selectedThemeMode)})',
               onTap: () => controller.goTo(LedgerRoute.theme),
-            ),
-          ],
-        ),
-        _MoreSection(
-          title: 'Legal',
-          children: [
-            _MoreTile(
-              icon: Icons.privacy_tip_outlined,
-              title: 'Privacy Policy',
-              onTap: () => controller.goTo(LedgerRoute.privacyPolicy),
-            ),
-            _MoreTile(
-              icon: Icons.gavel_outlined,
-              title: 'Terms & Disclaimer',
-              onTap: () => controller.goTo(LedgerRoute.termsDisclaimer),
-            ),
-            _MoreTile(
-              icon: Icons.delete_outline,
-              title: 'Delete My Data',
-              destructive: true,
-              onTap: () => controller.goTo(LedgerRoute.deleteMyData),
-            ),
-          ],
-        ),
-        _MoreSection(
-          title: 'Danger Zone',
-          children: [
-            _MoreTile(
-              icon: Icons.logout_outlined,
-              title: 'Logout',
-              destructive: true,
-              onTap: controller.signOut,
             ),
           ],
         ),
@@ -1273,6 +1242,7 @@ class _ProfileViewState extends State<_ProfileView> {
         const SizedBox(height: AppSpacing.lg),
         Form(
           key: _formKey,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1332,6 +1302,39 @@ class _ProfileViewState extends State<_ProfileView> {
         OutlinedButton(
           onPressed: () => widget.controller.goTo(LedgerRoute.forgotPassword),
           child: const Text('Change Password'),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        _MoreSection(
+          title: 'Legal',
+          children: [
+            _MoreTile(
+              icon: Icons.privacy_tip_outlined,
+              title: 'Privacy Policy',
+              onTap: () => widget.controller.goTo(LedgerRoute.privacyPolicy),
+            ),
+            _MoreTile(
+              icon: Icons.gavel_outlined,
+              title: 'Terms & Disclaimer',
+              onTap: () => widget.controller.goTo(LedgerRoute.termsDisclaimer),
+            ),
+            _MoreTile(
+              icon: Icons.delete_outline,
+              title: 'Delete My Data',
+              destructive: true,
+              onTap: () => widget.controller.goTo(LedgerRoute.deleteMyData),
+            ),
+          ],
+        ),
+        _MoreSection(
+          title: 'Danger Zone',
+          children: [
+            _MoreTile(
+              icon: Icons.logout_outlined,
+              title: 'Logout',
+              destructive: true,
+              onTap: widget.controller.signOut,
+            ),
+          ],
         ),
       ],
     );
@@ -1435,6 +1438,7 @@ class _CreateServiceViewState extends State<_CreateServiceView> {
       children: [
         Form(
           key: _formKey,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           child: Column(
             children: [
               TextFormField(

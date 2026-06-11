@@ -380,6 +380,8 @@ class _RecordPaymentBottomSheetState extends State<RecordPaymentBottomSheet> {
         paymentDate: _paymentDate,
         mode: _mode,
         note: _noteController.text.trim(),
+        source: widget.source,
+        returnRoute: widget.returnRoute ?? LedgerRoute.calendar,
       );
     } else {
       await widget.controller.updatePayment(

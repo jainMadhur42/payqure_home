@@ -49,6 +49,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final controller = widget.controller;
     final overview = controller.overview!;
+    final profileName = controller.profile?.name.trim().isNotEmpty == true
+        ? controller.profile!.name.trim()
+        : overview.profile.name.trim();
+    final displayName = profileName.isEmpty ? 'User' : profileName;
     return SafeArea(
       child: FutureBuilder<List<HomeServiceSummary>>(
         future: controller.loadHomeServiceSummaries(),
@@ -69,22 +73,27 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               children: [
                 Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
+                    _HomeProfileButton(
+                      name: displayName,
+                      onTap: () => controller.goTo(LedgerRoute.profile),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Good day, ${overview.profile.name.split(' ').first}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                            'Good day',
                             style: Theme.of(context).textTheme.bodyMedium
                                 ?.copyWith(color: AppColors.muted),
                           ),
                           const SizedBox(height: AppSpacing.xs),
                           Text(
-                            'Payqure Home',
+                            displayName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: Theme.of(context).textTheme.headlineSmall
                                 ?.copyWith(fontWeight: FontWeight.w900),
                           ),
@@ -204,6 +213,41 @@ class _HomeScreenState extends State<HomeScreen> {
       return now.day;
     }
     return month.daysInMonth;
+  }
+}
+
+class _HomeProfileButton extends StatelessWidget {
+  const _HomeProfileButton({required this.name, required this.onTap});
+
+  final String name;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final initial = name.trim().isEmpty ? 'P' : name.trim()[0].toUpperCase();
+    return Semantics(
+      button: true,
+      label: 'Open profile',
+      child: Tooltip(
+        message: 'Profile',
+        child: InkWell(
+          key: const ValueKey('home-profile-button'),
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          child: CircleAvatar(
+            radius: 23,
+            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+            foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+            child: Text(
+              initial,
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

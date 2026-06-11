@@ -41,6 +41,7 @@ class _LoginScreenState extends State<LoginScreen> {
       children: [
         Form(
           key: _formKey,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           child: Column(
             children: [
               _LabeledField(
@@ -136,6 +137,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       children: [
         Form(
           key: _formKey,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           child: Column(
             children: [
               _LabeledField(
@@ -283,6 +285,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
       children: [
         Form(
           key: _formKey,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           child: Column(
             children: [
               _LabeledField(
@@ -353,7 +356,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     return _AuthScaffold(
       onBack: () => widget.controller.goTo(
         widget.controller.isAuthenticated
-            ? LedgerRoute.more
+            ? LedgerRoute.profile
             : LedgerRoute.login,
       ),
       title: 'Reset Password',
@@ -362,6 +365,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       children: [
         Form(
           key: _formKey,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           child: _LabeledField(
             label: 'Email',
             controller: _emailController,
@@ -428,6 +432,7 @@ class _ResetPasswordOtpScreenState extends State<ResetPasswordOtpScreen> {
       children: [
         Form(
           key: _formKey,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           child: Column(
             children: [
               _LabeledField(

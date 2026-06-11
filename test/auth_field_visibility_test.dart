@@ -39,6 +39,26 @@ void main() {
     expect(passwordField().obscureText, isTrue);
   });
 
+  testWidgets('validation error clears when entered value becomes valid', (
+    tester,
+  ) async {
+    final fixture = _AuthFixture();
+    addTearDown(fixture.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(home: LoginScreen(controller: fixture.controller)),
+    );
+
+    final identifierField = find.byType(TextFormField).first;
+    await tester.enterText(identifierField, 'invalid');
+    await tester.pump();
+    expect(find.text('Enter a valid email'), findsOneWidget);
+
+    await tester.enterText(identifierField, 'valid@example.com');
+    await tester.pump();
+    expect(find.text('Enter a valid email'), findsNothing);
+  });
+
   testWidgets('signup and reset password fields expose visibility controls', (
     tester,
   ) async {

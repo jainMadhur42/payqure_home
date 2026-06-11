@@ -13,10 +13,10 @@ import '../../domain/entities/service_template.dart';
 import '../../domain/services/service_start_date_resolver.dart';
 import '../../domain/services/entry_value_resolver.dart';
 import '../controllers/ledger_controller.dart';
-import '../widgets/add_advance_bottom_sheet.dart';
 import '../widgets/ledger_calendar.dart';
 import '../widgets/ledger_screen_shared.dart';
 import '../widgets/record_payment_bottom_sheet.dart';
+import '../widgets/service_quick_actions_sheet.dart';
 import '../widgets/service_icon.dart';
 
 class ServiceDetailScreen extends StatelessWidget {
@@ -99,132 +99,23 @@ class ServiceDetailScreen extends StatelessWidget {
   void _showMoreActions(BuildContext context) {
     showModalBottomSheet<void>(
       context: context,
-      showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.lg,
-            AppSpacing.sm,
-            AppSpacing.lg,
-            AppSpacing.lg,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Manage Service',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              _ActionSheetGroup(
-                children: [
-                  _ActionSheetTile(
-                    icon: Icons.payments_outlined,
-                    title: 'Record Payment',
-                    onTap: () {
-                      Navigator.pop(sheetContext);
-                      _showRecordPaymentSheet(context);
-                    },
-                  ),
-                  _ActionSheetTile(
-                    icon: Icons.account_balance_wallet_outlined,
-                    title: 'Add Advance',
-                    onTap: () {
-                      Navigator.pop(sheetContext);
-                      _showAdvanceBottomSheet(context);
-                    },
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              _ActionSheetGroup(
-                children: [
-                  _ActionSheetTile(
-                    icon: Icons.account_balance_outlined,
-                    title: 'Settlement Details',
-                    onTap: () {
-                      Navigator.pop(sheetContext);
-                      controller.openSettlementDetail(service);
-                    },
-                  ),
-                  _ActionSheetTile(
-                    icon: Icons.history_outlined,
-                    title: 'Payment History',
-                    onTap: () {
-                      Navigator.pop(sheetContext);
-                      controller.openPaymentHistory(service);
-                    },
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              _ActionSheetGroup(
-                children: [
-                  _ActionSheetTile(
-                    icon: Icons.picture_as_pdf_outlined,
-                    title: 'Generate PDF',
-                    onTap: () {
-                      Navigator.pop(sheetContext);
-                      _generatePdf(context);
-                    },
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              _ActionSheetGroup(
-                children: [
-                  _ActionSheetTile(
-                    icon: Icons.edit_outlined,
-                    title: 'Edit Service',
-                    onTap: () {
-                      Navigator.pop(sheetContext);
-                      controller.startEditService(service);
-                    },
-                  ),
-                  _ActionSheetTile(
-                    icon: Icons.delete_outline,
-                    title: 'Delete Service',
-                    destructive: true,
-                    onTap: () {
-                      Navigator.pop(sheetContext);
-                      _confirmDeleteService(context);
-                    },
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => ServiceQuickActionsSheet(
+        onRecordPayment: () {
+          Navigator.pop(sheetContext);
+          _showRecordPaymentSheet(context);
+        },
+        onGeneratePdf: () {
+          Navigator.pop(sheetContext);
+          _generatePdf(context);
+        },
+        onManageService: () {
+          Navigator.pop(sheetContext);
+          controller.openManageService(service);
+        },
       ),
     );
-  }
-
-  Future<void> _confirmDeleteService(BuildContext context) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete Service?'),
-        content: Text(
-          'This will delete ${service.name} from this app and sync the deletion to Supabase.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed == true) {
-      await controller.deleteService(service);
-    }
   }
 
   void _showRecordPaymentSheet(BuildContext context) {
@@ -237,29 +128,10 @@ class ServiceDetailScreen extends StatelessWidget {
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: Colors.transparent,
-      builder: (_) =>
-          RecordPaymentBottomSheet(controller: controller, service: service),
-    );
-  }
-
-  void _showAdvanceBottomSheet(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => AddAdvanceBottomSheet(
+      builder: (_) => RecordPaymentBottomSheet(
         controller: controller,
-        serviceId: service.id,
-        serviceName: service.name,
-        month: controller.overview?.monthLabel ?? service.monthKey,
-        onSaved: () {
-          ScaffoldMessenger.of(context)
-            ..hideCurrentSnackBar()
-            ..showSnackBar(
-              const SnackBar(content: Text('Advance payment added.')),
-            );
-        },
+        service: service,
+        source: 'service_detail',
       ),
     );
   }
@@ -620,61 +492,6 @@ class _StickyActionBarState extends State<_StickyActionBar> {
   }
 }
 
-class _ActionSheetGroup extends StatelessWidget {
-  const _ActionSheetGroup({required this.children});
-
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-      ),
-      child: Column(children: children),
-    );
-  }
-}
-
-class _ActionSheetTile extends StatelessWidget {
-  const _ActionSheetTile({
-    required this.icon,
-    required this.title,
-    this.onTap,
-    this.destructive = false,
-  });
-
-  final IconData icon;
-  final String title;
-  final VoidCallback? onTap;
-  final bool destructive;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = destructive
-        ? AppColors.danger
-        : Theme.of(context).colorScheme.onSurface;
-    return ListTile(
-      leading: Icon(icon, color: color),
-      title: Text(
-        title,
-        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-          color: color,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
-      trailing: onTap == null
-          ? null
-          : Icon(
-              Icons.chevron_right,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-      onTap: onTap,
-    );
-  }
-}
-
 class StatusLegend extends StatelessWidget {
   const StatusLegend({super.key});
 
@@ -923,7 +740,6 @@ class EntryViewState extends State<EntryView> {
   late final TextEditingController _quantityController;
   late final TextEditingController _rateController;
   late final TextEditingController _noteController;
-  late String _unit;
 
   @override
   void initState() {
@@ -933,14 +749,13 @@ class EntryViewState extends State<EntryView> {
         .firstOrNull;
     _status = entry?.status ?? ServiceEntryStatus.delivered;
     _quantityController = TextEditingController(
-      text: (entry?.quantity ?? widget.service.defaultQuantity).toString(),
+      text: _formatQuantity(entry?.quantity ?? widget.service.defaultQuantity),
     );
     _rateController = TextEditingController(
       text: ((entry?.rateCents ?? widget.service.rateCents) / 100)
           .toStringAsFixed(0),
     );
     _noteController = TextEditingController(text: entry?.note ?? '');
-    _unit = entry?.unit.isNotEmpty == true ? entry!.unit : widget.service.unit;
   }
 
   @override
@@ -953,7 +768,7 @@ class EntryViewState extends State<EntryView> {
 
   @override
   Widget build(BuildContext context) {
-    final quantity = double.tryParse(_quantityController.text) ?? 0;
+    final quantity = _effectiveQuantity;
     final rateCents = ((double.tryParse(_rateController.text) ?? 0) * 100)
         .round();
     final amount = widget.controller.calculateEntryAmount(
@@ -997,59 +812,38 @@ class EntryViewState extends State<EntryView> {
                     style: Theme.of(context).textTheme.labelLarge,
                   ),
                   const SizedBox(height: AppSpacing.sm),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _quantityController,
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                          ),
-                          inputFormatters: [
-                            FilteringTextInputFormatter.allow(
-                              RegExp(r'^\d*\.?\d{0,3}'),
-                            ),
-                          ],
-                          decoration: const InputDecoration(
-                            labelText: 'Quantity',
-                            hintText: '1.5',
-                          ),
-                          onChanged: (_) => setState(() {}),
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      SizedBox(
-                        width: 112,
-                        child: DropdownButtonFormField<String>(
-                          initialValue: _unit.isEmpty ? 'Unit' : _unit,
-                          decoration: const InputDecoration(labelText: 'Unit'),
-                          items: const [
-                            DropdownMenuItem(value: 'L', child: Text('L')),
-                            DropdownMenuItem(value: 'Can', child: Text('Can')),
-                            DropdownMenuItem(value: 'Day', child: Text('Day')),
-                            DropdownMenuItem(
-                              value: 'Visit',
-                              child: Text('Visit'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'Unit',
-                              child: Text('Unit'),
-                            ),
-                          ],
-                          onChanged: (value) => setState(
-                            () => _unit = value == 'Unit' ? '' : value ?? '',
-                          ),
-                        ),
+                  TextField(
+                    controller: _quantityController,
+                    enabled:
+                        widget.service.templateType ==
+                            ServiceTemplateType.quantity &&
+                        _status == ServiceEntryStatus.delivered,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(
+                        RegExp(r'^\d*\.?\d{0,3}'),
                       ),
                     ],
+                    decoration: InputDecoration(
+                      labelText: widget.service.unit.isEmpty
+                          ? 'Quantity'
+                          : 'Quantity (${widget.service.unit})',
+                      suffixText: widget.service.unit.isEmpty
+                          ? null
+                          : widget.service.unit,
+                      hintText: _formatQuantity(widget.service.defaultQuantity),
+                    ),
+                    onChanged: (_) => setState(() {}),
                   ),
                   const SizedBox(height: AppSpacing.lg),
                   TextField(
                     controller: _rateController,
                     keyboardType: TextInputType.number,
                     decoration: InputDecoration(
-                      labelText: 'Rate (${CurrencyFormatter.symbol} / $_unit)',
+                      labelText:
+                          'Rate (${CurrencyFormatter.symbol} / ${widget.service.unit})',
                     ),
                     onChanged: (_) => setState(() {}),
                   ),
@@ -1111,8 +905,8 @@ class EntryViewState extends State<EntryView> {
             child: FilledButton(
               onPressed: () => widget.controller.saveSelectedEntry(
                 status: _status,
-                quantity: double.tryParse(_quantityController.text) ?? 0,
-                unit: _unit,
+                quantity: _effectiveQuantity,
+                unit: widget.service.unit,
                 rateCents: ((double.tryParse(_rateController.text) ?? 0) * 100)
                     .round(),
                 note: _noteController.text,
@@ -1123,6 +917,28 @@ class EntryViewState extends State<EntryView> {
         ),
       ],
     );
+  }
+
+  double get _effectiveQuantity {
+    if (_status == ServiceEntryStatus.notDelivered ||
+        _status == ServiceEntryStatus.noEntry) {
+      return 0;
+    }
+    if (_status == ServiceEntryStatus.halfDay) {
+      return widget.service.defaultQuantity / 2;
+    }
+    return double.tryParse(_quantityController.text.trim()) ??
+        widget.service.defaultQuantity;
+  }
+
+  String _formatQuantity(double quantity) {
+    if (quantity.truncateToDouble() == quantity) {
+      return quantity.toStringAsFixed(0);
+    }
+    return quantity
+        .toStringAsFixed(3)
+        .replaceFirst(RegExp(r'0+$'), '')
+        .replaceFirst(RegExp(r'\.$'), '');
   }
 
   String get _deliveredLabel {
@@ -1168,50 +984,82 @@ class _EntryStatusSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final useTwoRows = options.length > 3;
-    return Wrap(
-      spacing: AppSpacing.sm,
-      runSpacing: AppSpacing.sm,
-      children: options.map((option) {
-        final selected = option.status == value;
-        final width =
-            (MediaQuery.sizeOf(context).width -
-                (AppSpacing.lg * 4) -
-                (useTwoRows ? AppSpacing.sm : AppSpacing.sm * 2)) /
-            (useTwoRows ? 2 : 3);
-        return SizedBox(
-          width: width.clamp(96, 180).toDouble(),
-          height: 42,
-          child: ChoiceChip(
-            selected: selected,
-            showCheckmark: false,
-            label: Center(
-              child: Text(
-                option.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            labelStyle: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: selected
-                  ? Theme.of(context).colorScheme.onPrimary
-                  : Theme.of(context).colorScheme.onSurface,
-              fontWeight: FontWeight.w900,
-            ),
-            selectedColor: Theme.of(context).colorScheme.primary,
-            backgroundColor: Theme.of(context).colorScheme.surface,
-            side: BorderSide(
-              color: selected
-                  ? Theme.of(context).colorScheme.primary
-                  : Theme.of(context).colorScheme.outlineVariant,
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppRadius.md),
-            ),
-            onSelected: (_) => onChanged(option.status),
+    final rows = <List<_EntryStatusOption>>[
+      options.take(2).toList(growable: false),
+      if (options.length > 2) options.skip(2).toList(growable: false),
+    ];
+    return Column(
+      children: [
+        for (var rowIndex = 0; rowIndex < rows.length; rowIndex++) ...[
+          Row(
+            children: [
+              for (
+                var optionIndex = 0;
+                optionIndex < rows[rowIndex].length;
+                optionIndex++
+              ) ...[
+                Expanded(
+                  child: _EntryStatusButton(
+                    option: rows[rowIndex][optionIndex],
+                    selected: rows[rowIndex][optionIndex].status == value,
+                    onTap: onChanged,
+                  ),
+                ),
+                if (optionIndex < rows[rowIndex].length - 1)
+                  const SizedBox(width: AppSpacing.sm),
+              ],
+            ],
           ),
-        );
-      }).toList(),
+          if (rowIndex < rows.length - 1) const SizedBox(height: AppSpacing.sm),
+        ],
+      ],
+    );
+  }
+}
+
+class _EntryStatusButton extends StatelessWidget {
+  const _EntryStatusButton({
+    required this.option,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final _EntryStatusOption option;
+  final bool selected;
+  final ValueChanged<ServiceEntryStatus> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return SizedBox(
+      height: 44,
+      child: OutlinedButton(
+        onPressed: () => onTap(option.status),
+        style: OutlinedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+          foregroundColor: selected
+              ? colorScheme.onPrimary
+              : colorScheme.onSurface,
+          backgroundColor: selected ? colorScheme.primary : colorScheme.surface,
+          side: BorderSide(
+            color: selected ? colorScheme.primary : colorScheme.outlineVariant,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.md),
+          ),
+        ),
+        child: Center(
+          child: Text(
+            option.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: Theme.of(
+              context,
+            ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w900),
+          ),
+        ),
+      ),
     );
   }
 }

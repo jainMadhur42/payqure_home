@@ -31,9 +31,9 @@ class LedgerBottomNav extends StatelessWidget {
         ),
         AppBottomNavItem(
           index: 1,
-          icon: Icons.more_horiz,
-          selectedIcon: Icons.more_horiz,
-          label: 'More',
+          icon: Icons.settings_outlined,
+          selectedIcon: Icons.settings,
+          label: 'Settings',
         ),
       ],
     );

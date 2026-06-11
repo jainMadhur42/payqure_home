@@ -12,6 +12,7 @@ enum LedgerRoute {
   createService,
   createServiceReview,
   calendar,
+  manageService,
   entry,
   settlementDetail,
   paymentHistory,

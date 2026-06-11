@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/utils/currency_formatter.dart';
@@ -12,6 +13,7 @@ class AddAdvanceBottomSheet extends StatefulWidget {
     required this.serviceName,
     required this.month,
     required this.onSaved,
+    this.title = 'Add Advance',
     super.key,
   });
 
@@ -20,12 +22,15 @@ class AddAdvanceBottomSheet extends StatefulWidget {
   final String serviceName;
   final String month;
   final VoidCallback onSaved;
+  final String title;
 
   @override
   State<AddAdvanceBottomSheet> createState() => _AddAdvanceBottomSheetState();
 }
 
 class _AddAdvanceBottomSheetState extends State<AddAdvanceBottomSheet> {
+  static const _maximumAmountDigits = 7;
+
   final _amountController = TextEditingController(text: '500');
   final _noteController = TextEditingController();
   DateTime _paymentDate = DateTime.now();
@@ -61,7 +66,7 @@ class _AddAdvanceBottomSheetState extends State<AddAdvanceBottomSheet> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Add Advance',
+                widget.title,
                 style: Theme.of(
                   context,
                 ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
@@ -77,11 +82,13 @@ class _AddAdvanceBottomSheetState extends State<AddAdvanceBottomSheet> {
               TextField(
                 controller: _amountController,
                 keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 decoration: InputDecoration(
                   labelText: 'Amount',
                   prefixText: '${CurrencyFormatter.symbol} ',
                   errorText: _amountError,
                 ),
+                onChanged: _validateAmountLength,
               ),
               const SizedBox(height: AppSpacing.md),
               OutlinedButton.icon(
@@ -157,7 +164,14 @@ class _AddAdvanceBottomSheetState extends State<AddAdvanceBottomSheet> {
   }
 
   Future<void> _save() async {
-    final amount = double.tryParse(_amountController.text.trim()) ?? 0;
+    final amountText = _amountController.text.trim();
+    if (amountText.length > _maximumAmountDigits) {
+      setState(() {
+        _amountError = 'More than 7 digits are not allowed';
+      });
+      return;
+    }
+    final amount = double.tryParse(amountText) ?? 0;
     if (amount <= 0) {
       setState(() => _amountError = 'Enter an amount greater than 0');
       return;
@@ -177,5 +191,22 @@ class _AddAdvanceBottomSheetState extends State<AddAdvanceBottomSheet> {
     }
     Navigator.of(context).pop();
     widget.onSaved();
+  }
+
+  void _validateAmountLength(String value) {
+    if (value.length > _maximumAmountDigits) {
+      final allowedValue = value.substring(0, _maximumAmountDigits);
+      _amountController.value = TextEditingValue(
+        text: allowedValue,
+        selection: TextSelection.collapsed(offset: allowedValue.length),
+      );
+      setState(() {
+        _amountError = 'More than 7 digits are not allowed';
+      });
+      return;
+    }
+    if (_amountError != null) {
+      setState(() => _amountError = null);
+    }
   }
 }

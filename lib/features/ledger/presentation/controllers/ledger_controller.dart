@@ -37,7 +37,7 @@ import 'session_controller.dart';
 
 enum EntrySource { quickLog, calendar }
 
-enum PdfSource { serviceDetail, bills }
+enum PdfSource { serviceDetail, manageService, bills }
 
 class LedgerController extends ChangeNotifier {
   static const _currencyPreferenceKey = 'currency_code';
@@ -125,6 +125,8 @@ class LedgerController extends ChangeNotifier {
   int selectedDay = 29;
   EntrySource entrySource = EntrySource.calendar;
   PdfSource pdfSource = PdfSource.serviceDetail;
+  LedgerRoute serviceActionReturnRoute = LedgerRoute.calendar;
+  LedgerRoute serviceEditReturnRoute = LedgerRoute.calendar;
   bool isLoading = false;
   String? errorMessage;
   String? successMessage;
@@ -293,6 +295,14 @@ class LedgerController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void goBackTo(LedgerRoute previousRoute) {
+    _setRoute(previousRoute);
+    isBackwardNavigation = true;
+    errorMessage = null;
+    successMessage = null;
+    notifyListeners();
+  }
+
   void reviewAddService(AddServiceDraft draft) {
     addServiceDraft = draft;
     _analytics.logEvent(
@@ -318,10 +328,15 @@ class LedgerController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void startEditService(HouseholdService service) {
+  void startEditService(
+    HouseholdService service, {
+    LedgerRoute returnRoute = LedgerRoute.calendar,
+  }) {
     editingService = service;
+    serviceEditReturnRoute = returnRoute;
     addServiceDraft = AddServiceDraft.fromService(service);
     _setRoute(LedgerRoute.createService);
+    isBackwardNavigation = false;
     notifyListeners();
   }
 
@@ -347,7 +362,7 @@ class LedgerController extends ChangeNotifier {
             serviceBeingEdited.templateType == ServiceTemplateType.fixedMonthly
             ? amountCents
             : 0,
-        routeAfterSave: LedgerRoute.calendar,
+        routeAfterSave: serviceEditReturnRoute,
       );
       addServiceDraft = null;
       editingService = null;
@@ -582,14 +597,28 @@ class LedgerController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void openSettlementDetail(HouseholdService service) {
+  void openManageService(HouseholdService service) {
     selectedService = service;
+    _setRoute(LedgerRoute.manageService);
+    notifyListeners();
+  }
+
+  void openSettlementDetail(
+    HouseholdService service, {
+    LedgerRoute returnRoute = LedgerRoute.calendar,
+  }) {
+    selectedService = service;
+    serviceActionReturnRoute = returnRoute;
     _setRoute(LedgerRoute.settlementDetail);
     notifyListeners();
   }
 
-  void openPaymentHistory(HouseholdService service) {
+  void openPaymentHistory(
+    HouseholdService service, {
+    LedgerRoute returnRoute = LedgerRoute.calendar,
+  }) {
     selectedService = service;
+    serviceActionReturnRoute = returnRoute;
     _analytics.logEvent(
       AnalyticsEvents.paymentHistoryViewed,
       parameters: _serviceAnalyticsParameters(service),
@@ -993,6 +1022,8 @@ class LedgerController extends ChangeNotifier {
     required DateTime paymentDate,
     required PaymentMode mode,
     String note = '',
+    String source = 'service_detail',
+    LedgerRoute returnRoute = LedgerRoute.calendar,
   }) async {
     final service = selectedService;
     final userId = profile?.id ?? overview?.profile.id ?? 'local-user';
@@ -1015,12 +1046,12 @@ class LedgerController extends ChangeNotifier {
           service,
           amountCents: amountCents,
           mode: mode,
-          source: 'service_detail',
+          source: source,
         ),
       );
       _invalidateHomeSummaries();
       successMessage = 'Payment recorded.';
-      _setRoute(LedgerRoute.calendar);
+      _setRoute(returnRoute);
     });
   }
 
@@ -1544,7 +1575,6 @@ class LedgerController extends ChangeNotifier {
       LedgerRoute.contributionStats ||
       LedgerRoute.quickLog ||
       LedgerRoute.createService ||
-      LedgerRoute.paymentHistory ||
       LedgerRoute.globalPaymentHistory ||
       LedgerRoute.advanceHistory ||
       LedgerRoute.contacts ||
@@ -1554,11 +1584,12 @@ class LedgerController extends ChangeNotifier {
       LedgerRoute.privacyPolicy ||
       LedgerRoute.termsDisclaimer ||
       LedgerRoute.deleteMyData => 3,
-      LedgerRoute.createServiceReview ||
-      LedgerRoute.calendar ||
-      LedgerRoute.settlementDetail => 4,
-      LedgerRoute.entry => 5,
-      LedgerRoute.pdfPreview => 6,
+      LedgerRoute.createServiceReview || LedgerRoute.calendar => 4,
+      LedgerRoute.manageService => 5,
+      LedgerRoute.entry ||
+      LedgerRoute.settlementDetail ||
+      LedgerRoute.paymentHistory => 6,
+      LedgerRoute.pdfPreview => 7,
     };
   }
 
@@ -1821,6 +1852,7 @@ class LedgerController extends ChangeNotifier {
       LedgerRoute.createService ||
       LedgerRoute.createServiceReview => 'add_service',
       LedgerRoute.calendar => 'service_detail',
+      LedgerRoute.manageService => 'manage_service',
       LedgerRoute.entry => 'add_entry',
       LedgerRoute.settlementDetail => 'settlement_detail',
       LedgerRoute.paymentHistory ||
