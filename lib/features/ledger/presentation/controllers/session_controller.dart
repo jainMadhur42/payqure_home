@@ -65,8 +65,8 @@ class SessionController {
     return _repository.updateProfile(name: name, phone: phone);
   }
 
-  Future<void> requestPasswordReset(String email) {
-    return _repository.requestPasswordReset(email);
+  Future<String> requestPasswordReset(String identifier) {
+    return _repository.requestPasswordReset(identifier);
   }
 
   Future<void> resetPassword({

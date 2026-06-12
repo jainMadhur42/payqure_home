@@ -510,14 +510,17 @@ class LedgerController extends ChangeNotifier {
         _sessionController.requiresPrivacyAcceptance(current);
   }
 
-  Future<void> requestPasswordReset(String email) async {
+  Future<void> requestPasswordReset(String identifier) async {
     await _run(() async {
       _analytics.logEvent(
         AnalyticsEvents.forgotPasswordStarted,
         parameters: const {AnalyticsParams.method: 'email_password'},
       );
-      await _sessionController.requestPasswordReset(email);
-      pendingPasswordResetEmail = email.trim();
+      // A phone identifier is resolved to its account email, where the recovery
+      // OTP is sent and against which it must be verified.
+      pendingPasswordResetEmail = await _sessionController.requestPasswordReset(
+        identifier,
+      );
       _setRoute(LedgerRoute.resetPasswordOtp);
     });
   }

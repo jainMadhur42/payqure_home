@@ -334,17 +334,25 @@ class SupabaseAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<void> requestPasswordReset(String email) async {
+  Future<String> requestPasswordReset(String identifier) async {
+    final parsed = AuthIdentifier.parse(identifier);
     final client = _client;
     if (client == null) {
-      return;
+      return parsed.type == AuthIdentifierType.email
+          ? parsed.value
+          : 'local@payqure.local';
     }
-    final normalizedEmail = email.trim().toLowerCase();
+    // Recovery is email-based; resolve a phone identifier to its account email
+    // so the OTP is sent to (and later verified against) that address.
+    final normalizedEmail = parsed.type == AuthIdentifierType.phone
+        ? (await _emailForPhone(parsed.value)).trim().toLowerCase()
+        : parsed.value;
     await _claimOtpRequest(
       email: normalizedEmail,
       purpose: _OtpRequestPurpose.passwordReset,
     );
     await client.auth.resetPasswordForEmail(normalizedEmail);
+    return normalizedEmail;
   }
 
   @override

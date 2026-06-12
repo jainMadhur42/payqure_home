@@ -442,72 +442,130 @@ class DriftLedgerSyncService {
   }
 
   Future<void> _pushAllRowsForUser(String userId) async {
+    // Only rows still marked pendingSync need uploading; everything else is
+    // already on the server (claimed local rows are flagged pendingSync above).
+    // Each table is pushed in a single batched upsert and its pendingSync flag
+    // is cleared in a single update, instead of one network round-trip per row.
     final services = await (_database.select(
       _database.serviceRecords,
     )..where((table) => table.userId.equals(userId))).get();
     final serviceIds = services.map((row) => row.id).toSet();
-    for (final row in services) {
-      await _remoteDataSource.pushService(row);
-      await (_database.update(_database.serviceRecords)
-            ..where((table) => table.id.equals(row.id)))
-          .write(const ServiceRecordsCompanion(pendingSync: Value(false)));
-    }
+    final pendingServices = services.where((row) => row.pendingSync).toList();
+    await _remoteDataSource.pushServices(pendingServices);
+    await _clearServicePendingSync(pendingServices.map((row) => row.id));
     if (serviceIds.isEmpty) {
       return;
     }
-    final monthLogs = await (_database.select(
-      _database.serviceMonthLogRecords,
-    )..where((table) => table.serviceId.isIn(serviceIds))).get();
-    for (final row in monthLogs) {
-      await _remoteDataSource.pushMonthLog(row);
-      await (_database.update(
-        _database.serviceMonthLogRecords,
-      )..where((table) => table.id.equals(row.id))).write(
-        const ServiceMonthLogRecordsCompanion(pendingSync: Value(false)),
-      );
+
+    final monthLogs = await (_database.select(_database.serviceMonthLogRecords)
+          ..where(
+            (table) =>
+                table.serviceId.isIn(serviceIds) &
+                table.pendingSync.equals(true),
+          ))
+        .get();
+    await _remoteDataSource.pushMonthLogs(monthLogs);
+    await _clearMonthLogPendingSync(monthLogs.map((row) => row.id));
+
+    final entries = await (_database.select(_database.entryRecords)
+          ..where(
+            (table) =>
+                table.serviceId.isIn(serviceIds) &
+                table.pendingSync.equals(true),
+          ))
+        .get();
+    await _remoteDataSource.pushEntries(entries);
+    await _clearEntryPendingSync(entries.map((row) => row.id));
+
+    final advances = await (_database.select(_database.advancePaymentRecords)
+          ..where(
+            (table) =>
+                table.serviceId.isIn(serviceIds) &
+                table.pendingSync.equals(true),
+          ))
+        .get();
+    await _remoteDataSource.pushAdvances(advances);
+    await _clearAdvancePendingSync(advances.map((row) => row.id));
+
+    final payments = await (_database.select(_database.paymentTransactionRecords)
+          ..where(
+            (table) =>
+                table.userId.equals(userId) & table.pendingSync.equals(true),
+          ))
+        .get();
+    await _remoteDataSource.pushPayments(payments);
+    await _clearPaymentPendingSync(payments.map((row) => row.id));
+
+    final settlements =
+        await (_database.select(_database.monthlySettlementRecords)
+              ..where(
+                (table) =>
+                    table.userId.equals(userId) &
+                    table.pendingSync.equals(true),
+              ))
+            .get();
+    await _remoteDataSource.pushSettlements(settlements);
+    await _clearSettlementPendingSync(settlements.map((row) => row.id));
+  }
+
+  Future<void> _clearServicePendingSync(Iterable<String> ids) async {
+    if (ids.isEmpty) {
+      return;
     }
-    final entries = await (_database.select(
-      _database.entryRecords,
-    )..where((table) => table.serviceId.isIn(serviceIds))).get();
-    for (final row in entries) {
-      await _remoteDataSource.pushEntry(row);
-      await (_database.update(_database.entryRecords)
-            ..where((table) => table.id.equals(row.id)))
-          .write(const EntryRecordsCompanion(pendingSync: Value(false)));
+    await (_database.update(_database.serviceRecords)
+          ..where((table) => table.id.isIn(ids.toList())))
+        .write(const ServiceRecordsCompanion(pendingSync: Value(false)));
+  }
+
+  Future<void> _clearMonthLogPendingSync(Iterable<String> ids) async {
+    if (ids.isEmpty) {
+      return;
     }
-    final advances = await (_database.select(
-      _database.advancePaymentRecords,
-    )..where((table) => table.serviceId.isIn(serviceIds))).get();
-    for (final row in advances) {
-      await _remoteDataSource.pushAdvance(row);
-      await (_database.update(
-        _database.advancePaymentRecords,
-      )..where((table) => table.id.equals(row.id))).write(
-        const AdvancePaymentRecordsCompanion(pendingSync: Value(false)),
-      );
+    await (_database.update(_database.serviceMonthLogRecords)
+          ..where((table) => table.id.isIn(ids.toList())))
+        .write(
+          const ServiceMonthLogRecordsCompanion(pendingSync: Value(false)),
+        );
+  }
+
+  Future<void> _clearEntryPendingSync(Iterable<String> ids) async {
+    if (ids.isEmpty) {
+      return;
     }
-    final payments = await (_database.select(
-      _database.paymentTransactionRecords,
-    )..where((table) => table.userId.equals(userId))).get();
-    for (final row in payments) {
-      await _remoteDataSource.pushPayment(row);
-      await (_database.update(
-        _database.paymentTransactionRecords,
-      )..where((table) => table.id.equals(row.id))).write(
-        const PaymentTransactionRecordsCompanion(pendingSync: Value(false)),
-      );
+    await (_database.update(_database.entryRecords)
+          ..where((table) => table.id.isIn(ids.toList())))
+        .write(const EntryRecordsCompanion(pendingSync: Value(false)));
+  }
+
+  Future<void> _clearAdvancePendingSync(Iterable<String> ids) async {
+    if (ids.isEmpty) {
+      return;
     }
-    final settlements = await (_database.select(
-      _database.monthlySettlementRecords,
-    )..where((table) => table.userId.equals(userId))).get();
-    for (final row in settlements) {
-      await _remoteDataSource.pushSettlement(row);
-      await (_database.update(
-        _database.monthlySettlementRecords,
-      )..where((table) => table.id.equals(row.id))).write(
-        const MonthlySettlementRecordsCompanion(pendingSync: Value(false)),
-      );
+    await (_database.update(_database.advancePaymentRecords)
+          ..where((table) => table.id.isIn(ids.toList())))
+        .write(const AdvancePaymentRecordsCompanion(pendingSync: Value(false)));
+  }
+
+  Future<void> _clearPaymentPendingSync(Iterable<String> ids) async {
+    if (ids.isEmpty) {
+      return;
     }
+    await (_database.update(_database.paymentTransactionRecords)
+          ..where((table) => table.id.isIn(ids.toList())))
+        .write(
+          const PaymentTransactionRecordsCompanion(pendingSync: Value(false)),
+        );
+  }
+
+  Future<void> _clearSettlementPendingSync(Iterable<String> ids) async {
+    if (ids.isEmpty) {
+      return;
+    }
+    await (_database.update(_database.monthlySettlementRecords)
+          ..where((table) => table.id.isIn(ids.toList())))
+        .write(
+          const MonthlySettlementRecordsCompanion(pendingSync: Value(false)),
+        );
   }
 
   Future<void> _clearLocalData() {

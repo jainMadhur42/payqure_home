@@ -93,7 +93,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     if (index == 0) {
                       return _FirstOnboardingPage(page: _pages[index]);
                     }
-                    return _StandardOnboardingPage(page: _pages[index]);
+                    return _StandardOnboardingPage(
+                      page: _pages[index],
+                      showGetStarted: index == _pages.length - 1,
+                      isLoading: _isCompleting,
+                      onGetStarted: _complete,
+                    );
                   },
                 ),
               ),
@@ -104,7 +109,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 isLoading: _isCompleting,
                 onSkip: _skip,
                 onNext: _nextPage,
-                onComplete: _complete,
               ),
             ],
           ),
@@ -372,8 +376,17 @@ class _ServiceChip extends StatelessWidget {
 // ─── Pages 2–4: standard layout ───────────────────────────────────────────────
 
 class _StandardOnboardingPage extends StatelessWidget {
-  const _StandardOnboardingPage({required this.page});
+  const _StandardOnboardingPage({
+    required this.page,
+    this.showGetStarted = false,
+    this.isLoading = false,
+    this.onGetStarted,
+  });
+
   final OnboardingPageModel page;
+  final bool showGetStarted;
+  final bool isLoading;
+  final VoidCallback? onGetStarted;
 
   @override
   Widget build(BuildContext context) {
@@ -429,6 +442,29 @@ class _StandardOnboardingPage extends StatelessWidget {
                   type: page.illustration,
                   availableHeight: constraints.maxHeight * 0.52,
                 ),
+
+                // Last page: prominent Get Started button below the image
+                if (showGetStarted) ...[
+                  const SizedBox(height: AppSpacing.xl),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: FilledButton(
+                      key: const ValueKey('onboarding-get-started'),
+                      onPressed: isLoading ? null : onGetStarted,
+                      child: isLoading
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Text('Get Started'),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -545,7 +581,6 @@ class _OnboardingBottomBar extends StatelessWidget {
     required this.isLoading,
     required this.onSkip,
     required this.onNext,
-    required this.onComplete,
   });
 
   final int pageCount;
@@ -554,7 +589,6 @@ class _OnboardingBottomBar extends StatelessWidget {
   final bool isLoading;
   final VoidCallback onSkip;
   final VoidCallback onNext;
-  final VoidCallback onComplete;
 
   @override
   Widget build(BuildContext context) {
@@ -588,25 +622,12 @@ class _OnboardingBottomBar extends StatelessWidget {
 
           PageIndicator(pageCount: pageCount, selectedPage: selectedPage),
 
-          // Next / Get Started
+          // Next — the last page's "Get Started" lives below the image instead
           Expanded(
             child: Align(
               alignment: Alignment.centerRight,
               child: isLastPage
-                  ? FilledButton(
-                      key: const ValueKey('onboarding-get-started'),
-                      onPressed: isLoading ? null : onComplete,
-                      child: isLoading
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Text('Get Started'),
-                    )
+                  ? const SizedBox.shrink()
                   : TextButton(
                       key: const ValueKey('onboarding-next'),
                       onPressed: isLoading ? null : onNext,

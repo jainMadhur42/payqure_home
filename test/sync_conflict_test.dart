@@ -877,4 +877,40 @@ class _FakeRemoteDataSource implements LedgerRemoteDataSource {
   Future<void> pushService(ServiceRecord row) async {
     pushedServices++;
   }
+
+  @override
+  Future<void> pushServices(List<ServiceRecord> rows) async {
+    pushedServices += rows.length;
+  }
+
+  @override
+  Future<void> pushMonthLogs(List<ServiceMonthLogRecord> rows) async {
+    pushedMonthLogs += rows.length;
+  }
+
+  @override
+  Future<void> pushEntries(List<EntryRecord> rows) async {
+    if (failOnEntryPush && rows.isNotEmpty) {
+      throw StateError('Remote entry push failed.');
+    }
+    pushedEntries += rows.length;
+  }
+
+  @override
+  Future<void> pushAdvances(List<AdvancePaymentRecord> rows) async {
+    pushedAdvances += rows.length;
+  }
+
+  @override
+  Future<void> pushPayments(List<PaymentTransactionRecord> rows) async {
+    pushedPayments += rows.length;
+    if (rows.isNotEmpty) {
+      lastPushedPayment = rows.last;
+    }
+  }
+
+  @override
+  Future<void> pushSettlements(List<MonthlySettlementRecord> rows) async {
+    pushedSettlements += rows.length;
+  }
 }

@@ -58,6 +58,27 @@ void main() {
     expect(completed, isTrue);
   });
 
+  testWidgets('skip completes onboarding (routes to login)', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(430, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    var completed = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: OnboardingScreen(
+          onComplete: () async {
+            completed = true;
+          },
+        ),
+      ),
+    );
+
+    // Skip is available from the very first page.
+    await tester.tap(find.byKey(const ValueKey('onboarding-skip')));
+    await tester.pump();
+    expect(completed, isTrue);
+  });
+
   test('onboarding completion is persisted and shown only once', () async {
     final database = LedgerDatabase(NativeDatabase.memory());
     addTearDown(database.close);

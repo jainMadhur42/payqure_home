@@ -736,6 +736,9 @@ class EntryView extends StatefulWidget {
 }
 
 class EntryViewState extends State<EntryView> {
+  // Keeps a focused field scrolled clear of the floating "Save Entry" button.
+  static const _entryScrollPadding = EdgeInsets.only(bottom: 96);
+
   late ServiceEntryStatus _status;
   late final TextEditingController _quantityController;
   late final TextEditingController _rateController;
@@ -826,6 +829,7 @@ class EntryViewState extends State<EntryView> {
                         RegExp(r'^\d*\.?\d{0,3}'),
                       ),
                     ],
+                    scrollPadding: _entryScrollPadding,
                     decoration: InputDecoration(
                       labelText: widget.service.unit.isEmpty
                           ? 'Quantity'
@@ -841,6 +845,7 @@ class EntryViewState extends State<EntryView> {
                   TextField(
                     controller: _rateController,
                     keyboardType: TextInputType.number,
+                    scrollPadding: _entryScrollPadding,
                     decoration: InputDecoration(
                       labelText:
                           'Rate (${CurrencyFormatter.symbol} / ${widget.service.unit})',
@@ -886,6 +891,7 @@ class EntryViewState extends State<EntryView> {
                     controller: _noteController,
                     minLines: 2,
                     maxLines: 3,
+                    scrollPadding: _entryScrollPadding,
                     decoration: const InputDecoration(
                       labelText: 'Note (Optional)',
                       hintText: 'Extra can delivered',

@@ -23,7 +23,9 @@ abstract interface class AuthRepository {
     required String name,
     required String phone,
   });
-  Future<void> requestPasswordReset(String email);
+  /// Accepts an email or phone identifier (same as login) and returns the
+  /// email address the recovery OTP was actually sent to.
+  Future<String> requestPasswordReset(String identifier);
   Future<void> resetPasswordWithOtp({
     required String email,
     required String token,

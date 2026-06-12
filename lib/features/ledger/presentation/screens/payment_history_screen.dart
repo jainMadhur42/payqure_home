@@ -14,7 +14,7 @@ import '../widgets/ledger_screen_shared.dart';
 import '../widgets/record_payment_bottom_sheet.dart';
 import '../widgets/service_icon.dart';
 
-class PaymentHistoryScreen extends StatelessWidget {
+class PaymentHistoryScreen extends StatefulWidget {
   const PaymentHistoryScreen({
     required this.controller,
     required this.service,
@@ -25,12 +25,52 @@ class PaymentHistoryScreen extends StatelessWidget {
   final HouseholdService service;
 
   @override
+  State<PaymentHistoryScreen> createState() => _PaymentHistoryScreenState();
+}
+
+class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
+  late Future<List<PaymentTransaction>> _future;
+  // Last loaded list, kept on screen during a reload so the page doesn't blink.
+  List<PaymentTransaction> _payments = const [];
+  bool _loadedOnce = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant PaymentHistoryScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.service.id != widget.service.id) {
+      _reload();
+    }
+  }
+
+  Future<List<PaymentTransaction>> _load() async {
+    final result = await widget.controller.loadSelectedPaymentHistory();
+    if (mounted) {
+      _payments = result;
+      _loadedOnce = true;
+    }
+    return result;
+  }
+
+  void _reload() {
+    if (!mounted) return;
+    setState(() => _future = _load());
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final service = widget.service;
     return FutureBuilder<List<PaymentTransaction>>(
-      future: controller.loadSelectedPaymentHistory(),
+      future: _future,
       builder: (context, snapshot) {
-        final payments = snapshot.data ?? const <PaymentTransaction>[];
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        final payments = snapshot.data ?? _payments;
+        if (!_loadedOnce &&
+            snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
         if (payments.isEmpty) {
@@ -119,7 +159,7 @@ class PaymentHistoryScreen extends StatelessWidget {
                         service: service,
                         payment: payment,
                         onEdit: () => _showEditPaymentSheet(context, payment),
-                        onDelete: () => controller.deletePayment(payment),
+                        onDelete: () => _deletePayment(payment),
                       ),
                     ),
                   ],
@@ -162,37 +202,49 @@ class PaymentHistoryScreen extends StatelessWidget {
     );
   }
 
-  void _showRecordPaymentSheet(BuildContext context) {
-    controller.trackRecordPaymentStarted(
-      service: service,
+  Future<void> _showRecordPaymentSheet(BuildContext context) async {
+    widget.controller.trackRecordPaymentStarted(
+      service: widget.service,
       source: 'payment_history',
     );
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) =>
-          RecordPaymentBottomSheet(controller: controller, service: service),
-    );
-  }
-
-  void _showEditPaymentSheet(BuildContext context, PaymentTransaction payment) {
-    controller.trackRecordPaymentStarted(
-      service: service,
-      source: 'payment_history',
-    );
-    showModalBottomSheet<void>(
+    await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: Colors.transparent,
       builder: (_) => RecordPaymentBottomSheet(
-        controller: controller,
-        service: service,
+        controller: widget.controller,
+        service: widget.service,
+      ),
+    );
+    _reload();
+  }
+
+  Future<void> _showEditPaymentSheet(
+    BuildContext context,
+    PaymentTransaction payment,
+  ) async {
+    widget.controller.trackRecordPaymentStarted(
+      service: widget.service,
+      source: 'payment_history',
+    );
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => RecordPaymentBottomSheet(
+        controller: widget.controller,
+        service: widget.service,
         payment: payment,
       ),
     );
+    _reload();
+  }
+
+  Future<void> _deletePayment(PaymentTransaction payment) async {
+    await widget.controller.deletePayment(payment);
+    _reload();
   }
 }
 

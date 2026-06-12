@@ -37,6 +37,58 @@ void main() {
     expect(focusNode.hasFocus, isFalse);
   });
 
+  testWidgets(
+    'reserves space above the keyboard so fields scroll clear of the bar',
+    (tester) async {
+      late double childInset;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(
+              size: Size(390, 844),
+              viewInsets: EdgeInsets.only(bottom: 300),
+            ),
+            child: KeyboardDoneAccessory(
+              child: Builder(
+                builder: (context) {
+                  childInset = MediaQuery.viewInsetsOf(context).bottom;
+                  return const SizedBox.shrink();
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(childInset, 300 + KeyboardDoneAccessory.accessoryHeight);
+    },
+  );
+
+  testWidgets('does not inflate the inset when the keyboard is closed', (
+    tester,
+  ) async {
+    late double childInset;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaQuery(
+          data: const MediaQueryData(size: Size(390, 844)),
+          child: KeyboardDoneAccessory(
+            child: Builder(
+              builder: (context) {
+                childInset = MediaQuery.viewInsetsOf(context).bottom;
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(childInset, 0);
+  });
+
   testWidgets('Done accessory works for fields inside bottom sheets', (
     tester,
   ) async {

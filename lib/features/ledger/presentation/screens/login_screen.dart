@@ -360,16 +360,17 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             : LedgerRoute.login,
       ),
       title: 'Reset Password',
-      subtitle: 'We will send a recovery OTP to your email',
+      subtitle: 'We will send a recovery OTP to your registered email',
       errorMessage: widget.controller.errorMessage,
       children: [
         Form(
           key: _formKey,
           autovalidateMode: AutovalidateMode.onUserInteraction,
           child: _LabeledField(
-            label: 'Email',
+            label: 'Email or Phone',
             controller: _emailController,
-            validator: AuthValidators.email,
+            hintText: 'Email or phone number',
+            validator: AuthValidators.emailOrPhone,
           ),
         ),
         const SizedBox(height: AppSpacing.xl),

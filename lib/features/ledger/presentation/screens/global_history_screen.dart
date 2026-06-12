@@ -13,7 +13,7 @@ import '../widgets/record_payment_bottom_sheet.dart';
 import '../widgets/service_icon.dart';
 import 'payment_history_screen.dart';
 
-class GlobalHistoryScreen extends StatelessWidget {
+class GlobalHistoryScreen extends StatefulWidget {
   const GlobalHistoryScreen({
     required this.controller,
     required this.type,
@@ -24,23 +24,64 @@ class GlobalHistoryScreen extends StatelessWidget {
   final ServiceHistoryType type;
 
   @override
+  State<GlobalHistoryScreen> createState() => _GlobalHistoryScreenState();
+}
+
+class _GlobalHistoryScreenState extends State<GlobalHistoryScreen> {
+  late Future<List<ServiceHistoryItem>> _future;
+  // Last loaded list, kept on screen during a reload so the page doesn't blink.
+  List<ServiceHistoryItem> _items = const [];
+  bool _loadedOnce = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant GlobalHistoryScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.type != widget.type) {
+      _reload();
+    }
+  }
+
+  Future<List<ServiceHistoryItem>> _load() async {
+    final result = widget.type == ServiceHistoryType.payment
+        ? await widget.controller.loadGlobalPaymentHistory()
+        : await widget.controller.loadGlobalAdvanceHistory();
+    if (mounted) {
+      _items = result;
+      _loadedOnce = true;
+    }
+    return result;
+  }
+
+  void _reload() {
+    if (!mounted) return;
+    setState(() => _future = _load());
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final type = widget.type;
     return FutureBuilder<List<ServiceHistoryItem>>(
-      future: type == ServiceHistoryType.payment
-          ? controller.loadGlobalPaymentHistory()
-          : controller.loadGlobalAdvanceHistory(),
+      future: _future,
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        if (!_loadedOnce &&
+            snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
-        final items = snapshot.data ?? const <ServiceHistoryItem>[];
+        final items = snapshot.data ?? _items;
         if (items.isEmpty) {
           return _HistoryEmptyState(type: type);
         }
         if (type == ServiceHistoryType.payment) {
           return _GlobalPaymentHistoryList(
-            controller: controller,
+            controller: widget.controller,
             items: items,
+            onChanged: _reload,
           );
         }
         return ListView.separated(
@@ -64,10 +105,12 @@ class _GlobalPaymentHistoryList extends StatelessWidget {
   const _GlobalPaymentHistoryList({
     required this.controller,
     required this.items,
+    required this.onChanged,
   });
 
   final LedgerController controller;
   final List<ServiceHistoryItem> items;
+  final VoidCallback onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -109,12 +152,7 @@ class _GlobalPaymentHistoryList extends StatelessWidget {
                     showServiceName: true,
                     onEdit: () =>
                         _showEditPaymentSheet(context, serviceItem: item),
-                    onDelete: () => controller.deletePayment(
-                      payment,
-                      service: item.service,
-                      source: 'global_payment_history',
-                      returnRoute: LedgerRoute.globalPaymentHistory,
-                    ),
+                    onDelete: () => _deletePayment(item),
                   );
                 }),
               ],
@@ -126,10 +164,10 @@ class _GlobalPaymentHistoryList extends StatelessWidget {
     );
   }
 
-  void _showEditPaymentSheet(
+  Future<void> _showEditPaymentSheet(
     BuildContext context, {
     required ServiceHistoryItem serviceItem,
-  }) {
+  }) async {
     final payment = serviceItem.payment;
     if (payment == null) {
       return;
@@ -138,7 +176,7 @@ class _GlobalPaymentHistoryList extends StatelessWidget {
       service: serviceItem.service,
       source: 'global_payment_history',
     );
-    showModalBottomSheet<void>(
+    await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -151,6 +189,21 @@ class _GlobalPaymentHistoryList extends StatelessWidget {
         returnRoute: LedgerRoute.globalPaymentHistory,
       ),
     );
+    onChanged();
+  }
+
+  Future<void> _deletePayment(ServiceHistoryItem item) async {
+    final payment = item.payment;
+    if (payment == null) {
+      return;
+    }
+    await controller.deletePayment(
+      payment,
+      service: item.service,
+      source: 'global_payment_history',
+      returnRoute: LedgerRoute.globalPaymentHistory,
+    );
+    onChanged();
   }
 }
 

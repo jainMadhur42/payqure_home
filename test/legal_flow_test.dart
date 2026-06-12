@@ -272,7 +272,7 @@ class _RestoringAuthRepository implements AuthRepository {
   Future<void> resendEmailVerification(String email) async {}
 
   @override
-  Future<void> requestPasswordReset(String email) async {}
+  Future<String> requestPasswordReset(String identifier) async => identifier;
 
   @override
   Future<void> resetPasswordWithOtp({
