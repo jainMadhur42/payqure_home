@@ -8,10 +8,58 @@ import 'ledger_flow_screen.dart';
 import 'login_screen.dart';
 import 'splash_screen.dart';
 
-class LedgerHomeScreen extends StatelessWidget {
+class LedgerHomeScreen extends StatefulWidget {
   const LedgerHomeScreen({required this.controller, super.key});
 
   final LedgerController controller;
+
+  @override
+  State<LedgerHomeScreen> createState() => _LedgerHomeScreenState();
+}
+
+class _LedgerHomeScreenState extends State<LedgerHomeScreen> {
+  int _lastToastEventId = 0;
+
+  LedgerController get controller => widget.controller;
+
+  @override
+  void initState() {
+    super.initState();
+    controller.addListener(_handleControllerChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant LedgerHomeScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller == controller) {
+      return;
+    }
+    oldWidget.controller.removeListener(_handleControllerChanged);
+    _lastToastEventId = 0;
+    controller.addListener(_handleControllerChanged);
+  }
+
+  @override
+  void dispose() {
+    controller.removeListener(_handleControllerChanged);
+    super.dispose();
+  }
+
+  void _handleControllerChanged() {
+    final event = controller.toastEvent;
+    if (event == null || event.id == _lastToastEventId) {
+      return;
+    }
+    _lastToastEventId = event.id;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(event.message)));
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

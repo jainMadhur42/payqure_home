@@ -11,7 +11,6 @@ abstract interface class LedgerRemoteDataSource {
     required String monthKey,
   });
   Future<List<Map<String, dynamic>>> fetchMonthLogs({required String monthKey});
-  Future<List<Map<String, dynamic>>> fetchEntries({required String monthKey});
   Future<List<Map<String, dynamic>>> fetchAdvances({required String monthKey});
   Future<List<Map<String, dynamic>>> fetchPayments({required String monthKey});
   Future<List<Map<String, dynamic>>> fetchSettlements({
@@ -19,14 +18,12 @@ abstract interface class LedgerRemoteDataSource {
   });
   Future<void> pushService(ServiceRecord row);
   Future<void> pushMonthLog(ServiceMonthLogRecord row);
-  Future<void> pushEntry(EntryRecord row);
   Future<void> pushAdvance(AdvancePaymentRecord row);
   Future<void> pushPayment(PaymentTransactionRecord row);
   Future<void> deletePayment(String id);
   Future<void> pushSettlement(MonthlySettlementRecord row);
   Future<void> pushServices(List<ServiceRecord> rows);
   Future<void> pushMonthLogs(List<ServiceMonthLogRecord> rows);
-  Future<void> pushEntries(List<EntryRecord> rows);
   Future<void> pushAdvances(List<AdvancePaymentRecord> rows);
   Future<void> pushPayments(List<PaymentTransactionRecord> rows);
   Future<void> pushSettlements(List<MonthlySettlementRecord> rows);
@@ -59,21 +56,6 @@ class SupabaseLedgerRemoteDataSource implements LedgerRemoteDataSource {
       return const [];
     }
     final rows = await client.from('services').select().eq('user_id', userId);
-    return rows.cast<Map<String, dynamic>>();
-  }
-
-  @override
-  Future<List<Map<String, dynamic>>> fetchEntries({
-    required String monthKey,
-  }) async {
-    final client = _client;
-    if (client == null) {
-      return const [];
-    }
-    final rows = await client
-        .from('service_entries')
-        .select()
-        .eq('month_key', monthKey);
     return rows.cast<Map<String, dynamic>>();
   }
 
@@ -156,24 +138,6 @@ class SupabaseLedgerRemoteDataSource implements LedgerRemoteDataSource {
   }
 
   @override
-  Future<void> pushEntry(EntryRecord row) async {
-    final client = _client;
-    if (client == null) {
-      return;
-    }
-    await client.from('service_entries').upsert(_entryMap(row));
-  }
-
-  @override
-  Future<void> pushEntries(List<EntryRecord> rows) async {
-    final client = _client;
-    if (client == null || rows.isEmpty) {
-      return;
-    }
-    await client.from('service_entries').upsert(rows.map(_entryMap).toList());
-  }
-
-  @override
   Future<void> pushMonthLog(ServiceMonthLogRecord row) async {
     final client = _client;
     if (client == null) {
@@ -208,7 +172,9 @@ class SupabaseLedgerRemoteDataSource implements LedgerRemoteDataSource {
     if (client == null || rows.isEmpty) {
       return;
     }
-    await client.from('advance_payments').upsert(rows.map(_advanceMap).toList());
+    await client
+        .from('advance_payments')
+        .upsert(rows.map(_advanceMap).toList());
   }
 
   @override
@@ -272,21 +238,6 @@ class SupabaseLedgerRemoteDataSource implements LedgerRemoteDataSource {
     'default_quantity': row.defaultQuantity,
     'rate_cents': row.rateCents,
     'monthly_amount_cents': row.monthlyAmountCents,
-    'updated_at': row.updatedAt.toIso8601String(),
-    'is_deleted': row.isDeleted,
-  };
-
-  Map<String, dynamic> _entryMap(EntryRecord row) => {
-    'id': row.id,
-    'service_id': row.serviceId,
-    'month_key': row.monthKey,
-    'day': row.day,
-    'status': row.status,
-    'quantity': row.quantity,
-    'unit': row.unit,
-    'rate_cents': row.rateCents,
-    'amount_cents': row.amountCents,
-    'note': row.note,
     'updated_at': row.updatedAt.toIso8601String(),
     'is_deleted': row.isDeleted,
   };

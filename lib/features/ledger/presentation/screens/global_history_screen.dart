@@ -5,10 +5,13 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../domain/entities/app_route.dart';
+import '../../domain/entities/household_service.dart';
 import '../../domain/entities/service_history_item.dart';
 import '../../domain/entities/service_template.dart';
+import '../../domain/services/history_sorter.dart';
 import '../controllers/ledger_controller.dart';
 import '../widgets/ledger_screen_shared.dart';
+import '../widgets/add_advance_bottom_sheet.dart';
 import '../widgets/record_payment_bottom_sheet.dart';
 import '../widgets/service_icon.dart';
 import 'payment_history_screen.dart';
@@ -17,11 +20,13 @@ class GlobalHistoryScreen extends StatefulWidget {
   const GlobalHistoryScreen({
     required this.controller,
     required this.type,
+    this.service,
     super.key,
   });
 
   final LedgerController controller;
   final ServiceHistoryType type;
+  final HouseholdService? service;
 
   @override
   State<GlobalHistoryScreen> createState() => _GlobalHistoryScreenState();
@@ -42,15 +47,21 @@ class _GlobalHistoryScreenState extends State<GlobalHistoryScreen> {
   @override
   void didUpdateWidget(covariant GlobalHistoryScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.type != widget.type) {
+    if (oldWidget.type != widget.type ||
+        oldWidget.service?.id != widget.service?.id) {
       _reload();
     }
   }
 
   Future<List<ServiceHistoryItem>> _load() async {
-    final result = widget.type == ServiceHistoryType.payment
-        ? await widget.controller.loadGlobalPaymentHistory()
-        : await widget.controller.loadGlobalAdvanceHistory();
+    final result = switch ((widget.type, widget.service)) {
+      (ServiceHistoryType.advance, final HouseholdService _) =>
+        await widget.controller.loadSelectedAdvanceHistory(),
+      (ServiceHistoryType.advance, null) =>
+        await widget.controller.loadGlobalAdvanceHistory(),
+      (ServiceHistoryType.payment, _) =>
+        await widget.controller.loadGlobalPaymentHistory(),
+    };
     if (mounted) {
       _items = result;
       _loadedOnce = true;
@@ -73,7 +84,7 @@ class _GlobalHistoryScreenState extends State<GlobalHistoryScreen> {
             snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
-        final items = snapshot.data ?? _items;
+        final items = HistorySorter.itemsNewestFirst(snapshot.data ?? _items);
         if (items.isEmpty) {
           return _HistoryEmptyState(type: type);
         }
@@ -93,10 +104,177 @@ class _GlobalHistoryScreenState extends State<GlobalHistoryScreen> {
           ),
           itemCount: items.length,
           separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
-          itemBuilder: (context, index) =>
-              ServiceHistoryCard(item: items[index]),
+          itemBuilder: (context, index) => _AdvanceHistoryCard(
+            controller: widget.controller,
+            item: items[index],
+            onChanged: _reload,
+          ),
         );
       },
+    );
+  }
+}
+
+class _AdvanceHistoryCard extends StatefulWidget {
+  const _AdvanceHistoryCard({
+    required this.controller,
+    required this.item,
+    required this.onChanged,
+  });
+
+  final LedgerController controller;
+  final ServiceHistoryItem item;
+  final VoidCallback onChanged;
+
+  @override
+  State<_AdvanceHistoryCard> createState() => _AdvanceHistoryCardState();
+}
+
+class _AdvanceHistoryCardState extends State<_AdvanceHistoryCard> {
+  static const _actionSize = 50.0;
+  static const _maxReveal = (_actionSize * 2) + AppSpacing.md;
+  double _revealOffset = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: Stack(
+        alignment: Alignment.centerRight,
+        children: [
+          Positioned.fill(
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _AdvanceActionButton(
+                    color: AppColors.primary,
+                    icon: Icons.edit_outlined,
+                    onTap: _edit,
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  _AdvanceActionButton(
+                    color: AppColors.danger,
+                    icon: Icons.delete_outline,
+                    onTap: _delete,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOutCubic,
+            transform: Matrix4.translationValues(_revealOffset, 0, 0),
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onHorizontalDragUpdate: (details) {
+                setState(() {
+                  _revealOffset = (_revealOffset + details.delta.dx).clamp(
+                    -_maxReveal,
+                    0,
+                  );
+                });
+              },
+              onHorizontalDragEnd: (details) {
+                final shouldOpen =
+                    (details.primaryVelocity ?? 0) < -250 ||
+                    _revealOffset.abs() > _maxReveal * 0.42;
+                setState(() {
+                  _revealOffset = shouldOpen ? -_maxReveal : 0;
+                });
+              },
+              child: ServiceHistoryCard(item: widget.item),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _edit() async {
+    final advance = widget.item.advance;
+    if (advance == null) {
+      return;
+    }
+    setState(() => _revealOffset = 0);
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => AddAdvanceBottomSheet(
+        controller: widget.controller,
+        serviceId: widget.item.service.id,
+        serviceName: widget.item.service.name,
+        month: monthLabelShort(advance.monthKey),
+        title: 'Edit Advance',
+        advance: advance,
+        onSaved: widget.onChanged,
+      ),
+    );
+  }
+
+  Future<void> _delete() async {
+    final advance = widget.item.advance;
+    if (advance == null) {
+      return;
+    }
+    setState(() => _revealOffset = 0);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete Advance?'),
+        content: const Text(
+          'This will remove the advance and recalculate the related balances.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+    await widget.controller.deleteAdvance(advance);
+    widget.onChanged();
+  }
+}
+
+class _AdvanceActionButton extends StatelessWidget {
+  const _AdvanceActionButton({
+    required this.color,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final Color color;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 50,
+      height: 50,
+      child: Material(
+        color: color,
+        shape: const CircleBorder(),
+        child: IconButton(
+          onPressed: onTap,
+          color: Colors.white,
+          icon: Icon(icon),
+        ),
+      ),
     );
   }
 }
@@ -116,8 +294,7 @@ class _GlobalPaymentHistoryList extends StatelessWidget {
   Widget build(BuildContext context) {
     final grouped = <String, List<ServiceHistoryItem>>{};
     for (final item in items) {
-      final payment = item.payment;
-      final monthKey = payment?.monthKey ?? monthKeyForDate(item.date);
+      final monthKey = monthKeyForDate(item.date);
       grouped.putIfAbsent(monthKey, () => []).add(item);
     }
     return ListView(

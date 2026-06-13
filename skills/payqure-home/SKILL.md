@@ -52,6 +52,8 @@ Important entry points:
 | Drift/Supabase row synchronization | `lib/features/ledger/data/sync/drift_ledger_sync_service.dart` |
 | Entry validation and persistence | `lib/features/ledger/presentation/controllers/entry_operations_controller.dart` |
 | Payment and advance operations | `lib/features/ledger/presentation/controllers/payment_operations_controller.dart` |
+| Ledger analytics event mapping | `lib/features/ledger/presentation/analytics/ledger_analytics_mapper.dart` |
+| Reminder permission and schedule reconciliation | `lib/features/ledger/presentation/controllers/service_reminder_coordinator.dart` |
 | PDF generation | `lib/features/ledger/data/services/pdf_statement_service.dart` |
 | Legal content and policy version | `lib/features/legal/domain/legal_content.dart` |
 | Legal screens | `lib/features/legal/presentation/legal_screens.dart` |
@@ -93,6 +95,14 @@ Rules:
   and per-service serialization.
 - Entry and payment operation controllers create and persist domain entities;
   `LedgerController` owns optimistic UI projection, messages, and routes.
+- `LedgerAnalyticsMapper` owns analytics labels, event parameters, user
+  properties, amount context, and route-to-screen naming. Keep Firebase calls
+  in `AppAnalytics`; do not rebuild analytics payload policy inside widgets or
+  controllers.
+- `ServiceReminderCoordinator` serializes permission checks and schedule
+  replacement. Existing permissions restore reminders after authenticated
+  service data loads, and app resume forces reconciliation so app upgrades do
+  not leave stale or missing OS schedules.
 - Writes are local-first where possible. Update UI immediately, then sync.
 - Reuse existing theme tokens and common widgets. Do not introduce a separate
   design language for new screens.
@@ -109,6 +119,18 @@ flutter run \
   --dart-define=SUPABASE_URL=https://YOUR_PROJECT.supabase.co \
   --dart-define=SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
 ```
+
+Build modes select safe defaults automatically:
+
+- Debug/profile builds use the non-production Supabase project, enable verbose
+  diagnostics, and disable Firebase Analytics/Crashlytics collection.
+- Release builds use the production Supabase project, disable verbose
+  diagnostics, and enable Firebase Analytics/Crashlytics collection.
+- `APP_ENV`, Supabase values, and telemetry flags can still be overridden with
+  `--dart-define` for CI and targeted verification.
+- Android release tasks require an ignored `android/key.properties` created
+  from `android/key.properties.example`; never restore debug signing for store
+  artifacts.
 
 Startup sequence:
 
@@ -143,7 +165,9 @@ Home     +     More
 ```
 
 - Home contains the month summary and service list.
-- The center Add button opens a quick-action bottom sheet, not a tab.
+- The center Add button opens the Service Template Picker directly, then the
+  pre-populated Add Service form. It is not a tab and does not open a global
+  action sheet.
 - More contains account, records, preferences, legal, and logout.
 - Contacts is opened from More, not from bottom navigation.
 - Calendar, settlement, payments, advances, and PDF are service-specific flows.
@@ -171,6 +195,13 @@ Registration collects:
 - Privacy Policy acceptance
 
 Phone is normalized and stored but not verified.
+
+The production Supabase bootstrap installs `handle_new_auth_user`, an
+`auth.users` insert trigger that copies registration name, phone, and privacy
+metadata into `public.profiles`. This is required because email-confirmation
+signups may not receive an authenticated session immediately. Explicit profile
+edits must write `public.profiles` synchronously and surface failures; only
+passive session-refresh repair upserts may suppress transient errors.
 
 Current policy metadata is defined only in:
 
@@ -210,11 +241,45 @@ Main tables:
 
 - `profile_records`
 - `service_records`
-- `entry_records`
+- `service_month_log_records`
 - `advance_payment_records`
 - `payment_transaction_records`
 - `monthly_settlement_records`
 - `sync_metadata_records`
+
+Daily entries are stored locally and remotely as one
+`service_month_log_records` / `service_month_logs` JSON document per service
+and month. `ServiceEntry` remains the domain/UI model and is decoded through
+`MonthLogEntryCodec`; there is no legacy per-day entry table.
+
+The monthly entry document uses this shape:
+
+```json
+{
+  "schemaVersion": 1,
+  "overrides": {
+    "12": {
+      "id": "entry-id",
+      "status": "delivered",
+      "quantity": 1.5,
+      "unit": "L",
+      "rateCents": 6000,
+      "amountCents": 9000,
+      "note": "",
+      "updatedAt": "2026-06-12T08:00:00.000Z"
+    }
+  }
+}
+```
+
+The key inside `overrides` is the day of month. Keep the domain and UI working
+with `ServiceEntry`; persistence conversion belongs in `MonthLogEntryCodec`.
+Do not reintroduce `entry_records`, Supabase `service_entries`, or direct JSON
+parsing in widgets/controllers.
+
+Current local Drift schema version is `6`. Version 6 removes the obsolete
+`entry_records` table for existing development installs. A fresh database
+creates only the current table set.
 
 Generated file:
 
@@ -244,30 +309,27 @@ Sync invariants:
 
 ## Supabase
 
-Base schema:
+Fresh production schema:
 
 ```text
-supabase/migrations/202606030001_create_ledger_schema.sql
+supabase/migrations/202606130001_create_payqure_home_production_schema.sql
 ```
 
-Incremental migrations currently include:
+This single bootstrap creates the complete schema at ledger version 5,
+including payment allocations, privacy acceptance, OTP request limits, and
+optimized service month logs. It is intended for a new Supabase project and
+must not be run as a replacement migration on an existing populated database.
+It deliberately does not create the obsolete `service_entries` table.
 
-```text
-202606060001_add_payment_allocations.sql
-202606060002_add_privacy_policy_acceptance.sql
-202606070001_add_auth_otp_request_limits.sql
-```
-
-The OTP migration is required before releasing the matching app build. It
-limits signup-verification and password-recovery OTP sends to three requests
-per email and purpose. Support reset instructions are in:
+OTP request limiting allows three signup-verification or password-recovery
+requests per email and purpose. Support reset instructions are in:
 
 ```text
 docs/otp_request_support_process.md
 ```
 
-For an existing database, apply only unapplied incremental migrations. Do not
-rerun destructive setup casually.
+Future production changes must be added as new incremental migrations after
+this bootstrap. Do not edit an already-applied production migration.
 
 RLS must keep every user scoped to their own rows. Ledger tables use `user_id`
 directly or inherit ownership through their service relationship.
@@ -371,12 +433,14 @@ usage till cutoff
 
 Payment allocation order in this app:
 
-1. Settle current selected-month due.
-2. Settle previous balance.
-3. Store any remainder as advance.
+1. Settle the oldest outstanding month first.
+2. Continue chronologically through newer outstanding months.
+3. Settle the current month when its turn is reached.
+4. Store any remainder as advance.
 
 Do not mark a bill paid unless a payment or applicable advance actually settles
-it.
+it. A payment may appear in the history of an older month it settled while
+retaining the real payment transaction date.
 
 Rate resolution priority:
 

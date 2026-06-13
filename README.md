@@ -16,16 +16,36 @@ See [docs/supabase_setup_runbook.md](docs/supabase_setup_runbook.md).
 
 ## Run
 
-Run with the configured Supabase project:
+Run from VS Code or the terminal with the non-production Supabase project:
 
 ```bash
 flutter run
 ```
 
-Override Supabase for another environment:
+Release builds automatically use the production Supabase project and enable
+Firebase Analytics and Crashlytics:
+
+```bash
+flutter build appbundle --release
+flutter build ipa --release
+```
+
+Android release builds also require Play Store upload-key configuration. Copy
+`android/key.properties.example` to the ignored `android/key.properties` file
+and provide the real keystore path and credentials. Release builds fail fast
+when signing is missing instead of creating a debug-signed store artifact.
+
+Build-mode defaults are centralized in
+`lib/core/config/app_config.dart`:
+
+- Debug/profile: non-production Supabase, verbose diagnostics, telemetry off.
+- Release: production Supabase, verbose diagnostics off, telemetry on.
+
+Override configuration for CI or a temporary environment:
 
 ```bash
 flutter run \
+  --dart-define=APP_ENV=debug \
   --dart-define=SUPABASE_URL=https://YOUR_PROJECT.supabase.co \
   --dart-define=SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
 ```
@@ -36,6 +56,15 @@ For this local workspace, Supabase credentials are available in
 ```bash
 flutter run --dart-define-from-file=dart_defines/supabase.local.json
 ```
+
+Supported optional overrides:
+
+- `APP_ENV=debug|release`
+- `SUPABASE_URL`
+- `SUPABASE_PUBLISHABLE_KEY`
+- `ANALYTICS_ENABLED=true|false`
+- `CRASHLYTICS_ENABLED=true|false`
+- `VERBOSE_LOGGING_ENABLED=true|false`
 
 ## Verify
 

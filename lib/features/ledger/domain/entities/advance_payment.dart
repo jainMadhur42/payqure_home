@@ -16,4 +16,21 @@ class AdvancePayment {
   final DateTime paidOn;
   final String note;
   final bool pendingSync;
+
+  AdvancePayment copyWith({
+    int? amountCents,
+    DateTime? paidOn,
+    String? note,
+    bool? pendingSync,
+  }) {
+    return AdvancePayment(
+      id: id,
+      serviceId: serviceId,
+      monthKey: monthKey,
+      amountCents: amountCents ?? this.amountCents,
+      paidOn: paidOn ?? this.paidOn,
+      note: note ?? this.note,
+      pendingSync: pendingSync ?? this.pendingSync,
+    );
+  }
 }

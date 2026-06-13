@@ -4,6 +4,7 @@ import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:payqure_home/features/ledger/data/database/ledger_database.dart';
+import 'package:payqure_home/features/ledger/data/mappers/month_log_entry_codec.dart';
 import 'package:payqure_home/features/ledger/data/repositories/drift_ledger_repository.dart';
 import 'package:payqure_home/features/ledger/data/sync/supabase_ledger_remote_data_source.dart';
 import 'package:payqure_home/features/ledger/domain/entities/payment_transaction.dart';
@@ -80,18 +81,27 @@ void main() {
         updatedAt: DateTime.utc(2026, 5, 1),
         pendingSync: false,
       );
-      remote.entries = [
+      remote.monthLogs = [
         {
-          'id': 'entry-1',
+          'id': '$serviceId:$monthKey',
           'service_id': serviceId,
           'month_key': monthKey,
-          'day': 3,
-          'status': 'delivered',
-          'quantity': 2.0,
-          'unit': 'L',
-          'rate_cents': 6000,
-          'amount_cents': 12000,
-          'note': 'Remote delivery',
+          'schema_version': 1,
+          'entries_json': MonthLogEntryCodec.encode([
+            ServiceEntry(
+              id: 'entry-1',
+              serviceId: serviceId,
+              monthKey: monthKey,
+              day: 3,
+              status: ServiceEntryStatus.delivered,
+              quantity: 2,
+              unit: 'L',
+              rateCents: 6000,
+              amountCents: 12000,
+              note: 'Remote delivery',
+              updatedAt: remoteUpdatedAt,
+            ),
+          ]),
           'updated_at': remoteUpdatedAt.toIso8601String(),
           'is_deleted': false,
         },
@@ -111,7 +121,14 @@ void main() {
 
       await repository.syncRemoteChanges(userId: userId, monthKey: monthKey);
 
-      final entry = await database.select(database.entryRecords).getSingle();
+      final monthLog = await database
+          .select(database.serviceMonthLogRecords)
+          .getSingle();
+      final entry = MonthLogEntryCodec.decode(
+        entriesJson: monthLog.entriesJson,
+        serviceId: serviceId,
+        monthKey: monthKey,
+      ).single;
       final advance = await database
           .select(database.advancePaymentRecords)
           .getSingle();
@@ -145,11 +162,9 @@ void main() {
       ),
     );
 
-    final legacyEntries = await database.select(database.entryRecords).get();
     final monthLog = await database
         .select(database.serviceMonthLogRecords)
         .getSingle();
-    expect(legacyEntries, isEmpty);
     expect(monthLog.id, '$serviceId:$monthKey');
     expect(monthLog.entriesJson, contains('"4"'));
     expect(monthLog.entriesJson, contains('"quantity":1.5'));
@@ -183,7 +198,7 @@ void main() {
     await repository.hydrateMonth(userId: userId, monthKey: monthKey);
 
     expect(remote.serviceFetches, 1);
-    expect(remote.entryFetches, 1);
+    expect(remote.monthLogFetches, 1);
     expect(remote.advanceFetches, 1);
     expect(remote.paymentFetches, 1);
     expect(remote.settlementFetches, 1);
@@ -202,7 +217,7 @@ void main() {
     );
 
     expect(remote.serviceFetches, 2);
-    expect(remote.entryFetches, 2);
+    expect(remote.monthLogFetches, 2);
     expect(remote.advanceFetches, 2);
     expect(remote.paymentFetches, 2);
     expect(remote.settlementFetches, 2);
@@ -216,13 +231,16 @@ void main() {
       await repository.syncUserDataAndClearLocal(userId: userId);
 
       expect(remote.pushedServices, 1);
-      expect(remote.pushedEntries, 1);
+      expect(remote.pushedMonthLogs, 1);
       expect(remote.pushedAdvances, 1);
       expect(remote.pushedPayments, 1);
       expect(remote.pushedSettlements, 1);
       expect(await database.select(database.profileRecords).get(), isEmpty);
       expect(await database.select(database.serviceRecords).get(), isEmpty);
-      expect(await database.select(database.entryRecords).get(), isEmpty);
+      expect(
+        await database.select(database.serviceMonthLogRecords).get(),
+        isEmpty,
+      );
       expect(
         await database.select(database.advancePaymentRecords).get(),
         isEmpty,
@@ -244,7 +262,7 @@ void main() {
 
   test('logout sync failure keeps local data intact', () async {
     await _insertCompleteLocalLedger(database);
-    remote.failOnEntryPush = true;
+    remote.failOnMonthLogPush = true;
 
     await expectLater(
       repository.syncUserDataAndClearLocal(userId: userId),
@@ -252,7 +270,10 @@ void main() {
     );
 
     expect(await database.select(database.serviceRecords).get(), isNotEmpty);
-    expect(await database.select(database.entryRecords).get(), isNotEmpty);
+    expect(
+      await database.select(database.serviceMonthLogRecords).get(),
+      isNotEmpty,
+    );
     expect(
       await database.select(database.advancePaymentRecords).get(),
       isNotEmpty,
@@ -318,22 +339,20 @@ void main() {
             updatedAt: now,
           ),
         );
-    await database
-        .into(database.entryRecords)
-        .insert(
-          EntryRecordsCompanion.insert(
-            id: 'entry-may-25',
-            serviceId: serviceId,
-            monthKey: monthKey,
-            day: 25,
-            status: 'delivered',
-            quantity: const Value(1),
-            unit: const Value('L'),
-            rateCents: const Value(70000),
-            amountCents: const Value(70000),
-            updatedAt: now,
-          ),
-        );
+    await repository.saveEntry(
+      ServiceEntry(
+        id: 'entry-may-25',
+        serviceId: serviceId,
+        monthKey: monthKey,
+        day: 25,
+        status: ServiceEntryStatus.delivered,
+        quantity: 1,
+        unit: 'L',
+        rateCents: 70000,
+        amountCents: 70000,
+        updatedAt: now,
+      ),
+    );
     await database
         .into(database.monthlySettlementRecords)
         .insert(
@@ -370,22 +389,20 @@ void main() {
       updatedAt: now,
       pendingSync: false,
     );
-    await database
-        .into(database.entryRecords)
-        .insert(
-          EntryRecordsCompanion.insert(
-            id: 'entry-payment-sync',
-            serviceId: serviceId,
-            monthKey: monthKey,
-            day: 25,
-            status: 'delivered',
-            quantity: const Value(1),
-            unit: const Value('L'),
-            rateCents: const Value(70000),
-            amountCents: const Value(70000),
-            updatedAt: now,
-          ),
-        );
+    await repository.saveEntry(
+      ServiceEntry(
+        id: 'entry-payment-sync',
+        serviceId: serviceId,
+        monthKey: monthKey,
+        day: 25,
+        status: ServiceEntryStatus.delivered,
+        quantity: 1,
+        unit: 'L',
+        rateCents: 70000,
+        amountCents: 70000,
+        updatedAt: now,
+      ),
+    );
 
     await repository.savePayment(
       PaymentTransaction(
@@ -419,22 +436,20 @@ void main() {
         updatedAt: mayDate,
         pendingSync: false,
       );
-      await database
-          .into(database.entryRecords)
-          .insert(
-            EntryRecordsCompanion.insert(
-              id: 'entry-may-due',
-              serviceId: serviceId,
-              monthKey: monthKey,
-              day: 31,
-              status: 'delivered',
-              quantity: const Value(1),
-              unit: const Value('L'),
-              rateCents: const Value(98000),
-              amountCents: const Value(98000),
-              updatedAt: mayDate,
-            ),
-          );
+      await repository.saveEntry(
+        ServiceEntry(
+          id: 'entry-may-due',
+          serviceId: serviceId,
+          monthKey: monthKey,
+          day: 31,
+          status: ServiceEntryStatus.delivered,
+          quantity: 1,
+          unit: 'L',
+          rateCents: 98000,
+          amountCents: 98000,
+          updatedAt: mayDate,
+        ),
+      );
 
       final mayBeforePayment = await repository.getMonthlyBill(
         serviceId: serviceId,
@@ -593,22 +608,20 @@ void main() {
     addTearDown(subscription.cancel);
 
     await firstOverview.future;
-    await database
-        .into(database.entryRecords)
-        .insert(
-          EntryRecordsCompanion.insert(
-            id: 'reactive-entry',
-            serviceId: serviceId,
-            monthKey: monthKey,
-            day: 1,
-            status: 'delivered',
-            quantity: const Value(1),
-            unit: const Value('L'),
-            rateCents: const Value(6000),
-            amountCents: const Value(6000),
-            updatedAt: now,
-          ),
-        );
+    await repository.saveEntry(
+      ServiceEntry(
+        id: 'reactive-entry',
+        serviceId: serviceId,
+        monthKey: monthKey,
+        day: 1,
+        status: ServiceEntryStatus.delivered,
+        quantity: 1,
+        unit: 'L',
+        rateCents: 6000,
+        amountCents: 6000,
+        updatedAt: now,
+      ),
+    );
 
     await secondOverview.future;
     expect(values.first.services.single.entries, isEmpty);
@@ -638,18 +651,28 @@ Future<void> _insertCompleteLocalLedger(LedgerDatabase database) async {
     pendingSync: true,
   );
   await database
-      .into(database.entryRecords)
+      .into(database.serviceMonthLogRecords)
       .insert(
-        EntryRecordsCompanion.insert(
-          id: 'entry-1',
+        ServiceMonthLogRecordsCompanion.insert(
+          id: '$serviceId:$monthKey',
           serviceId: serviceId,
           monthKey: monthKey,
-          day: 20,
-          status: 'delivered',
-          quantity: const Value(1),
-          unit: const Value('L'),
-          rateCents: const Value(6000),
-          amountCents: const Value(6000),
+          entriesJson: Value(
+            MonthLogEntryCodec.encode([
+              ServiceEntry(
+                id: 'entry-1',
+                serviceId: serviceId,
+                monthKey: monthKey,
+                day: 20,
+                status: ServiceEntryStatus.delivered,
+                quantity: 1,
+                unit: 'L',
+                rateCents: 6000,
+                amountCents: 6000,
+                updatedAt: now,
+              ),
+            ]),
+          ),
           updatedAt: now,
           pendingSync: const Value(true),
         ),
@@ -763,21 +786,18 @@ Map<String, dynamic> _remoteService({
 class _FakeRemoteDataSource implements LedgerRemoteDataSource {
   List<Map<String, dynamic>> services = const [];
   List<Map<String, dynamic>> monthLogs = const [];
-  List<Map<String, dynamic>> entries = const [];
   List<Map<String, dynamic>> advances = const [];
   List<Map<String, dynamic>> payments = const [];
   List<Map<String, dynamic>> settlements = const [];
   int? schemaVersion = 5;
-  bool failOnEntryPush = false;
+  bool failOnMonthLogPush = false;
   int pushedServices = 0;
   int pushedMonthLogs = 0;
-  int pushedEntries = 0;
   int pushedAdvances = 0;
   int pushedPayments = 0;
   int pushedSettlements = 0;
   int serviceFetches = 0;
   int monthLogFetches = 0;
-  int entryFetches = 0;
   int advanceFetches = 0;
   int paymentFetches = 0;
   int settlementFetches = 0;
@@ -797,14 +817,6 @@ class _FakeRemoteDataSource implements LedgerRemoteDataSource {
   }) async {
     serviceFetches++;
     return services;
-  }
-
-  @override
-  Future<List<Map<String, dynamic>>> fetchEntries({
-    required String monthKey,
-  }) async {
-    entryFetches++;
-    return entries;
   }
 
   @override
@@ -845,15 +857,10 @@ class _FakeRemoteDataSource implements LedgerRemoteDataSource {
   }
 
   @override
-  Future<void> pushEntry(EntryRecord row) async {
-    if (failOnEntryPush) {
-      throw StateError('Remote entry push failed.');
-    }
-    pushedEntries++;
-  }
-
-  @override
   Future<void> pushMonthLog(ServiceMonthLogRecord row) async {
+    if (failOnMonthLogPush) {
+      throw StateError('Remote month log push failed.');
+    }
     pushedMonthLogs++;
   }
 
@@ -885,15 +892,10 @@ class _FakeRemoteDataSource implements LedgerRemoteDataSource {
 
   @override
   Future<void> pushMonthLogs(List<ServiceMonthLogRecord> rows) async {
-    pushedMonthLogs += rows.length;
-  }
-
-  @override
-  Future<void> pushEntries(List<EntryRecord> rows) async {
-    if (failOnEntryPush && rows.isNotEmpty) {
-      throw StateError('Remote entry push failed.');
+    if (failOnMonthLogPush && rows.isNotEmpty) {
+      throw StateError('Remote month log push failed.');
     }
-    pushedEntries += rows.length;
+    pushedMonthLogs += rows.length;
   }
 
   @override

@@ -181,17 +181,22 @@ class SupabaseAuthRepository implements AuthRepository {
     } catch (_) {
       // Email-confirmation signups may not have an active session yet.
     }
-    await _upsertProfile(
-      user: user,
-      name: name,
-      email: normalizedEmail,
-      phone: normalizedPhone,
-      privacyPolicyAccepted: privacyPolicyAccepted,
-      privacyPolicyAcceptedAt: privacyPolicyAccepted ? DateTime.now() : null,
-      privacyPolicyVersion: privacyPolicyAccepted
-          ? LegalContent.policyVersion
-          : '',
-    );
+    // With email confirmation enabled, signUp may not return a session. The
+    // database auth-user trigger persists metadata in that case. When a
+    // session is available, verify the profile write synchronously.
+    if (response.session != null || client.auth.currentSession != null) {
+      await _upsertProfile(
+        user: user,
+        name: name,
+        email: normalizedEmail,
+        phone: normalizedPhone,
+        privacyPolicyAccepted: privacyPolicyAccepted,
+        privacyPolicyAcceptedAt: privacyPolicyAccepted ? DateTime.now() : null,
+        privacyPolicyVersion: privacyPolicyAccepted
+            ? LegalContent.policyVersion
+            : '',
+      );
+    }
     _setProfile(
       await _profileFromUser(
         user,
@@ -472,6 +477,7 @@ class SupabaseAuthRepository implements AuthRepository {
         privacyPolicyAccepted: accepted,
         privacyPolicyAcceptedAt: acceptedAt,
         privacyPolicyVersion: policyVersion,
+        suppressErrors: true,
       ),
     );
 
@@ -532,6 +538,7 @@ class SupabaseAuthRepository implements AuthRepository {
     bool privacyPolicyAccepted = false,
     DateTime? privacyPolicyAcceptedAt,
     String privacyPolicyVersion = '',
+    bool suppressErrors = false,
   }) async {
     final client = _client;
     if (client == null) {
@@ -557,7 +564,11 @@ class SupabaseAuthRepository implements AuthRepository {
           })
           .timeout(const Duration(seconds: 6));
     } catch (_) {
-      // Auth should remain usable while the Supabase schema is being applied.
+      if (!suppressErrors) {
+        rethrow;
+      }
+      // Passive session restoration must remain usable during transient
+      // network failures. Explicit registration/profile updates are strict.
     }
   }
 

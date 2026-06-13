@@ -38,25 +38,6 @@ class ServiceRecords extends Table {
   Set<Column<Object>> get primaryKey => {id};
 }
 
-class EntryRecords extends Table {
-  TextColumn get id => text()();
-  TextColumn get serviceId => text()();
-  TextColumn get monthKey => text()();
-  IntColumn get day => integer()();
-  TextColumn get status => text()();
-  RealColumn get quantity => real().withDefault(const Constant(0))();
-  TextColumn get unit => text().withDefault(const Constant(''))();
-  IntColumn get rateCents => integer().withDefault(const Constant(0))();
-  IntColumn get amountCents => integer().withDefault(const Constant(0))();
-  TextColumn get note => text().withDefault(const Constant(''))();
-  DateTimeColumn get updatedAt => dateTime()();
-  BoolColumn get pendingSync => boolean().withDefault(const Constant(false))();
-  BoolColumn get isDeleted => boolean().withDefault(const Constant(false))();
-
-  @override
-  Set<Column<Object>> get primaryKey => {id};
-}
-
 class ServiceMonthLogRecords extends Table {
   TextColumn get id => text()();
   TextColumn get serviceId => text()();
@@ -155,7 +136,6 @@ class SyncMetadataRecords extends Table {
   tables: [
     ProfileRecords,
     ServiceRecords,
-    EntryRecords,
     ServiceMonthLogRecords,
     AdvancePaymentRecords,
     PaymentTransactionRecords,
@@ -169,7 +149,7 @@ class LedgerDatabase extends _$LedgerDatabase {
   LedgerDatabase.defaults() : super(driftDatabase(name: 'payqure_ledger'));
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -198,6 +178,9 @@ class LedgerDatabase extends _$LedgerDatabase {
       }
       if (from < 5) {
         await m.createTable(serviceMonthLogRecords);
+      }
+      if (from < 6) {
+        await m.deleteTable('entry_records');
       }
     },
     beforeOpen: (details) async {

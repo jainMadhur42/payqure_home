@@ -7,8 +7,11 @@ import 'core/config/app_config.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final analytics = await AppAnalytics.initialize();
   final config = AppConfig.fromEnvironment();
+  final analytics = await AppAnalytics.initialize(
+    analyticsEnabled: config.analyticsEnabled,
+    crashlyticsEnabled: config.crashlyticsEnabled,
+  );
   SupabaseClient? supabaseClient;
 
   if (config.hasSupabase) {

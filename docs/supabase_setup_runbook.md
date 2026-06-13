@@ -2,7 +2,16 @@
 
 ## 1. Apply Database Migration
 
-Run the SQL in `supabase/migrations/202606030001_create_ledger_schema.sql` in your Supabase project SQL editor or migration pipeline.
+For a new production Supabase project, run the single bootstrap file:
+
+```text
+supabase/migrations/202606130001_create_payqure_home_production_schema.sql
+```
+
+Run the complete file once in the Supabase SQL editor or migration pipeline.
+It creates the final schema, indexes, functions, Row Level Security policies,
+privacy fields, OTP request limits, payment allocation fields, and optimized
+monthly JSON logs.
 
 After applying it, verify:
 
@@ -13,7 +22,7 @@ select public.ledger_schema_version();
 Expected result:
 
 ```text
-1
+5
 ```
 
 ## 2. Configure Auth
@@ -24,6 +33,9 @@ In Supabase Auth settings:
 - Enable email confirmations.
 - Keep phone verification disabled unless you intentionally add it later.
 - Add the app redirect URLs for email confirmation and password recovery.
+- Configure custom SMTP before testing with addresses that are not Supabase
+  organization members. The built-in sender is restricted and heavily
+  rate-limited.
 
 Suggested redirect URL placeholders:
 
@@ -41,14 +53,52 @@ Configure:
 - Confirm signup template.
 - Reset password/recovery template.
 
-For OTP-style recovery, include the Supabase token in the email body. The Flutter reset screen expects the user to enter email, OTP, and new password.
+The Flutter app uses typed six-digit OTPs rather than confirmation links.
+Update both templates to include the token:
+
+**Confirm signup**
+
+```html
+<h2>Verify your Payqure Home account</h2>
+<p>Your verification code is:</p>
+<h1>{{ .Token }}</h1>
+<p>This code expires shortly and can only be used once.</p>
+```
+
+**Reset password**
+
+```html
+<h2>Reset your Payqure Home password</h2>
+<p>Your recovery code is:</p>
+<h1>{{ .Token }}</h1>
+<p>This code expires shortly and can only be used once.</p>
+```
+
+Do not leave these templates using only `{{ .ConfirmationURL }}` because the
+app expects the user to enter the token.
 
 ## 4. Run App With Supabase
 
-Run with real project values:
+Normal VS Code and `flutter run` debug builds use the configured
+non-production Supabase project automatically:
+
+```bash
+flutter run
+```
+
+Store release builds use the configured production Supabase project
+automatically:
+
+```bash
+flutter build appbundle --release
+flutter build ipa --release
+```
+
+Override either environment when needed:
 
 ```bash
 flutter run \
+  --dart-define=APP_ENV=debug \
   --dart-define=SUPABASE_URL=https://YOUR_PROJECT.supabase.co \
   --dart-define=SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
 ```
@@ -59,7 +109,8 @@ For this local workspace, use the ignored Supabase define file:
 flutter run --dart-define-from-file=dart_defines/supabase.local.json
 ```
 
-Without these values, the app runs in local demo auth mode.
+Environment defaults and telemetry behavior are centralized in
+`lib/core/config/app_config.dart`.
 
 ## 5. Smoke Test
 
@@ -72,6 +123,7 @@ Without these values, the app runs in local demo auth mode.
 
 ## 6. Troubleshooting
 
-- If ledger sync fails with a schema message, rerun the migration and verify `public.ledger_schema_version()` returns `1`.
+- If ledger sync fails with a schema message, verify the bootstrap completed
+  successfully and `public.ledger_schema_version()` returns `5`.
 - If phone login fails, confirm the phone is stored normalized in E.164 format in `public.profiles`.
 - If email verification does not route back into the app, check Supabase redirect URLs and platform deep-link configuration.

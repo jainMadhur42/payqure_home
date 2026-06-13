@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "546563010151",
+    "project_id": "payqure-home",
+    "storage_bucket": "payqure-home.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:546563010151:android:8b44933fd8ca0907a9eec2",
+        "android_client_info": {
+          "package_name": "com.payqure.home"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAmgQRStMkwoaF1F-l7Z-e-7odYz6mAG9w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

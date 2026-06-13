@@ -5,6 +5,7 @@ import '../../domain/entities/payment_transaction.dart';
 import '../../domain/entities/payment_settlement_preview.dart';
 import '../../domain/entities/service_history_item.dart';
 import '../../domain/repositories/ledger_repository.dart';
+import '../../domain/services/history_sorter.dart';
 
 class PaymentOperationsController {
   const PaymentOperationsController(this._repository);
@@ -28,6 +29,26 @@ class PaymentOperationsController {
         note: note,
       ),
     );
+  }
+
+  Future<void> updateAdvance({
+    required AdvancePayment advance,
+    required int amountCents,
+    required DateTime paidOn,
+    required String note,
+  }) {
+    return _repository.saveAdvance(
+      advance.copyWith(
+        amountCents: amountCents,
+        paidOn: paidOn,
+        note: note,
+        pendingSync: true,
+      ),
+    );
+  }
+
+  Future<void> deleteAdvance(AdvancePayment advance) {
+    return _repository.deleteAdvance(advance);
   }
 
   Future<void> savePayment({
@@ -97,53 +118,58 @@ class PaymentOperationsController {
   Future<List<ServiceHistoryItem>> globalPaymentHistory(
     List<HouseholdService> services,
   ) async {
-    final items = <ServiceHistoryItem>[];
-    for (final service in services) {
-      final payments = await paymentHistory(service.id);
-      items.addAll(
-        payments.map(
-          (payment) => ServiceHistoryItem(
-            id: payment.id,
-            service: service,
-            type: ServiceHistoryType.payment,
-            amountCents: payment.amountCents,
-            date: payment.paymentDate,
-            modeLabel: payment.mode.label,
-            note: payment.note,
-            pendingSync: payment.pendingSync,
-            payment: payment,
-          ),
-        ),
-      );
-    }
-    items.sort((a, b) => b.date.compareTo(a.date));
-    return items;
+    final serviceItems = await Future.wait(
+      services.map((service) async {
+        final payments = await paymentHistory(service.id);
+        return payments
+            .map(
+              (payment) => ServiceHistoryItem(
+                id: payment.id,
+                service: service,
+                type: ServiceHistoryType.payment,
+                amountCents: payment.amountCents,
+                date: payment.paymentDate,
+                modeLabel: payment.mode.label,
+                note: payment.note,
+                pendingSync: payment.pendingSync,
+                payment: payment,
+              ),
+            )
+            .toList();
+      }),
+    );
+    return HistorySorter.itemsNewestFirst(
+      serviceItems.expand((items) => items),
+    );
   }
 
   Future<List<ServiceHistoryItem>> globalAdvanceHistory(
     List<HouseholdService> services,
   ) async {
-    final items = <ServiceHistoryItem>[];
-    for (final service in services) {
-      final advances = await _repository.getAdvanceHistory(
-        serviceId: service.id,
-      );
-      items.addAll(
-        advances.map(
-          (advance) => ServiceHistoryItem(
-            id: advance.id,
-            service: service,
-            type: ServiceHistoryType.advance,
-            amountCents: advance.amountCents,
-            date: advance.paidOn,
-            modeLabel: 'Advance',
-            note: advance.note,
-            pendingSync: advance.pendingSync,
-          ),
+    final serviceItems = await Future.wait(services.map(serviceAdvanceHistory));
+    return HistorySorter.itemsNewestFirst(
+      serviceItems.expand((items) => items),
+    );
+  }
+
+  Future<List<ServiceHistoryItem>> serviceAdvanceHistory(
+    HouseholdService service,
+  ) async {
+    final advances = await _repository.getAdvanceHistory(serviceId: service.id);
+    return HistorySorter.itemsNewestFirst(
+      advances.map(
+        (advance) => ServiceHistoryItem(
+          id: advance.id,
+          service: service,
+          type: ServiceHistoryType.advance,
+          amountCents: advance.amountCents,
+          date: advance.paidOn,
+          modeLabel: 'Advance',
+          note: advance.note,
+          pendingSync: advance.pendingSync,
+          advance: advance,
         ),
-      );
-    }
-    items.sort((a, b) => b.date.compareTo(a.date));
-    return items;
+      ),
+    );
   }
 }

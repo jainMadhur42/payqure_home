@@ -12,6 +12,7 @@ import '../../domain/services/service_reminder_planner.dart';
 abstract interface class ServiceReminderScheduler {
   Stream<String> get serviceReminderTaps;
   Future<String?> consumeLaunchServiceId();
+  Future<bool> notificationsEnabled();
   Future<bool> requestPermission();
   Future<void> scheduleServices(List<HouseholdService> services);
   Future<void> cancelServiceReminders();
@@ -28,6 +29,9 @@ class NoopServiceReminderScheduler implements ServiceReminderScheduler {
 
   @override
   Future<void> cancelServiceReminders() async {}
+
+  @override
+  Future<bool> notificationsEnabled() async => false;
 
   @override
   Future<bool> requestPermission() async => false;
@@ -112,12 +116,40 @@ class LocalNotificationService implements ServiceReminderScheduler {
         .resolvePlatformSpecificImplementation<
           IOSFlutterLocalNotificationsPlugin
         >();
-    final androidGranted =
-        await android?.requestNotificationsPermission() ?? true;
-    final iosGranted =
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.android =>
+        await android?.requestNotificationsPermission() ?? false,
+      TargetPlatform.iOS =>
         await ios?.requestPermissions(alert: true, badge: true, sound: true) ??
-        true;
-    return androidGranted && iosGranted;
+            false,
+      _ => false,
+    };
+  }
+
+  @override
+  Future<bool> notificationsEnabled() async {
+    if (kIsWeb) {
+      return false;
+    }
+    await _initialize();
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.android =>
+        await _plugin
+                .resolvePlatformSpecificImplementation<
+                  AndroidFlutterLocalNotificationsPlugin
+                >()
+                ?.areNotificationsEnabled() ??
+            false,
+      TargetPlatform.iOS =>
+        (await _plugin
+                    .resolvePlatformSpecificImplementation<
+                      IOSFlutterLocalNotificationsPlugin
+                    >()
+                    ?.checkPermissions())
+                ?.isEnabled ??
+            false,
+      _ => false,
+    };
   }
 
   @override

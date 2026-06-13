@@ -12,7 +12,9 @@ The Flutter ledger prototype is now implemented as a functional local-first app 
 - Removed phone verification; phone is stored as profile/contact data only.
 - Added profile edit screen for name and phone.
 - Added Drift/SQLite schema, generated Drift code, local-first repository, local writes, pending sync flags, and remote pull/push sync.
-- Added Supabase SQL migration with `profiles`, `services`, `service_entries`, `advance_payments`, schema version metadata, helper RPCs, and RLS policies.
+- Added Supabase SQL bootstrap with `profiles`, `services`,
+  `service_month_logs`, advances, payments, settlements, schema metadata,
+  helper RPCs, and RLS policies.
 - Added real domain models for services, entries, advances, bills, profiles, and typed bill calculations.
 - Added functional service creation, entry save, advance save, dashboard updates, calendar updates, bill view, and PDF preview generation.
 - Redesigned Bills list into clean summary cards with non-wrapping `View Details` and `Record Payment` actions.
@@ -41,7 +43,9 @@ The Flutter ledger prototype is now implemented as a functional local-first app 
 
 ## External Setup Remaining
 
-- Apply `supabase/migrations/202606030001_create_ledger_schema.sql` in the Supabase project.
+- Apply
+  `supabase/migrations/202606130001_create_payqure_home_production_schema.sql`
+  in a new Supabase project.
 - Enable Supabase email/password auth and email confirmation.
 - Configure Supabase email confirmation and password recovery templates.
 - Configure app redirect/deep-link URLs in Supabase and platform settings.

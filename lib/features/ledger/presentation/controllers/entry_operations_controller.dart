@@ -153,7 +153,3 @@ class EntryOperationsController {
     return service.rateCents;
   }
 }
-
-extension _FirstOrNull<T> on Iterable<T> {
-  T? get firstOrNull => isEmpty ? null : first;
-}

@@ -2,8 +2,10 @@ import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:payqure_home/features/ledger/data/database/ledger_database.dart';
+import 'package:payqure_home/features/ledger/data/mappers/month_log_entry_codec.dart';
 import 'package:payqure_home/features/ledger/data/repositories/drift_ledger_repository.dart';
 import 'package:payqure_home/features/ledger/data/sync/supabase_ledger_remote_data_source.dart';
+import 'package:payqure_home/features/ledger/domain/entities/advance_payment.dart';
 import 'package:payqure_home/features/ledger/domain/entities/household_service.dart';
 import 'package:payqure_home/features/ledger/domain/entities/payment_transaction.dart';
 import 'package:payqure_home/features/ledger/domain/entities/service_entry.dart';
@@ -79,9 +81,14 @@ void main() {
 
       expect(optimisticEntry?.id, entry.id);
       expect(entry.amountCents, 9000);
-      final rows = await database.select(database.entryRecords).get();
-      expect(rows.single.quantity, 1.5);
-      expect(rows.single.amountCents, 9000);
+      final rows = await database.select(database.serviceMonthLogRecords).get();
+      final persistedEntries = MonthLogEntryCodec.decode(
+        entriesJson: rows.single.entriesJson,
+        serviceId: service.id,
+        monthKey: '2026-06',
+      );
+      expect(persistedEntries.single.quantity, 1.5);
+      expect(persistedEntries.single.amountCents, 9000);
     },
   );
 
@@ -115,4 +122,36 @@ void main() {
       expect(history.single.pendingSync, isTrue);
     },
   );
+
+  test('advance operations support create, update, and delete', () async {
+    final operations = PaymentOperationsController(repository);
+    final advance = AdvancePayment(
+      id: 'advance-1',
+      serviceId: service.id,
+      monthKey: '2026-06',
+      amountCents: 50000,
+      paidOn: DateTime(2026, 6, 12),
+      note: 'Cash',
+    );
+
+    await repository.saveAdvance(advance);
+    await operations.updateAdvance(
+      advance: advance,
+      amountCents: 75000,
+      paidOn: DateTime(2026, 6, 13),
+      note: 'UPI',
+    );
+
+    var history = await repository.getAdvanceHistory(serviceId: service.id);
+    expect(history.single.amountCents, 75000);
+    expect(history.single.note, 'UPI');
+
+    await operations.deleteAdvance(history.single);
+
+    history = await repository.getAdvanceHistory(serviceId: service.id);
+    expect(history, isEmpty);
+    final rows = await database.select(database.advancePaymentRecords).get();
+    expect(rows.single.isDeleted, isTrue);
+    expect(rows.single.pendingSync, isTrue);
+  });
 }

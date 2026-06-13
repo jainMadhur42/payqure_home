@@ -21,6 +21,7 @@ import '../widgets/ledger_bottom_nav.dart';
 import '../widgets/ledger_screen_shared.dart';
 import '../widgets/loading_skeleton.dart';
 import '../widgets/month_selector.dart';
+import '../widgets/quick_entry_actions.dart';
 
 import 'currency_screen.dart';
 import 'contacts_screen.dart';
@@ -50,7 +51,7 @@ class LedgerFlowScreen extends StatelessWidget {
         bottomNavigationBar: LedgerBottomNav(
           selectedIndex: _bottomNavIndex,
           onSelected: _selectBottomNav,
-          onAdd: () => _showAddActions(context),
+          onAdd: controller.startCreateService,
         ),
       );
     }
@@ -58,7 +59,7 @@ class LedgerFlowScreen extends StatelessWidget {
         controller.selectedService ??
         (overview.services.isNotEmpty ? overview.services.first : null);
 
-    return Scaffold(
+    final scaffold = Scaffold(
       appBar: controller.route == LedgerRoute.dashboard
           ? null
           : _appBar(context, selectedService),
@@ -68,6 +69,12 @@ class LedgerFlowScreen extends StatelessWidget {
           controller: controller,
         ),
         LedgerRoute.quickLog => _QuickLogView(controller: controller),
+        LedgerRoute.createServiceTemplate => ServiceTemplatePickerScreen(
+          selectedTemplateId:
+              controller.addServiceDraft?.serviceTemplateName ?? '',
+          onSelected: controller.selectServiceTemplate,
+          embedded: true,
+        ),
         LedgerRoute.createService => _CreateServiceView(controller: controller),
         LedgerRoute.createServiceReview => _CreateServiceReviewView(
           controller: controller,
@@ -104,6 +111,14 @@ class LedgerFlowScreen extends StatelessWidget {
                   controller: controller,
                   service: selectedService,
                 ),
+        LedgerRoute.serviceAdvanceHistory =>
+          selectedService == null
+              ? const _EmptyLedgerView()
+              : GlobalHistoryScreen(
+                  controller: controller,
+                  type: ServiceHistoryType.advance,
+                  service: selectedService,
+                ),
         LedgerRoute.globalPaymentHistory => GlobalHistoryScreen(
           controller: controller,
           type: ServiceHistoryType.payment,
@@ -134,9 +149,19 @@ class LedgerFlowScreen extends StatelessWidget {
           ? LedgerBottomNav(
               selectedIndex: _bottomNavIndex,
               onSelected: _selectBottomNav,
-              onAdd: () => _showAddActions(context),
+              onAdd: controller.startCreateService,
             )
           : null,
+    );
+    final isRootRoute = controller.route == LedgerRoute.dashboard;
+    return PopScope(
+      canPop: isRootRoute,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) {
+          controller.goBackTo(_backRoute());
+        }
+      },
+      child: scaffold,
     );
   }
 
@@ -163,109 +188,13 @@ class LedgerFlowScreen extends StatelessWidget {
     }
   }
 
-  void _showAddActions(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) => DraggableScrollableSheet(
-        initialChildSize: 0.52,
-        minChildSize: 0.40,
-        maxChildSize: 0.72,
-        expand: false,
-        builder: (context, scrollController) => Material(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(AppRadius.lg),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            children: [
-              const SizedBox(height: AppSpacing.sm),
-              Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  borderRadius: BorderRadius.circular(AppRadius.lg),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.lg,
-                  AppSpacing.md,
-                  AppSpacing.lg,
-                  AppSpacing.sm,
-                ),
-                child: Text(
-                  'Quick Actions',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-              Expanded(
-                child: ListView(
-                  controller: scrollController,
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.lg,
-                    AppSpacing.sm,
-                    AppSpacing.lg,
-                    AppSpacing.xl,
-                  ),
-                  children: [
-                    _AddActionTile(
-                      icon: Icons.event_available_outlined,
-                      title: 'Quick Log Today',
-                      subtitle: 'Mark today’s service status quickly',
-                      onTap: () {
-                        Navigator.pop(sheetContext);
-                        controller.openQuickLog(date: DateTime.now());
-                      },
-                    ),
-                    _AddActionTile(
-                      icon: Icons.edit_calendar_outlined,
-                      title: 'Log Past Date',
-                      subtitle: 'Update service entries for an earlier date',
-                      onTap: () async {
-                        Navigator.pop(sheetContext);
-                        final now = DateTime.now();
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: now,
-                          firstDate: DateTime(now.year - 2),
-                          lastDate: now,
-                        );
-                        if (picked != null) {
-                          controller.openQuickLog(date: picked);
-                        }
-                      },
-                    ),
-                    _AddActionTile(
-                      icon: Icons.home_repair_service_outlined,
-                      title: 'Add Service',
-                      subtitle: 'Track a new household service',
-                      onTap: () {
-                        Navigator.pop(sheetContext);
-                        controller.startCreateService();
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   PreferredSizeWidget _appBar(
     BuildContext context,
     HouseholdService? selectedService,
   ) {
     final isCreateService = controller.route == LedgerRoute.createService;
+    final isServiceTemplatePicker =
+        controller.route == LedgerRoute.createServiceTemplate;
     final isCreateServiceReview =
         controller.route == LedgerRoute.createServiceReview;
     final isServiceDetail = controller.route == LedgerRoute.calendar;
@@ -287,7 +216,9 @@ class LedgerFlowScreen extends StatelessWidget {
               icon: const Icon(Icons.arrow_back),
             ),
       title: Text(
-        isCreateService
+        isServiceTemplatePicker
+            ? 'Select Service'
+            : isCreateService
             ? controller.isEditingService
                   ? 'Edit Service'
                   : 'Add Service'
@@ -315,6 +246,8 @@ class LedgerFlowScreen extends StatelessWidget {
             ? 'Spending Stats'
             : controller.route == LedgerRoute.advanceHistory
             ? 'Advance History'
+            : controller.route == LedgerRoute.serviceAdvanceHistory
+            ? '${selectedService?.name ?? 'Service'} Advances'
             : isQuickLog
             ? 'Quick Log'
             : controller.route == LedgerRoute.more
@@ -348,7 +281,8 @@ class LedgerFlowScreen extends StatelessWidget {
       LedgerRoute.createService =>
         controller.isEditingService
             ? controller.serviceEditReturnRoute
-            : LedgerRoute.dashboard,
+            : LedgerRoute.createServiceTemplate,
+      LedgerRoute.createServiceTemplate => LedgerRoute.dashboard,
       LedgerRoute.quickLog => LedgerRoute.dashboard,
       LedgerRoute.contributionStats => LedgerRoute.dashboard,
       LedgerRoute.entry => switch (controller.entrySource) {
@@ -357,7 +291,8 @@ class LedgerFlowScreen extends StatelessWidget {
       },
       LedgerRoute.manageService => LedgerRoute.calendar,
       LedgerRoute.settlementDetail ||
-      LedgerRoute.paymentHistory => controller.serviceActionReturnRoute,
+      LedgerRoute.paymentHistory ||
+      LedgerRoute.serviceAdvanceHistory => controller.serviceActionReturnRoute,
       LedgerRoute.globalPaymentHistory ||
       LedgerRoute.advanceHistory ||
       LedgerRoute.theme => LedgerRoute.more,
@@ -374,84 +309,6 @@ class LedgerFlowScreen extends StatelessWidget {
       LedgerRoute.currency => LedgerRoute.more,
       _ => LedgerRoute.dashboard,
     };
-  }
-}
-
-class _AddActionTile extends StatelessWidget {
-  const _AddActionTile({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        child: Container(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          decoration: BoxDecoration(
-            color: colorScheme.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(AppRadius.lg),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: AppColors.primarySoft,
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                ),
-                child: Icon(icon, color: AppColors.primary, size: 21),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: colorScheme.onSurface,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Icon(
-                Icons.chevron_right,
-                color: colorScheme.onSurfaceVariant,
-                size: 20,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 }
 
@@ -537,19 +394,9 @@ class _QuickLogView extends StatelessWidget {
                 ),
               )
             else ...[
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Active Services',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () => _markAllDefaults(context, services, day),
-                    child: const Text('Mark All Defaults'),
-                  ),
-                ],
+              Text(
+                'Active Services',
+                style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: AppSpacing.sm),
               ...services.map(
@@ -628,13 +475,7 @@ class _QuickLogView extends StatelessWidget {
     int day,
   ) {
     HapticFeedback.mediumImpact();
-    for (final service in services) {
-      controller.saveQuickEntryForService(
-        service: service,
-        day: day,
-        status: ServiceEntryStatus.delivered,
-      );
-    }
+    controller.saveDefaultsForAllServices(services: services, day: day);
   }
 }
 
@@ -758,46 +599,21 @@ class _QuickLogServiceRowState extends State<_QuickLogServiceRow> {
                 ],
               ),
               const SizedBox(height: AppSpacing.sm),
-              StatusSelector(
-                options: _statusOptions(widget.service),
-                value: status,
-                onChanged: (nextStatus) {
+              QuickEntryActionGrid(
+                service: widget.service,
+                selectedStatus: status,
+                onQuickMark: (nextStatus) {
                   HapticFeedback.selectionClick();
                   _provider.select(nextStatus);
                   widget.onStatusSelected(nextStatus);
                 },
-              ),
-              SizedBox(
-                height: 32,
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: widget.onEdit,
-                    child: const Text('Edit'),
-                  ),
-                ),
+                onCustomize: widget.onEdit,
               ),
             ],
           ),
         );
       },
     );
-  }
-
-  List<StatusOption> _statusOptions(HouseholdService service) {
-    if (service.templateType == ServiceTemplateType.attendance) {
-      return const [
-        StatusOption(ServiceEntryStatus.noEntry, 'Not Logged'),
-        StatusOption(ServiceEntryStatus.delivered, 'Present'),
-        StatusOption(ServiceEntryStatus.notDelivered, 'Absent'),
-        StatusOption(ServiceEntryStatus.halfDay, 'Half Day'),
-      ];
-    }
-    return const [
-      StatusOption(ServiceEntryStatus.noEntry, 'Not Logged'),
-      StatusOption(ServiceEntryStatus.delivered, 'Delivered'),
-      StatusOption(ServiceEntryStatus.notDelivered, 'Not Delivered'),
-    ];
   }
 
   String _defaultSummary(HouseholdService service) {
@@ -837,75 +653,6 @@ class QuickLogCardProvider extends ChangeNotifier {
     }
     _status = status;
     notifyListeners();
-  }
-}
-
-class StatusOption {
-  const StatusOption(this.status, this.label);
-
-  final ServiceEntryStatus status;
-  final String label;
-}
-
-class StatusSelector extends StatelessWidget {
-  const StatusSelector({
-    required this.options,
-    required this.value,
-    required this.onChanged,
-    super.key,
-  });
-
-  final List<StatusOption> options;
-  final ServiceEntryStatus value;
-  final ValueChanged<ServiceEntryStatus> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      spacing: AppSpacing.sm,
-      runSpacing: AppSpacing.sm,
-      children: options.map((option) {
-        final selected = option.status == value;
-        final color = _statusColor(option.status);
-        return InkWell(
-          onTap: () => onChanged(option.status),
-          borderRadius: BorderRadius.circular(18),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.sm,
-              vertical: 7,
-            ),
-            decoration: BoxDecoration(
-              color: selected
-                  ? color.withValues(alpha: 0.14)
-                  : AppColors.background,
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  selected
-                      ? Icons.radio_button_checked
-                      : Icons.radio_button_unchecked,
-                  size: 16,
-                  color: selected ? color : AppColors.muted,
-                ),
-                const SizedBox(width: AppSpacing.xs),
-                Text(
-                  option.label,
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: selected ? color : AppColors.muted,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      }).toList(),
-    );
   }
 }
 

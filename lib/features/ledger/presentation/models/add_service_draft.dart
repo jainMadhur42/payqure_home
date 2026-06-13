@@ -47,6 +47,26 @@ class AddServiceDraft {
     );
   }
 
+  factory AddServiceDraft.fromTemplate(
+    ServiceTemplateDefinition template, {
+    DateTime? startDate,
+  }) {
+    return AddServiceDraft(
+      providerName: '',
+      contactNumber: '',
+      serviceTime: '',
+      remindBeforeMinutes: 0,
+      startDate: startDate ?? DateTime.now(),
+      serviceName: template.isCustom ? '' : template.title,
+      serviceTemplateName: template.id,
+      serviceIcon: template.iconIdentifier,
+      templateType: template.templateType,
+      unit: template.defaultUnit,
+      defaultQuantity: template.defaultQuantity,
+      amount: 0,
+    );
+  }
+
   final String providerName;
   final String contactNumber;
   final String serviceTime;

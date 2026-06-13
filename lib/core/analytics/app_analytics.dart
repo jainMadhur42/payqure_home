@@ -5,6 +5,8 @@ import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../firebase_options.dart';
+
 abstract final class AnalyticsEvents {
   static const signUpStarted = 'sign_up_started';
   static const signUpCompleted = 'sign_up_completed';
@@ -112,22 +114,32 @@ class AppAnalytics {
 
   factory AppAnalytics.disabled() => AppAnalytics._(enabled: false);
 
-  static Future<AppAnalytics> initialize() async {
+  static Future<AppAnalytics> initialize({
+    bool analyticsEnabled = true,
+    bool crashlyticsEnabled = true,
+  }) async {
     try {
       if (Firebase.apps.isEmpty) {
-        await Firebase.initializeApp();
+        await Firebase.initializeApp(
+          options: DefaultFirebaseOptions.currentPlatform,
+        );
       }
+      final analytics = FirebaseAnalytics.instance;
       final crashlytics = FirebaseCrashlytics.instance;
-      FlutterError.onError = (details) {
-        unawaited(crashlytics.recordFlutterFatalError(details));
-      };
-      PlatformDispatcher.instance.onError = (error, stack) {
-        unawaited(crashlytics.recordError(error, stack, fatal: true));
-        return true;
-      };
+      await analytics.setAnalyticsCollectionEnabled(analyticsEnabled);
+      await crashlytics.setCrashlyticsCollectionEnabled(crashlyticsEnabled);
+      if (crashlyticsEnabled) {
+        FlutterError.onError = (details) {
+          unawaited(crashlytics.recordFlutterFatalError(details));
+        };
+        PlatformDispatcher.instance.onError = (error, stack) {
+          unawaited(crashlytics.recordError(error, stack, fatal: true));
+          return true;
+        };
+      }
       return AppAnalytics._(
-        analytics: FirebaseAnalytics.instance,
-        crashlytics: crashlytics,
+        analytics: analyticsEnabled ? analytics : null,
+        crashlytics: crashlyticsEnabled ? crashlytics : null,
       );
     } catch (error, stackTrace) {
       if (kDebugMode) {

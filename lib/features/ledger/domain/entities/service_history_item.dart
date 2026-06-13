@@ -1,3 +1,4 @@
+import 'advance_payment.dart';
 import 'household_service.dart';
 import 'payment_transaction.dart';
 
@@ -14,6 +15,7 @@ class ServiceHistoryItem {
     required this.note,
     required this.pendingSync,
     this.payment,
+    this.advance,
   });
 
   final String id;
@@ -25,4 +27,5 @@ class ServiceHistoryItem {
   final String note;
   final bool pendingSync;
   final PaymentTransaction? payment;
+  final AdvancePayment? advance;
 }

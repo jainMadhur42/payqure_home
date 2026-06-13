@@ -71,9 +71,19 @@ class ManageServiceScreen extends StatelessWidget {
             ManageServiceActionTile(
               icon: Icons.history_outlined,
               title: 'Transaction History',
-              subtitle: 'Payments and credits',
+              subtitle: 'Recorded service payments',
               tintColor: AppColors.info,
               onTap: () => controller.openPaymentHistory(
+                service,
+                returnRoute: LedgerRoute.manageService,
+              ),
+            ),
+            ManageServiceActionTile(
+              icon: Icons.savings_outlined,
+              title: 'Advance History',
+              subtitle: 'Advance and credit payments',
+              tintColor: AppColors.info,
+              onTap: () => controller.openAdvanceHistory(
                 service,
                 returnRoute: LedgerRoute.manageService,
               ),
@@ -151,13 +161,7 @@ class ManageServiceScreen extends StatelessWidget {
         serviceName: service.name,
         month: controller.overview?.monthLabel ?? service.monthKey,
         title: 'Add Credit',
-        onSaved: () {
-          ScaffoldMessenger.of(context)
-            ..hideCurrentSnackBar()
-            ..showSnackBar(
-              const SnackBar(content: Text('Credit added successfully.')),
-            );
-        },
+        onSaved: () {},
       ),
     );
   }

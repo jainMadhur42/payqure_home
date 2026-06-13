@@ -15,6 +15,7 @@ import '../../domain/services/entry_value_resolver.dart';
 import '../controllers/ledger_controller.dart';
 import '../widgets/ledger_calendar.dart';
 import '../widgets/ledger_screen_shared.dart';
+import '../widgets/quick_entry_actions.dart';
 import '../widgets/record_payment_bottom_sheet.dart';
 import '../widgets/service_quick_actions_sheet.dart';
 import '../widgets/service_icon.dart';
@@ -68,6 +69,7 @@ class ServiceDetailScreen extends StatelessWidget {
             const SizedBox(height: AppSpacing.md),
             QuickEntryActionCard(
               service: service,
+              selectedStatus: selectedEntry?.status,
               onQuickMark: (status) =>
                   _saveQuickAction(day: controller.selectedDay, status: status),
               onCustomize: () => controller.customizeEntryForService(
@@ -192,12 +194,12 @@ class ServiceDetailScreen extends StatelessWidget {
       );
   }
 
-  void _saveQuickAction({
+  Future<void> _saveQuickAction({
     required int day,
     required ServiceEntryStatus status,
-  }) {
+  }) async {
     HapticFeedback.lightImpact();
-    controller.saveQuickEntryForService(
+    await controller.saveQuickEntryForService(
       service: service,
       day: day,
       status: status,
@@ -325,117 +327,6 @@ class _LoggedEntryDetails extends StatelessWidget {
         ),
         if (entry.note.isNotEmpty) DetailRow(label: 'Note', value: entry.note),
       ],
-    );
-  }
-}
-
-class QuickEntryActionCard extends StatelessWidget {
-  const QuickEntryActionCard({
-    required this.service,
-    required this.onQuickMark,
-    required this.onCustomize,
-    super.key,
-  });
-
-  final HouseholdService service;
-  final ValueChanged<ServiceEntryStatus> onQuickMark;
-  final VoidCallback onCustomize;
-
-  @override
-  Widget build(BuildContext context) {
-    final deliveredLabel =
-        service.templateType == ServiceTemplateType.attendance
-        ? 'Present'
-        : 'Delivered';
-    final missedLabel = service.templateType == ServiceTemplateType.attendance
-        ? 'Absent'
-        : 'Not Delivered';
-    return AppCard(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Log Entry',
-            style: Theme.of(
-              context,
-            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Row(
-            children: [
-              Expanded(
-                child: _QuickEntryButton(
-                  label: deliveredLabel,
-                  onPressed: () => onQuickMark(ServiceEntryStatus.delivered),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: _QuickEntryButton(
-                  label: missedLabel,
-                  onPressed: () => onQuickMark(ServiceEntryStatus.notDelivered),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          if (service.templateType == ServiceTemplateType.attendance)
-            Row(
-              children: [
-                Expanded(
-                  child: _QuickEntryButton(
-                    label: 'Half Day',
-                    onPressed: () => onQuickMark(ServiceEntryStatus.halfDay),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: _QuickEntryButton(
-                    label: 'Customize',
-                    onPressed: onCustomize,
-                    outlined: true,
-                  ),
-                ),
-              ],
-            )
-          else
-            _QuickEntryButton(
-              label: 'Customize',
-              onPressed: onCustomize,
-              outlined: true,
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _QuickEntryButton extends StatelessWidget {
-  const _QuickEntryButton({
-    required this.label,
-    required this.onPressed,
-    this.outlined = false,
-  });
-
-  final String label;
-  final VoidCallback onPressed;
-  final bool outlined;
-
-  @override
-  Widget build(BuildContext context) {
-    final labelWidget = Text(
-      label,
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-      textAlign: TextAlign.center,
-    );
-    return SizedBox(
-      width: double.infinity,
-      height: 48,
-      child: outlined
-          ? OutlinedButton(onPressed: onPressed, child: labelWidget)
-          : FilledButton.tonal(onPressed: onPressed, child: labelWidget),
     );
   }
 }
@@ -909,19 +800,22 @@ class EntryViewState extends State<EntryView> {
           child: SizedBox(
             height: 52,
             child: FilledButton(
-              onPressed: () => widget.controller.saveSelectedEntry(
-                status: _status,
-                quantity: _effectiveQuantity,
-                unit: widget.service.unit,
-                rateCents: ((double.tryParse(_rateController.text) ?? 0) * 100)
-                    .round(),
-                note: _noteController.text,
-              ),
+              onPressed: () => _saveEntry(context),
               child: const Center(child: Text('Save Entry')),
             ),
           ),
         ),
       ],
+    );
+  }
+
+  Future<void> _saveEntry(BuildContext context) async {
+    await widget.controller.saveSelectedEntry(
+      status: _status,
+      quantity: _effectiveQuantity,
+      unit: widget.service.unit,
+      rateCents: ((double.tryParse(_rateController.text) ?? 0) * 100).round(),
+      note: _noteController.text,
     );
   }
 
@@ -1045,10 +939,14 @@ class _EntryStatusButton extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
           foregroundColor: selected
               ? colorScheme.onPrimary
-              : colorScheme.onSurface,
-          backgroundColor: selected ? colorScheme.primary : colorScheme.surface,
+              : colorScheme.primary,
+          backgroundColor: selected
+              ? colorScheme.primary
+              : colorScheme.primary.withValues(alpha: 0.10),
           side: BorderSide(
-            color: selected ? colorScheme.primary : colorScheme.outlineVariant,
+            color: selected
+                ? colorScheme.primary
+                : colorScheme.primary.withValues(alpha: 0.24),
           ),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadius.md),

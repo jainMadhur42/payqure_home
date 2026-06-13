@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,7 +9,11 @@ import 'package:payqure_home/features/ledger/data/database/ledger_database.dart'
 import 'package:payqure_home/features/ledger/data/repositories/drift_ledger_repository.dart';
 import 'package:payqure_home/features/ledger/data/repositories/supabase_auth_repository.dart';
 import 'package:payqure_home/features/ledger/data/services/pdf_statement_service.dart';
+import 'package:payqure_home/features/ledger/data/services/local_notification_service.dart';
 import 'package:payqure_home/features/ledger/data/sync/supabase_ledger_remote_data_source.dart';
+import 'package:payqure_home/features/ledger/domain/entities/app_route.dart';
+import 'package:payqure_home/features/ledger/domain/entities/household_service.dart';
+import 'package:payqure_home/features/ledger/domain/entities/service_template.dart';
 import 'package:payqure_home/features/ledger/presentation/controllers/ledger_controller.dart';
 import 'package:payqure_home/features/ledger/presentation/screens/login_screen.dart';
 import 'package:payqure_home/features/ledger/presentation/screens/splash_screen.dart';
@@ -134,4 +140,86 @@ void main() {
 
     expect(restoredController.selectedThemeMode, ThemeMode.dark);
   });
+
+  test('notification tap opens its service from a different month', () async {
+    final database = LedgerDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final scheduler = _FakeReminderScheduler();
+    final controller = LedgerController(
+      authRepository: SupabaseAuthRepository(client: null),
+      ledgerRepository: DriftLedgerRepository(
+        database: database,
+        remoteDataSource: SupabaseLedgerRemoteDataSource(null),
+      ),
+      pdfStatementService: const PdfStatementService(),
+      reminderScheduler: scheduler,
+    );
+    addTearDown(controller.dispose);
+    addTearDown(scheduler.dispose);
+
+    await controller.signIn(
+      identifier: 'local@payqure.local',
+      password: 'password123',
+    );
+    await controller.createService(
+      name: 'Milkman',
+      description: '',
+      icon: 'milkman',
+      templateType: ServiceTemplateType.quantity,
+      unit: 'L',
+      defaultQuantity: 1,
+      rateCents: 6000,
+      monthlyAmountCents: 0,
+      routeAfterSave: LedgerRoute.dashboard,
+    );
+    final serviceId = controller.selectedService!.id;
+
+    await controller.goToPreviousMonth();
+    expect(controller.monthKey, isNot(LedgerController.defaultMonthKey()));
+
+    scheduler.tap(serviceId);
+    await _waitFor(
+      () =>
+          controller.route == LedgerRoute.calendar &&
+          controller.selectedService?.id == serviceId,
+    );
+
+    expect(controller.monthKey, LedgerController.defaultMonthKey());
+    expect(controller.route, LedgerRoute.calendar);
+    expect(controller.selectedService?.id, serviceId);
+  });
+}
+
+Future<void> _waitFor(bool Function() condition) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 2));
+  while (!condition() && DateTime.now().isBefore(deadline)) {
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
+  expect(condition(), isTrue);
+}
+
+class _FakeReminderScheduler implements ServiceReminderScheduler {
+  final StreamController<String> _taps = StreamController<String>.broadcast();
+
+  @override
+  Stream<String> get serviceReminderTaps => _taps.stream;
+
+  void tap(String serviceId) => _taps.add(serviceId);
+
+  Future<void> dispose() => _taps.close();
+
+  @override
+  Future<void> cancelServiceReminders() async {}
+
+  @override
+  Future<String?> consumeLaunchServiceId() async => null;
+
+  @override
+  Future<bool> notificationsEnabled() async => false;
+
+  @override
+  Future<bool> requestPermission() async => false;
+
+  @override
+  Future<void> scheduleServices(List<HouseholdService> services) async {}
 }

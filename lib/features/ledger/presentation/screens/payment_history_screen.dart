@@ -9,6 +9,7 @@ import '../../../../core/utils/currency_formatter.dart';
 import '../../domain/entities/household_service.dart';
 import '../../domain/entities/payment_transaction.dart';
 import '../../domain/entities/service_template.dart';
+import '../../domain/services/history_sorter.dart';
 import '../controllers/ledger_controller.dart';
 import '../widgets/ledger_screen_shared.dart';
 import '../widgets/record_payment_bottom_sheet.dart';
@@ -68,7 +69,9 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
     return FutureBuilder<List<PaymentTransaction>>(
       future: _future,
       builder: (context, snapshot) {
-        final payments = snapshot.data ?? _payments;
+        final payments = HistorySorter.paymentsNewestFirst(
+          snapshot.data ?? _payments,
+        );
         if (!_loadedOnce &&
             snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
@@ -101,7 +104,9 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
 
         final grouped = <String, List<PaymentTransaction>>{};
         for (final payment in payments) {
-          grouped.putIfAbsent(payment.monthKey, () => []).add(payment);
+          grouped
+              .putIfAbsent(monthKeyForDate(payment.paymentDate), () => [])
+              .add(payment);
         }
 
         return ListView(

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/utils/currency_formatter.dart';
+import '../../domain/entities/advance_payment.dart';
 import '../controllers/ledger_controller.dart';
 import 'ledger_screen_shared.dart';
 
@@ -14,6 +15,7 @@ class AddAdvanceBottomSheet extends StatefulWidget {
     required this.month,
     required this.onSaved,
     this.title = 'Add Advance',
+    this.advance,
     super.key,
   });
 
@@ -23,6 +25,7 @@ class AddAdvanceBottomSheet extends StatefulWidget {
   final String month;
   final VoidCallback onSaved;
   final String title;
+  final AdvancePayment? advance;
 
   @override
   State<AddAdvanceBottomSheet> createState() => _AddAdvanceBottomSheetState();
@@ -31,11 +34,25 @@ class AddAdvanceBottomSheet extends StatefulWidget {
 class _AddAdvanceBottomSheetState extends State<AddAdvanceBottomSheet> {
   static const _maximumAmountDigits = 7;
 
-  final _amountController = TextEditingController(text: '500');
-  final _noteController = TextEditingController();
-  DateTime _paymentDate = DateTime.now();
+  late final TextEditingController _amountController;
+  late final TextEditingController _noteController;
+  late DateTime _paymentDate;
   String _paymentMode = 'Cash';
   String? _amountError;
+
+  @override
+  void initState() {
+    super.initState();
+    final advance = widget.advance;
+    _amountController = TextEditingController(
+      text: advance == null ? '500' : _formatAmount(advance.amountCents / 100),
+    );
+    _noteController = TextEditingController(
+      text: _noteWithoutPaymentMode(advance?.note ?? ''),
+    );
+    _paymentDate = advance?.paidOn ?? DateTime.now();
+    _paymentMode = _paymentModeFromNote(advance?.note ?? '');
+  }
 
   @override
   void dispose() {
@@ -135,7 +152,9 @@ class _AddAdvanceBottomSheetState extends State<AddAdvanceBottomSheet> {
                 height: 48,
                 child: FilledButton(
                   onPressed: _save,
-                  child: const Text('Save Advance'),
+                  child: Text(
+                    widget.advance == null ? 'Save Advance' : 'Update Advance',
+                  ),
                 ),
               ),
               Center(
@@ -178,19 +197,56 @@ class _AddAdvanceBottomSheetState extends State<AddAdvanceBottomSheet> {
     }
     setState(() => _amountError = null);
     final note = _noteController.text.trim();
-    await widget.controller.saveAdvance(
-      amountCents: (amount * 100).round(),
-      paidOn: _paymentDate,
-      note: [
-        if (note.isNotEmpty) note,
-        'Payment mode: $_paymentMode',
-      ].join(' · '),
-    );
+    final savedNote = [
+      if (note.isNotEmpty) note,
+      'Payment mode: $_paymentMode',
+    ].join(' · ');
+    final advance = widget.advance;
+    if (advance == null) {
+      await widget.controller.saveAdvance(
+        amountCents: (amount * 100).round(),
+        paidOn: _paymentDate,
+        note: savedNote,
+      );
+    } else {
+      await widget.controller.updateAdvance(
+        advance: advance,
+        amountCents: (amount * 100).round(),
+        paidOn: _paymentDate,
+        note: savedNote,
+      );
+    }
     if (!mounted) {
       return;
     }
     Navigator.of(context).pop();
     widget.onSaved();
+  }
+
+  String _formatAmount(double amount) {
+    if (amount.truncateToDouble() == amount) {
+      return amount.toStringAsFixed(0);
+    }
+    return amount.toStringAsFixed(2);
+  }
+
+  String _noteWithoutPaymentMode(String note) {
+    return note
+        .split(' · ')
+        .where((part) => !part.startsWith('Payment mode: '))
+        .join(' · ');
+  }
+
+  String _paymentModeFromNote(String note) {
+    for (final part in note.split(' · ')) {
+      if (part.startsWith('Payment mode: ')) {
+        final mode = part.substring('Payment mode: '.length);
+        if (const ['Cash', 'UPI', 'Other'].contains(mode)) {
+          return mode;
+        }
+      }
+    }
+    return 'Cash';
   }
 
   void _validateAmountLength(String value) {

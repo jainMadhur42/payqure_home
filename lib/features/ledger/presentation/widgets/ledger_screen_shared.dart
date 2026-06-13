@@ -9,10 +9,6 @@ import '../../domain/entities/service_metadata.dart';
 import '../../domain/entities/service_entry.dart';
 import '../../domain/entities/service_template.dart';
 
-extension FirstOrNull<T> on Iterable<T> {
-  T? get firstOrNull => isEmpty ? null : first;
-}
-
 extension ServiceEntryStatusLabel on ServiceEntryStatus {
   String get label {
     return switch (this) {

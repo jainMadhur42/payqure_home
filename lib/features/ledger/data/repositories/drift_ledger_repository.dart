@@ -145,14 +145,6 @@ class DriftLedgerRepository implements LedgerRepository {
           ..where((table) => table.userId.equals(userId));
         final settlements = _database.select(_database.monthlySettlementRecords)
           ..where((table) => table.userId.equals(userId));
-        final entries = _database.select(_database.entryRecords).join([
-          innerJoin(
-            _database.serviceRecords,
-            _database.serviceRecords.id.equalsExp(
-              _database.entryRecords.serviceId,
-            ),
-          ),
-        ])..where(_database.serviceRecords.userId.equals(userId));
         final monthLogs =
             _database.select(_database.serviceMonthLogRecords).join([
               innerJoin(
@@ -174,7 +166,6 @@ class DriftLedgerRepository implements LedgerRepository {
 
         subscriptions
           ..add(services.watch().listen(emit, onError: emitError))
-          ..add(entries.watch().listen(emit, onError: emitError))
           ..add(monthLogs.watch().listen(emit, onError: emitError))
           ..add(advances.watch().listen(emit, onError: emitError))
           ..add(payments.watch().listen(emit, onError: emitError))
@@ -370,11 +361,7 @@ class DriftLedgerRepository implements LedgerRepository {
                 ))
                 .getSingleOrNull();
         final entriesJson = MonthLogEntryCodec.upsert(
-          entriesJson:
-              existing?.entriesJson ??
-              MonthLogEntryCodec.encode(
-                await _loadLegacyEntries(entry.serviceId, entry.monthKey),
-              ),
+          entriesJson: existing?.entriesJson ?? MonthLogEntryCodec.emptyJson(),
           entry: updatedEntry,
         );
         await _database
@@ -421,6 +408,32 @@ class DriftLedgerRepository implements LedgerRepository {
                 pendingSync: const Value(true),
               ),
             );
+        await _reallocatePayments(
+          serviceId: advance.serviceId,
+          monthKey: advance.monthKey,
+        );
+        await _recalculateSettlement(
+          serviceId: advance.serviceId,
+          monthKey: advance.monthKey,
+        );
+      });
+    });
+    _scheduleSync();
+  }
+
+  @override
+  Future<void> deleteAdvance(AdvancePayment advance) async {
+    await _runForService(advance.serviceId, () async {
+      await _database.transaction(() async {
+        await (_database.update(
+          _database.advancePaymentRecords,
+        )..where((table) => table.id.equals(advance.id))).write(
+          AdvancePaymentRecordsCompanion(
+            isDeleted: const Value(true),
+            updatedAt: Value(DateTime.now()),
+            pendingSync: const Value(true),
+          ),
+        );
         await _reallocatePayments(
           serviceId: advance.serviceId,
           monthKey: advance.monthKey,
@@ -599,8 +612,9 @@ class DriftLedgerRepository implements LedgerRepository {
                     table.isDeleted.equals(false),
               )
               ..orderBy([
-                (table) => OrderingTerm.desc(table.monthKey),
                 (table) => OrderingTerm.desc(table.paymentDate),
+                (table) => OrderingTerm.desc(table.updatedAt),
+                (table) => OrderingTerm.desc(table.id),
               ]))
             .get();
     return rows.map((row) => row.toDomain()).toList();
@@ -1291,40 +1305,15 @@ class DriftLedgerRepository implements LedgerRepository {
                   table.isDeleted.equals(false),
             ))
             .getSingleOrNull();
-    final entriesByDay = <int, ServiceEntry>{
-      for (final entry in await _loadLegacyEntries(serviceId, monthKey))
-        entry.day: entry,
-    };
-    if (log != null) {
-      for (final entry in MonthLogEntryCodec.decode(
-        entriesJson: log.entriesJson,
-        serviceId: serviceId,
-        monthKey: monthKey,
-        pendingSync: log.pendingSync,
-      )) {
-        entriesByDay[entry.day] = entry;
-      }
+    if (log == null) {
+      return const [];
     }
-    final entries = entriesByDay.values.toList()
-      ..sort((a, b) => a.day.compareTo(b.day));
-    return entries;
-  }
-
-  Future<List<ServiceEntry>> _loadLegacyEntries(
-    String serviceId,
-    String monthKey,
-  ) async {
-    final rows =
-        await (_database.select(_database.entryRecords)
-              ..where(
-                (table) =>
-                    table.serviceId.equals(serviceId) &
-                    table.monthKey.equals(monthKey) &
-                    table.isDeleted.equals(false),
-              )
-              ..orderBy([(table) => OrderingTerm.asc(table.day)]))
-            .get();
-    return rows.map((row) => row.toDomain()).toList();
+    return MonthLogEntryCodec.decode(
+      entriesJson: log.entriesJson,
+      serviceId: serviceId,
+      monthKey: monthKey,
+      pendingSync: log.pendingSync,
+    );
   }
 
   String _monthLogId(String serviceId, String monthKey) {

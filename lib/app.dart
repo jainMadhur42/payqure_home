@@ -32,7 +32,8 @@ class PayqureHomeApp extends StatefulWidget {
   State<PayqureHomeApp> createState() => _PayqureHomeAppState();
 }
 
-class _PayqureHomeAppState extends State<PayqureHomeApp> {
+class _PayqureHomeAppState extends State<PayqureHomeApp>
+    with WidgetsBindingObserver {
   late final LedgerController _controller;
   late final LedgerDatabase _database;
   late final SupabaseAuthRepository _authRepository;
@@ -41,6 +42,7 @@ class _PayqureHomeAppState extends State<PayqureHomeApp> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _ownsDatabase = widget.database == null;
     _database = widget.database ?? LedgerDatabase.defaults();
     _authRepository = SupabaseAuthRepository(client: widget.supabaseClient);
@@ -62,12 +64,20 @@ class _PayqureHomeAppState extends State<PayqureHomeApp> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _controller.dispose();
     unawaited(_authRepository.dispose());
     if (_ownsDatabase) {
       unawaited(_database.close());
     }
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_controller.restoreServiceReminders(force: true));
+    }
   }
 
   @override

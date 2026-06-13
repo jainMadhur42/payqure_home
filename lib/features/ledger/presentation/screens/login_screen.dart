@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -41,7 +43,6 @@ class _LoginScreenState extends State<LoginScreen> {
       children: [
         Form(
           key: _formKey,
-          autovalidateMode: AutovalidateMode.onUserInteraction,
           child: Column(
             children: [
               _LabeledField(
@@ -137,7 +138,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
       children: [
         Form(
           key: _formKey,
-          autovalidateMode: AutovalidateMode.onUserInteraction,
           child: Column(
             children: [
               _LabeledField(
@@ -257,6 +257,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _emailController;
   final _otpController = TextEditingController();
+  Timer? _resendCooldownTimer;
 
   @override
   void initState() {
@@ -266,10 +267,12 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
           ? widget.controller.pendingVerificationEmail
           : widget.controller.profile?.email ?? '',
     );
+    _startResendCooldownTicker();
   }
 
   @override
   void dispose() {
+    _resendCooldownTimer?.cancel();
     _emailController.dispose();
     _otpController.dispose();
     super.dispose();
@@ -277,6 +280,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final resendRemaining = widget.controller.emailVerificationResendRemaining;
     return _AuthScaffold(
       title: 'Verify your email',
       subtitle: 'Enter the OTP sent to your email',
@@ -285,12 +289,12 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
       children: [
         Form(
           key: _formKey,
-          autovalidateMode: AutovalidateMode.onUserInteraction,
           child: Column(
             children: [
               _LabeledField(
                 label: 'Email',
                 controller: _emailController,
+                readOnly: true,
                 validator: AuthValidators.email,
               ),
               const SizedBox(height: AppSpacing.md),
@@ -319,8 +323,23 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
         ),
         const SizedBox(height: AppSpacing.sm),
         TextButton(
-          onPressed: widget.controller.resendEmailVerification,
-          child: const Text('Resend OTP'),
+          key: const ValueKey('resend-verification-otp'),
+          onPressed:
+              widget.controller.isLoading || resendRemaining > Duration.zero
+              ? null
+              : () async {
+                  await widget.controller.resendEmailVerification();
+                  if (!mounted) {
+                    return;
+                  }
+                  _startResendCooldownTicker();
+                  setState(() {});
+                },
+          child: Text(
+            resendRemaining > Duration.zero
+                ? 'Resend OTP in ${_formatCooldown(resendRemaining)}'
+                : 'Resend OTP',
+          ),
         ),
         const _OtpLimitNotice(),
         TextButton(
@@ -329,6 +348,29 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
         ),
       ],
     );
+  }
+
+  void _startResendCooldownTicker() {
+    _resendCooldownTimer?.cancel();
+    if (widget.controller.emailVerificationResendRemaining == Duration.zero) {
+      return;
+    }
+    _resendCooldownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) {
+        return;
+      }
+      if (widget.controller.emailVerificationResendRemaining == Duration.zero) {
+        _resendCooldownTimer?.cancel();
+      }
+      setState(() {});
+    });
+  }
+
+  String _formatCooldown(Duration duration) {
+    final totalSeconds = (duration.inMilliseconds / 1000).ceil();
+    final minutes = totalSeconds ~/ 60;
+    final seconds = totalSeconds % 60;
+    return '$minutes:${seconds.toString().padLeft(2, '0')}';
   }
 }
 
@@ -365,7 +407,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       children: [
         Form(
           key: _formKey,
-          autovalidateMode: AutovalidateMode.onUserInteraction,
           child: _LabeledField(
             label: 'Email or Phone',
             controller: _emailController,
@@ -433,12 +474,12 @@ class _ResetPasswordOtpScreenState extends State<ResetPasswordOtpScreen> {
       children: [
         Form(
           key: _formKey,
-          autovalidateMode: AutovalidateMode.onUserInteraction,
           child: Column(
             children: [
               _LabeledField(
                 label: 'Email',
                 controller: _emailController,
+                readOnly: true,
                 validator: AuthValidators.email,
               ),
               const SizedBox(height: AppSpacing.md),
@@ -627,6 +668,7 @@ class _LabeledField extends StatefulWidget {
     required this.controller,
     this.hintText,
     this.obscureText = false,
+    this.readOnly = false,
     this.validator,
   });
 
@@ -634,6 +676,7 @@ class _LabeledField extends StatefulWidget {
   final TextEditingController controller;
   final String? hintText;
   final bool obscureText;
+  final bool readOnly;
   final FormFieldValidator<String>? validator;
 
   @override
@@ -666,14 +709,21 @@ class _LabeledFieldState extends State<_LabeledField> {
         const SizedBox(height: AppSpacing.sm),
         TextFormField(
           controller: widget.controller,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           obscureText: widget.obscureText && _isObscured,
+          readOnly: widget.readOnly,
           validator: widget.validator,
           scrollPadding: const EdgeInsets.only(bottom: 120),
           enableSuggestions: !widget.obscureText,
           autocorrect: !widget.obscureText,
           decoration: InputDecoration(
             hintText: widget.hintText ?? widget.label,
-            suffixIcon: widget.obscureText
+            suffixIcon: widget.readOnly
+                ? const Icon(
+                    Icons.lock_outline,
+                    semanticLabel: 'Email cannot be edited',
+                  )
+                : widget.obscureText
                 ? IconButton(
                     key: ValueKey(
                       '${widget.label.toLowerCase().replaceAll(' ', '-')}-visibility',

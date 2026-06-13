@@ -54,19 +54,6 @@ class DriftLedgerSyncService {
       );
     }
 
-    final entries = await (_database.select(
-      _database.entryRecords,
-    )..where((table) => table.pendingSync.equals(true))).get();
-    for (final row in entries) {
-      if (localServiceIds.contains(row.serviceId)) {
-        continue;
-      }
-      await _remoteDataSource.pushEntry(row);
-      await (_database.update(_database.entryRecords)
-            ..where((table) => table.id.equals(row.id)))
-          .write(const EntryRecordsCompanion(pendingSync: Value(false)));
-    }
-
     final advances = await (_database.select(
       _database.advancePaymentRecords,
     )..where((table) => table.pendingSync.equals(true))).get();
@@ -120,22 +107,19 @@ class DriftLedgerSyncService {
     final results = await Future.wait<Object>([
       _remoteDataSource.fetchServices(userId: userId, monthKey: monthKey),
       _remoteDataSource.fetchMonthLogs(monthKey: monthKey),
-      _remoteDataSource.fetchEntries(monthKey: monthKey),
       _remoteDataSource.fetchAdvances(monthKey: monthKey),
       _remoteDataSource.fetchPayments(monthKey: monthKey),
       _remoteDataSource.fetchSettlements(monthKey: monthKey),
     ]);
     final services = results[0] as List<Map<String, dynamic>>;
     final monthLogs = results[1] as List<Map<String, dynamic>>;
-    final entries = results[2] as List<Map<String, dynamic>>;
-    final advances = results[3] as List<Map<String, dynamic>>;
-    final payments = results[4] as List<Map<String, dynamic>>;
-    final settlements = results[5] as List<Map<String, dynamic>>;
+    final advances = results[2] as List<Map<String, dynamic>>;
+    final payments = results[3] as List<Map<String, dynamic>>;
+    final settlements = results[4] as List<Map<String, dynamic>>;
 
     await _database.transaction(() async {
       await _mergeServices(services);
       await _mergeMonthLogs(monthLogs);
-      await _mergeEntries(entries);
       await _mergeAdvances(advances);
       await _mergePayments(payments);
       await _mergeSettlements(settlements);
@@ -213,39 +197,6 @@ class DriftLedgerSyncService {
               monthlyAmountCents: Value(_int(row['monthly_amount_cents'])),
               updatedAt: updatedAt,
               pendingSync: Value(effectiveMonthKey != storedMonthKey),
-              isDeleted: Value(_bool(row['is_deleted'])),
-            ),
-          );
-    }
-  }
-
-  Future<void> _mergeEntries(List<Map<String, dynamic>> rows) async {
-    for (final row in rows) {
-      final updatedAt = _date(row['updated_at']);
-      final id = row['id'].toString();
-      if (!await _shouldApplyRemote(
-        id: id,
-        remoteUpdatedAt: updatedAt,
-        localState: _entrySyncState,
-      )) {
-        continue;
-      }
-      await _database
-          .into(_database.entryRecords)
-          .insertOnConflictUpdate(
-            EntryRecordsCompanion.insert(
-              id: id,
-              serviceId: row['service_id'].toString(),
-              monthKey: row['month_key'].toString(),
-              day: _int(row['day']),
-              status: row['status'].toString(),
-              quantity: Value(_double(row['quantity'], 0)),
-              unit: Value(row['unit']?.toString() ?? ''),
-              rateCents: Value(_int(row['rate_cents'])),
-              amountCents: Value(_int(row['amount_cents'])),
-              note: Value(row['note']?.toString() ?? ''),
-              updatedAt: updatedAt,
-              pendingSync: const Value(false),
               isDeleted: Value(_bool(row['is_deleted'])),
             ),
           );
@@ -415,14 +366,6 @@ class DriftLedgerSyncService {
         ),
       );
       await (_database.update(
-        _database.entryRecords,
-      )..where((table) => table.serviceId.isIn(serviceIds))).write(
-        EntryRecordsCompanion(
-          updatedAt: Value(now),
-          pendingSync: const Value(true),
-        ),
-      );
-      await (_database.update(
         _database.serviceMonthLogRecords,
       )..where((table) => table.serviceId.isIn(serviceIds))).write(
         ServiceMonthLogRecordsCompanion(
@@ -457,52 +400,40 @@ class DriftLedgerSyncService {
       return;
     }
 
-    final monthLogs = await (_database.select(_database.serviceMonthLogRecords)
-          ..where(
-            (table) =>
-                table.serviceId.isIn(serviceIds) &
-                table.pendingSync.equals(true),
-          ))
-        .get();
+    final monthLogs =
+        await (_database.select(_database.serviceMonthLogRecords)..where(
+              (table) =>
+                  table.serviceId.isIn(serviceIds) &
+                  table.pendingSync.equals(true),
+            ))
+            .get();
     await _remoteDataSource.pushMonthLogs(monthLogs);
     await _clearMonthLogPendingSync(monthLogs.map((row) => row.id));
 
-    final entries = await (_database.select(_database.entryRecords)
-          ..where(
-            (table) =>
-                table.serviceId.isIn(serviceIds) &
-                table.pendingSync.equals(true),
-          ))
-        .get();
-    await _remoteDataSource.pushEntries(entries);
-    await _clearEntryPendingSync(entries.map((row) => row.id));
-
-    final advances = await (_database.select(_database.advancePaymentRecords)
-          ..where(
-            (table) =>
-                table.serviceId.isIn(serviceIds) &
-                table.pendingSync.equals(true),
-          ))
-        .get();
+    final advances =
+        await (_database.select(_database.advancePaymentRecords)..where(
+              (table) =>
+                  table.serviceId.isIn(serviceIds) &
+                  table.pendingSync.equals(true),
+            ))
+            .get();
     await _remoteDataSource.pushAdvances(advances);
     await _clearAdvancePendingSync(advances.map((row) => row.id));
 
-    final payments = await (_database.select(_database.paymentTransactionRecords)
-          ..where(
-            (table) =>
-                table.userId.equals(userId) & table.pendingSync.equals(true),
-          ))
-        .get();
+    final payments =
+        await (_database.select(_database.paymentTransactionRecords)..where(
+              (table) =>
+                  table.userId.equals(userId) & table.pendingSync.equals(true),
+            ))
+            .get();
     await _remoteDataSource.pushPayments(payments);
     await _clearPaymentPendingSync(payments.map((row) => row.id));
 
     final settlements =
-        await (_database.select(_database.monthlySettlementRecords)
-              ..where(
-                (table) =>
-                    table.userId.equals(userId) &
-                    table.pendingSync.equals(true),
-              ))
+        await (_database.select(_database.monthlySettlementRecords)..where(
+              (table) =>
+                  table.userId.equals(userId) & table.pendingSync.equals(true),
+            ))
             .get();
     await _remoteDataSource.pushSettlements(settlements);
     await _clearSettlementPendingSync(settlements.map((row) => row.id));
@@ -521,20 +452,11 @@ class DriftLedgerSyncService {
     if (ids.isEmpty) {
       return;
     }
-    await (_database.update(_database.serviceMonthLogRecords)
-          ..where((table) => table.id.isIn(ids.toList())))
-        .write(
-          const ServiceMonthLogRecordsCompanion(pendingSync: Value(false)),
-        );
-  }
-
-  Future<void> _clearEntryPendingSync(Iterable<String> ids) async {
-    if (ids.isEmpty) {
-      return;
-    }
-    await (_database.update(_database.entryRecords)
-          ..where((table) => table.id.isIn(ids.toList())))
-        .write(const EntryRecordsCompanion(pendingSync: Value(false)));
+    await (_database.update(
+      _database.serviceMonthLogRecords,
+    )..where((table) => table.id.isIn(ids.toList()))).write(
+      const ServiceMonthLogRecordsCompanion(pendingSync: Value(false)),
+    );
   }
 
   Future<void> _clearAdvancePendingSync(Iterable<String> ids) async {
@@ -550,27 +472,26 @@ class DriftLedgerSyncService {
     if (ids.isEmpty) {
       return;
     }
-    await (_database.update(_database.paymentTransactionRecords)
-          ..where((table) => table.id.isIn(ids.toList())))
-        .write(
-          const PaymentTransactionRecordsCompanion(pendingSync: Value(false)),
-        );
+    await (_database.update(
+      _database.paymentTransactionRecords,
+    )..where((table) => table.id.isIn(ids.toList()))).write(
+      const PaymentTransactionRecordsCompanion(pendingSync: Value(false)),
+    );
   }
 
   Future<void> _clearSettlementPendingSync(Iterable<String> ids) async {
     if (ids.isEmpty) {
       return;
     }
-    await (_database.update(_database.monthlySettlementRecords)
-          ..where((table) => table.id.isIn(ids.toList())))
-        .write(
-          const MonthlySettlementRecordsCompanion(pendingSync: Value(false)),
-        );
+    await (_database.update(
+      _database.monthlySettlementRecords,
+    )..where((table) => table.id.isIn(ids.toList()))).write(
+      const MonthlySettlementRecordsCompanion(pendingSync: Value(false)),
+    );
   }
 
   Future<void> _clearLocalData() {
     return _database.transaction(() async {
-      await _database.delete(_database.entryRecords).go();
       await _database.delete(_database.serviceMonthLogRecords).go();
       await _database.delete(_database.advancePaymentRecords).go();
       await _database.delete(_database.paymentTransactionRecords).go();
@@ -591,13 +512,6 @@ class DriftLedgerSyncService {
   Future<_LocalSyncState?> _serviceSyncState(String id) async {
     final row = await (_database.select(
       _database.serviceRecords,
-    )..where((table) => table.id.equals(id))).getSingleOrNull();
-    return row == null ? null : _LocalSyncState(row.updatedAt, row.pendingSync);
-  }
-
-  Future<_LocalSyncState?> _entrySyncState(String id) async {
-    final row = await (_database.select(
-      _database.entryRecords,
     )..where((table) => table.id.equals(id))).getSingleOrNull();
     return row == null ? null : _LocalSyncState(row.updatedAt, row.pendingSync);
   }

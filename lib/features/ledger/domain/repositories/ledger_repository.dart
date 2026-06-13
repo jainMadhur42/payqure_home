@@ -44,6 +44,7 @@ abstract interface class LedgerRepository {
   });
   Future<void> saveEntry(ServiceEntry entry);
   Future<void> saveAdvance(AdvancePayment advance);
+  Future<void> deleteAdvance(AdvancePayment advance);
   Future<List<AdvancePayment>> getAdvances({
     required String serviceId,
     required String monthKey,

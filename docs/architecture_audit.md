@@ -83,6 +83,14 @@ migrate or localize.
 Pending rows are pushed one at a time and acknowledged individually. This is
 correct but scales poorly for large histories and logout synchronization.
 
+### P1: Query Amplification In Historical Summaries
+
+Global histories still require one local query per service. Those independent
+queries can run concurrently, but a future read model should replace the
+service-by-service fan-out. Settlement overview loading can also traverse
+following months repeatedly per service, causing work to grow with both service
+count and ledger age.
+
 ### P1: Generated Settlements Mix Read And Write Behavior
 
 Several read paths recalculate and persist settlements. Reads therefore have
@@ -165,6 +173,20 @@ schema mismatch, or data corruption without structured logging.
 - `LedgerController` keeps only presentation-facing orchestration such as
   optimistic state patching, loading/error state, messages, and navigation.
 
+### Analytics Policy And History Loading
+
+- Extracted analytics labels, service/entry/payment/PDF parameters, user
+  properties, amount classification, and route screen names into the pure
+  `LedgerAnalyticsMapper`.
+- Reduced `LedgerController` by roughly 150 lines of analytics policy while
+  retaining its existing public API and event behavior.
+- Global payment and advance histories now execute independent per-service
+  reads concurrently and sort the combined result after all reads complete.
+- Removed duplicate `firstOrNull` extensions and use the Dart SDK collection
+  API.
+- Updated entry-operation characterization coverage to assert the current
+  monthly JSON log rather than the legacy row-per-entry table.
+
 ## Recommended Refactor Strategy
 
 ### Phase 1: Split Application State
@@ -183,6 +205,10 @@ PreferenceController
 
 Keep typed navigation in a small coordinator. Widgets should subscribe only to
 the state they render.
+
+The next safest extraction is `PreferenceController` for theme, currency,
+onboarding, and app-version state. After that, split route/selection state from
+mutation orchestration so entry updates do not notify unrelated screens.
 
 ### Phase 2: Split Repository Responsibilities
 
@@ -210,6 +236,9 @@ inactive date into explicit Drift and Supabase columns. Keep
 Store or query one monthly service summary projection containing usage,
 previous balance, advance, paid amount, and net due. Home should load all cards
 with one query instead of service-by-service calculations.
+
+Global payment and advance history should likewise use repository-level bulk
+queries rather than one query per service.
 
 ### Phase 5: Batch Synchronization
 

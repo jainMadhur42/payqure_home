@@ -47,25 +47,6 @@ extension ServiceRecordMapper on ServiceRecord {
   }
 }
 
-extension EntryRecordMapper on EntryRecord {
-  ServiceEntry toDomain() {
-    return ServiceEntry(
-      id: id,
-      serviceId: serviceId,
-      day: day,
-      monthKey: monthKey,
-      status: _entryStatus(status),
-      quantity: quantity,
-      unit: unit,
-      rateCents: rateCents,
-      amountCents: amountCents,
-      note: note,
-      updatedAt: updatedAt,
-      pendingSync: pendingSync,
-    );
-  }
-}
-
 extension AdvanceRecordMapper on AdvancePaymentRecord {
   AdvancePayment toDomain() {
     return AdvancePayment(
@@ -125,25 +106,6 @@ extension MonthlySettlementRecordMapper on MonthlySettlementRecord {
   }
 }
 
-extension ServiceEntryCompanionMapper on ServiceEntry {
-  EntryRecordsCompanion toCompanion() {
-    return EntryRecordsCompanion.insert(
-      id: id,
-      serviceId: serviceId,
-      monthKey: monthKey,
-      day: day,
-      status: status.name,
-      quantity: Value(quantity),
-      unit: Value(unit),
-      rateCents: Value(rateCents),
-      amountCents: Value(amountCents),
-      note: Value(note),
-      updatedAt: updatedAt,
-      pendingSync: Value(pendingSync),
-    );
-  }
-}
-
 extension PaymentTransactionCompanionMapper on PaymentTransaction {
   PaymentTransactionRecordsCompanion toCompanion() {
     return PaymentTransactionRecordsCompanion.insert(
@@ -194,13 +156,6 @@ ServiceTemplateType _templateType(String value) {
   return ServiceTemplateType.values.firstWhere(
     (type) => type.name == value,
     orElse: () => ServiceTemplateType.quantity,
-  );
-}
-
-ServiceEntryStatus _entryStatus(String value) {
-  return ServiceEntryStatus.values.firstWhere(
-    (status) => status.name == value,
-    orElse: () => ServiceEntryStatus.noEntry,
   );
 }
 
