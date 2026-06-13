@@ -79,15 +79,14 @@ app expects the user to enter the token.
 
 ## 4. Run App With Supabase
 
-Normal VS Code and `flutter run` debug builds use the configured
-non-production Supabase project automatically:
+Normal VS Code and `flutter run` debug builds use the configured debug
+Supabase target automatically:
 
 ```bash
 flutter run
 ```
 
-Store release builds use the configured production Supabase project
-automatically:
+Store release builds use the configured release Supabase target automatically:
 
 ```bash
 flutter build appbundle --release
@@ -103,14 +102,11 @@ flutter run \
   --dart-define=SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
 ```
 
-For this local workspace, use the ignored Supabase define file:
-
-```bash
-flutter run --dart-define-from-file=dart_defines/supabase.local.json
-```
-
 Environment defaults and telemetry behavior are centralized in
 `lib/core/config/app_config.dart`.
+
+Debug/profile builds use the non-production Supabase project. Release builds
+use the production Supabase project.
 
 ## 5. Smoke Test
 

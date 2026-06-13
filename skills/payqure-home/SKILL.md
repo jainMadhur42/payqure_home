@@ -122,10 +122,11 @@ flutter run \
 
 Build modes select safe defaults automatically:
 
-- Debug/profile builds use the non-production Supabase project, enable verbose
-  diagnostics, and disable Firebase Analytics/Crashlytics collection.
-- Release builds use the production Supabase project, disable verbose
-  diagnostics, and enable Firebase Analytics/Crashlytics collection.
+- Debug/profile builds enable verbose diagnostics and disable Firebase
+  Analytics/Crashlytics collection, and use the non-production Supabase
+  project.
+- Release builds disable verbose diagnostics and enable Firebase
+  Analytics/Crashlytics collection, and use the production Supabase project.
 - `APP_ENV`, Supabase values, and telemetry flags can still be overridden with
   `--dart-define` for CI and targeted verification.
 - Android release tasks require an ignored `android/key.properties` created

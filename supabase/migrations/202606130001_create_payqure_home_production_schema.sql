@@ -368,10 +368,30 @@ begin
     and purpose = request_purpose
   for update;
 
-  if current_record.blocked or current_record.request_count >= 3 then
+  if current_record.blocked
+    and current_record.blocked_at is not null
+    and current_record.blocked_at <= now() - interval '60 minutes' then
+    update public.auth_otp_request_limits
+    set request_count = 0,
+        blocked = false,
+        blocked_at = null,
+        last_requested_at = null
+    where identifier = normalized_identifier
+      and purpose = request_purpose
+    returning *
+    into current_record;
+  end if;
+
+  if current_record.blocked then
+    return query
+    select false, current_record.request_count, true;
+    return;
+  end if;
+
+  if current_record.request_count >= 3 then
     update public.auth_otp_request_limits
     set blocked = true,
-        blocked_at = coalesce(blocked_at, now())
+        blocked_at = now()
     where identifier = normalized_identifier
       and purpose = request_purpose;
 
@@ -402,7 +422,7 @@ revoke all on table public.auth_otp_request_limits from anon;
 revoke all on table public.auth_otp_request_limits from authenticated;
 
 comment on table public.auth_otp_request_limits is
-'Private support-managed OTP request counters. To unblock after review, reset request_count to 0 and blocked to false for the requested identifier and purpose.';
+'Private OTP request counters. Three requests are allowed per email and purpose; the fourth request blocks new OTPs for 60 minutes, after which the RPC resets the counter automatically.';
 
 insert into public.app_schema_versions (id, version)
 values ('ledger', 5)

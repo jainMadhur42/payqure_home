@@ -634,6 +634,8 @@ class EntryViewState extends State<EntryView> {
   late final TextEditingController _quantityController;
   late final TextEditingController _rateController;
   late final TextEditingController _noteController;
+  String? _quantityError;
+  String? _rateError;
 
   @override
   void initState() {
@@ -729,8 +731,18 @@ class EntryViewState extends State<EntryView> {
                           ? null
                           : widget.service.unit,
                       hintText: _formatQuantity(widget.service.defaultQuantity),
+                      errorText: _quantityError,
                     ),
-                    onChanged: (_) => setState(() {}),
+                    onChanged: (_) {
+                      final quantity = double.tryParse(
+                        _quantityController.text.trim(),
+                      );
+                      setState(() {
+                        if (quantity != null && quantity > 0) {
+                          _quantityError = null;
+                        }
+                      });
+                    },
                   ),
                   const SizedBox(height: AppSpacing.lg),
                   TextField(
@@ -740,8 +752,16 @@ class EntryViewState extends State<EntryView> {
                     decoration: InputDecoration(
                       labelText:
                           'Rate (${CurrencyFormatter.symbol} / ${widget.service.unit})',
+                      errorText: _rateError,
                     ),
-                    onChanged: (_) => setState(() {}),
+                    onChanged: (_) {
+                      final rate = double.tryParse(_rateController.text.trim());
+                      setState(() {
+                        if (rate != null && rate >= 0) {
+                          _rateError = null;
+                        }
+                      });
+                    },
                   ),
                   const SizedBox(height: AppSpacing.md),
                   Container(
@@ -810,11 +830,28 @@ class EntryViewState extends State<EntryView> {
   }
 
   Future<void> _saveEntry(BuildContext context) async {
+    final quantity = double.tryParse(_quantityController.text.trim());
+    final rate = double.tryParse(_rateController.text.trim());
+    final requiresQuantity =
+        widget.service.templateType == ServiceTemplateType.quantity &&
+        _status == ServiceEntryStatus.delivered;
+    final quantityError =
+        requiresQuantity && (quantity == null || quantity <= 0)
+        ? 'Enter a quantity greater than 0'
+        : null;
+    final rateError = rate == null || rate < 0 ? 'Enter a valid rate' : null;
+    if (quantityError != null || rateError != null) {
+      setState(() {
+        _quantityError = quantityError;
+        _rateError = rateError;
+      });
+      return;
+    }
     await widget.controller.saveSelectedEntry(
       status: _status,
       quantity: _effectiveQuantity,
       unit: widget.service.unit,
-      rateCents: ((double.tryParse(_rateController.text) ?? 0) * 100).round(),
+      rateCents: (rate! * 100).round(),
       note: _noteController.text,
     );
   }

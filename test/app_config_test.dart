@@ -17,7 +17,7 @@ void main() {
     expect(config.verboseLoggingEnabled, isTrue);
   });
 
-  test('release configuration uses production services and telemetry', () {
+  test('release configuration uses its configured services and telemetry', () {
     final config = AppConfig.forEnvironment(AppEnvironment.release);
 
     expect(config.hasSupabase, isTrue);

@@ -22,6 +22,7 @@ import '../widgets/ledger_screen_shared.dart';
 import '../widgets/loading_skeleton.dart';
 import '../widgets/month_selector.dart';
 import '../widgets/quick_entry_actions.dart';
+import '../widgets/service_icon.dart';
 
 import 'currency_screen.dart';
 import 'contacts_screen.dart';
@@ -989,15 +990,16 @@ class _ProfileViewState extends State<_ProfileView> {
         const SizedBox(height: AppSpacing.lg),
         Form(
           key: _formKey,
-          autovalidateMode: AutovalidateMode.onUserInteraction,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Name', style: Theme.of(context).textTheme.labelLarge),
               const SizedBox(height: AppSpacing.sm),
               TextFormField(
+                key: const ValueKey('profile-name'),
                 controller: _nameController,
                 decoration: const InputDecoration(hintText: 'Full name'),
+                autovalidateMode: AutovalidateMode.onUserInteraction,
                 validator: (value) =>
                     (value ?? '').trim().isEmpty ? 'Name is required' : null,
               ),
@@ -1005,9 +1007,11 @@ class _ProfileViewState extends State<_ProfileView> {
               Text('Phone', style: Theme.of(context).textTheme.labelLarge),
               const SizedBox(height: AppSpacing.sm),
               TextFormField(
+                key: const ValueKey('profile-phone'),
                 controller: _phoneController,
                 decoration: const InputDecoration(hintText: '+919999999999'),
                 keyboardType: TextInputType.phone,
+                autovalidateMode: AutovalidateMode.onUserInteraction,
                 validator: (value) {
                   final digits = (value ?? '').replaceAll(RegExp('[^0-9]'), '');
                   return digits.length >= 10 ? null : 'Enter a valid phone';
@@ -1185,21 +1189,24 @@ class _CreateServiceViewState extends State<_CreateServiceView> {
       children: [
         Form(
           key: _formKey,
-          autovalidateMode: AutovalidateMode.onUserInteraction,
           child: Column(
             children: [
               TextFormField(
+                key: const ValueKey('service-provider-name'),
                 controller: providerNameController,
                 decoration: const InputDecoration(
                   labelText: 'Service Provider Name',
                 ),
+                autovalidateMode: AutovalidateMode.onUserInteraction,
                 validator: _required,
               ),
               const SizedBox(height: AppSpacing.md),
               TextFormField(
+                key: const ValueKey('service-provider-contact'),
                 controller: _contactController,
                 keyboardType: TextInputType.phone,
                 decoration: const InputDecoration(labelText: 'Contact Number'),
+                autovalidateMode: AutovalidateMode.onUserInteraction,
                 validator: _required,
               ),
               const SizedBox(height: AppSpacing.md),
@@ -1243,6 +1250,7 @@ class _CreateServiceViewState extends State<_CreateServiceView> {
                 TextFormField(
                   controller: _serviceNameController,
                   decoration: const InputDecoration(labelText: 'Service Name'),
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
                   validator: _required,
                 ),
               ],
@@ -1297,6 +1305,7 @@ class _CreateServiceViewState extends State<_CreateServiceView> {
                   decoration: const InputDecoration(
                     labelText: 'Default Quantity',
                   ),
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
                   validator: _quantity,
                 ),
               ],
@@ -1307,6 +1316,7 @@ class _CreateServiceViewState extends State<_CreateServiceView> {
                   decimal: true,
                 ),
                 decoration: InputDecoration(labelText: _amountLabel),
+                autovalidateMode: AutovalidateMode.onUserInteraction,
                 validator: _amount,
               ),
               const SizedBox(height: AppSpacing.md),
@@ -1318,6 +1328,7 @@ class _CreateServiceViewState extends State<_CreateServiceView> {
                   labelText: 'Service Start Date',
                   suffixIcon: Icon(Icons.event_outlined),
                 ),
+                autovalidateMode: AutovalidateMode.onUserInteraction,
                 validator: _required,
               ),
               const SizedBox(height: AppSpacing.xl),
@@ -1554,61 +1565,505 @@ class _CreateServiceReviewView extends StatelessWidget {
       );
     }
 
+    void editDraft() => controller.goBackTo(LedgerRoute.createService);
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+
     return ListView(
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      key: const ValueKey('service-review-scroll-view'),
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.sm,
+        AppSpacing.lg,
+        AppSpacing.xl + bottomInset,
+      ),
       children: [
-        AppCard(
-          child: Column(
+        Text(
+          controller.isEditingService
+              ? 'Please review the updated details before saving'
+              : 'Please review the service details before saving',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        _ServiceReviewHero(draft: draft),
+        const SizedBox(height: AppSpacing.lg),
+        _ReviewSection(
+          icon: Icons.person_outline_rounded,
+          title: 'Provider Details',
+          children: [
+            _ReviewDetailTile(
+              icon: Icons.person_outline_rounded,
+              label: 'Provider Name',
+              value: draft.providerName,
+              onTap: editDraft,
+            ),
+            _ReviewDetailTile(
+              icon: Icons.phone_outlined,
+              label: 'Contact Number',
+              value: draft.contactNumber,
+              onTap: editDraft,
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        _ReviewSection(
+          icon: Icons.schedule_outlined,
+          title: 'Schedule & Reminder',
+          children: [
+            _ReviewDetailTile(
+              icon: Icons.schedule_outlined,
+              label: 'Service Time',
+              value: draft.serviceTime.isEmpty ? 'Not set' : draft.serviceTime,
+              onTap: editDraft,
+            ),
+            _ReviewDetailTile(
+              icon: Icons.notifications_none_rounded,
+              label: 'Reminder',
+              value: draft.remindBeforeMinutes <= 0
+                  ? 'No reminder'
+                  : '${draft.remindBeforeMinutes} minutes before',
+              valueAccent: draft.remindBeforeMinutes > 0,
+              onTap: editDraft,
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        _ReviewSection(
+          icon: Icons.sell_outlined,
+          title: 'Pricing Details',
+          children: [_ReviewPricingCard(draft: draft)],
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        _ReviewSection(
+          icon: Icons.calendar_month_outlined,
+          title: 'Service Dates',
+          children: [
+            _ReviewDetailTile(
+              icon: Icons.calendar_month_outlined,
+              label: 'Start Date',
+              value: fullDateLabel(
+                draft.startDate.day,
+                monthKeyForDate(draft.startDate),
+              ),
+              onTap: editDraft,
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.sm,
+          ),
+          decoration: BoxDecoration(
+            color: Theme.of(
+              context,
+            ).colorScheme.primary.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(AppRadius.md),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              DetailRow(label: 'Service Name', value: draft.serviceName),
-              DetailRow(label: 'Provider', value: draft.providerName),
-              DetailRow(label: 'Contact', value: draft.contactNumber),
-              DetailRow(
-                label: 'Service Time',
-                value: draft.serviceTime.isEmpty
-                    ? 'Not set'
-                    : draft.serviceTime,
+              Icon(
+                Icons.verified_user_outlined,
+                size: 18,
+                color: Theme.of(context).colorScheme.primary,
               ),
-              DetailRow(
-                label: 'Reminder',
-                value: draft.remindBeforeMinutes <= 0
-                    ? 'Not set'
-                    : '${draft.remindBeforeMinutes} minutes before',
-              ),
-              if (draft.templateType == ServiceTemplateType.quantity) ...[
-                DetailRow(label: 'Unit', value: draft.unit),
-                DetailRow(
-                  label: 'Default Quantity',
-                  value: draft.defaultQuantity.toStringAsFixed(
-                    draft.defaultQuantity.truncateToDouble() ==
-                            draft.defaultQuantity
-                        ? 0
-                        : 1,
+              const SizedBox(width: AppSpacing.sm),
+              Flexible(
+                child: Text(
+                  controller.isEditingService
+                      ? 'Review everything before updating your service.'
+                      : 'Review everything before creating your service.',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-              ],
-              DetailRow(
-                label: switch (draft.templateType) {
-                  ServiceTemplateType.quantity => 'Unit Price',
-                  ServiceTemplateType.attendance => 'Daily Wage',
-                  ServiceTemplateType.fixedMonthly => 'Monthly Amount',
-                },
-                value: CurrencyFormatter.rupees(draft.amount),
-              ),
-              DetailRow(
-                label: 'Start Date',
-                value:
-                    '${draft.startDate.day.toString().padLeft(2, '0')}/${draft.startDate.month.toString().padLeft(2, '0')}/${draft.startDate.year}',
               ),
             ],
           ),
         ),
-        const SizedBox(height: AppSpacing.xl),
-        FilledButton(
-          onPressed: controller.saveDraftService,
-          child: Text(controller.isEditingService ? 'Save Changes' : 'Done'),
+        const SizedBox(height: AppSpacing.md),
+        SizedBox(
+          height: 52,
+          child: FilledButton.icon(
+            onPressed: controller.isLoading
+                ? null
+                : controller.saveDraftService,
+            icon: const Icon(Icons.save_outlined, size: 20),
+            label: Text(
+              controller.isEditingService ? 'Save Changes' : 'Create Service',
+            ),
+          ),
         ),
       ],
+    );
+  }
+}
+
+class _ServiceReviewHero extends StatelessWidget {
+  const _ServiceReviewHero({required this.draft});
+
+  final AddServiceDraft draft;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = draft.templateType.color;
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(
+          color: Theme.of(context).dividerColor.withValues(alpha: 0.55),
+        ),
+        gradient: LinearGradient(
+          colors: [
+            Theme.of(context).colorScheme.surface,
+            Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+          ],
+        ),
+      ),
+      child: Row(
+        children: [
+          ServiceIcon(
+            icon: draft.serviceIcon,
+            color: accent,
+            serviceName: draft.serviceName,
+            templateType: draft.templateType,
+            size: 72,
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  draft.serviceName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text.rich(
+                  TextSpan(
+                    text: 'Provider: ',
+                    children: [
+                      TextSpan(
+                        text: draft.providerName,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.primary,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                  ),
+                  child: Text(
+                    draft.templateType.label,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: accent,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReviewSection extends StatelessWidget {
+  const _ReviewSection({
+    required this.icon,
+    required this.title,
+    required this.children,
+  });
+
+  final IconData icon;
+  final String title;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
+            const SizedBox(width: AppSpacing.sm),
+            Text(
+              title,
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        AppCard(
+          padding: EdgeInsets.zero,
+          child: Column(
+            children: [
+              for (var index = 0; index < children.length; index++) ...[
+                children[index],
+                if (index < children.length - 1)
+                  Divider(
+                    height: 1,
+                    indent: 68,
+                    color: Theme.of(context).dividerColor,
+                  ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ReviewDetailTile extends StatelessWidget {
+  const _ReviewDetailTile({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.onTap,
+    this.valueAccent = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final VoidCallback onTap;
+  final bool valueAccent;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppRadius.lg),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: Theme.of(
+                  context,
+                ).colorScheme.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(AppRadius.xl),
+              ),
+              child: Icon(
+                icon,
+                size: 21,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      color: valueAccent
+                          ? Theme.of(context).colorScheme.primary
+                          : null,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.chevron_right,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ReviewPricingCard extends StatelessWidget {
+  const _ReviewPricingCard({required this.draft});
+
+  final AddServiceDraft draft;
+
+  @override
+  Widget build(BuildContext context) {
+    final metrics = switch (draft.templateType) {
+      ServiceTemplateType.quantity => [
+        _ReviewMetric(
+          icon: Icons.inventory_2_outlined,
+          label: 'Unit',
+          value: draft.unit,
+          color: AppColors.success,
+        ),
+        _ReviewMetric(
+          icon: Icons.balance_outlined,
+          label: 'Default Quantity',
+          value: _formatQuantity(draft.defaultQuantity),
+          color: AppColors.success,
+        ),
+        _ReviewMetric(
+          icon: Icons.currency_rupee,
+          label: 'Unit Price',
+          value: CurrencyFormatter.rupees(draft.amount),
+          color: Theme.of(context).colorScheme.primary,
+        ),
+      ],
+      ServiceTemplateType.attendance => [
+        _ReviewMetric(
+          icon: Icons.calendar_today_outlined,
+          label: 'Unit',
+          value: 'Day',
+          color: AppColors.warning,
+        ),
+        _ReviewMetric(
+          icon: Icons.currency_rupee,
+          label: 'Daily Wage',
+          value: CurrencyFormatter.rupees(draft.amount),
+          color: Theme.of(context).colorScheme.primary,
+        ),
+      ],
+      ServiceTemplateType.fixedMonthly => [
+        _ReviewMetric(
+          icon: Icons.calendar_month_outlined,
+          label: 'Unit',
+          value: 'Month',
+          color: AppColors.info,
+        ),
+        _ReviewMetric(
+          icon: Icons.currency_rupee,
+          label: 'Monthly Amount',
+          value: CurrencyFormatter.rupees(draft.amount),
+          color: Theme.of(context).colorScheme.primary,
+        ),
+      ],
+    };
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (var index = 0; index < metrics.length; index++) ...[
+            Expanded(child: metrics[index]),
+            if (index < metrics.length - 1)
+              SizedBox(
+                height: 72,
+                child: VerticalDivider(
+                  width: 1,
+                  color: Theme.of(context).dividerColor,
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _formatQuantity(double value) {
+    if (value.truncateToDouble() == value) {
+      return value.toStringAsFixed(0);
+    }
+    return value
+        .toStringAsFixed(3)
+        .replaceFirst(RegExp(r'0+$'), '')
+        .replaceFirst(RegExp(r'\.$'), '');
+  }
+}
+
+class _ReviewMetric extends StatelessWidget {
+  const _ReviewMetric({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+      child: Column(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.10),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color, size: 19),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

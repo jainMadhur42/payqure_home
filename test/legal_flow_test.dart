@@ -211,6 +211,39 @@ void main() {
     expect(find.text('Good day'), findsOneWidget);
     expect(find.byKey(const ValueKey('home-profile-button')), findsOneWidget);
   });
+
+  testWidgets('Profile validates only the field being edited', (tester) async {
+    final database = LedgerDatabase(NativeDatabase.memory());
+    final authRepository = SupabaseAuthRepository(client: null);
+    final controller = _controller(
+      database: database,
+      authRepository: authRepository,
+    );
+
+    try {
+      await controller.bypassLoginForDevelopment();
+      await tester.pumpWidget(
+        MaterialApp(home: LedgerHomeScreen(controller: controller)),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('home-profile-button')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('profile-name')),
+        'Updated User',
+      );
+      await tester.pump();
+
+      expect(find.text('Enter a valid phone'), findsNothing);
+    } finally {
+      controller.dispose();
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 50));
+      await authRepository.dispose();
+      await database.close();
+    }
+  });
 }
 
 LedgerController _controller({

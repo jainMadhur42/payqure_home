@@ -33,7 +33,6 @@ build/
 coverage/
 
 # Local compile-time config / secrets
-dart_defines/
 *.env
 *.env.*
 

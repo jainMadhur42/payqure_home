@@ -653,7 +653,7 @@ class _OtpLimitNotice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Text(
-      'Maximum 3 OTP requests. Additional requests require support review.',
+      'Maximum 3 OTP requests per hour.',
       style: Theme.of(context).textTheme.bodySmall?.copyWith(
         color: Theme.of(context).colorScheme.onSurfaceVariant,
       ),

@@ -16,13 +16,13 @@ See [docs/supabase_setup_runbook.md](docs/supabase_setup_runbook.md).
 
 ## Run
 
-Run from VS Code or the terminal with the non-production Supabase project:
+Run from VS Code or the terminal with the configured debug Supabase target:
 
 ```bash
 flutter run
 ```
 
-Release builds automatically use the production Supabase project and enable
+Release builds automatically use their configured Supabase project and enable
 Firebase Analytics and Crashlytics:
 
 ```bash
@@ -38,8 +38,9 @@ when signing is missing instead of creating a debug-signed store artifact.
 Build-mode defaults are centralized in
 `lib/core/config/app_config.dart`:
 
-- Debug/profile: non-production Supabase, verbose diagnostics, telemetry off.
-- Release: production Supabase, verbose diagnostics off, telemetry on.
+- Debug/profile: non-production Supabase, verbose diagnostics, and telemetry
+  off.
+- Release: production Supabase, verbose diagnostics off, and telemetry on.
 
 Override configuration for CI or a temporary environment:
 
@@ -48,13 +49,6 @@ flutter run \
   --dart-define=APP_ENV=debug \
   --dart-define=SUPABASE_URL=https://YOUR_PROJECT.supabase.co \
   --dart-define=SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
-```
-
-For this local workspace, Supabase credentials are available in
-`dart_defines/supabase.local.json`:
-
-```bash
-flutter run --dart-define-from-file=dart_defines/supabase.local.json
 ```
 
 Supported optional overrides:

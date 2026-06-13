@@ -409,7 +409,8 @@ class SupabaseAuthRepository implements AuthRepository {
       return;
     }
     throw AuthException(
-      'OTP requests are blocked after 3 attempts. Contact ${LegalContent.supportEmail} for review.',
+      'You have reached the maximum OTP request limit. '
+      'Please try again after 60 minutes.',
     );
   }
 

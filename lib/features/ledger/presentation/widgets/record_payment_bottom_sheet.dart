@@ -159,7 +159,10 @@ class _RecordPaymentBottomSheetState extends State<RecordPaymentBottomSheet> {
                               ),
                         errorText: _amountError,
                       ),
-                      onChanged: (_) => _schedulePreview(),
+                      onChanged: (_) {
+                        _clearAmountErrorIfValid();
+                        _schedulePreview();
+                      },
                     ),
                     const SizedBox(height: AppSpacing.md),
                     Text(
@@ -319,6 +322,16 @@ class _RecordPaymentBottomSheetState extends State<RecordPaymentBottomSheet> {
       }
       setState(() => _previewFuture = _loadPreview());
     });
+  }
+
+  void _clearAmountErrorIfValid() {
+    if (_amountError == null) {
+      return;
+    }
+    final amount = double.tryParse(_amountController.text.trim()) ?? 0;
+    if (amount > 0) {
+      setState(() => _amountError = null);
+    }
   }
 
   String _dueLabel(PaymentSettlementPreview preview) {
