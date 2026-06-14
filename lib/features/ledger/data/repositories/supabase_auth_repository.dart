@@ -134,25 +134,38 @@ class SupabaseAuthRepository implements AuthRepository {
       return;
     }
 
+    await _ensureRegistrationIdentityAvailable(
+      email: normalizedEmail,
+      phone: normalizedPhone,
+    );
     await _claimOtpRequest(
       email: normalizedEmail,
       purpose: _OtpRequestPurpose.signup,
     );
-    final response = await client.auth.signUp(
-      email: normalizedEmail,
-      password: password,
-      data: {
-        'name': name,
-        'phone': normalizedPhone,
-        'privacy_policy_accepted': privacyPolicyAccepted,
-        'privacy_policy_accepted_at': privacyPolicyAccepted
-            ? DateTime.now().toUtc().toIso8601String()
-            : null,
-        'privacy_policy_version': privacyPolicyAccepted
-            ? LegalContent.policyVersion
-            : null,
-      },
-    );
+    late final AuthResponse response;
+    try {
+      response = await client.auth.signUp(
+        email: normalizedEmail,
+        password: password,
+        data: {
+          'name': name,
+          'phone': normalizedPhone,
+          'privacy_policy_accepted': privacyPolicyAccepted,
+          'privacy_policy_accepted_at': privacyPolicyAccepted
+              ? DateTime.now().toUtc().toIso8601String()
+              : null,
+          'privacy_policy_version': privacyPolicyAccepted
+              ? LegalContent.policyVersion
+              : null,
+        },
+      );
+    } catch (error) {
+      await _throwRegistrationConflictIfPresent(
+        email: normalizedEmail,
+        phone: normalizedPhone,
+      );
+      rethrow;
+    }
     final user = response.user;
     if (user == null) {
       throw AuthException('Unable to register.');
@@ -321,17 +334,29 @@ class SupabaseAuthRepository implements AuthRepository {
     if (user == null) {
       throw AuthException('Sign in before editing your profile.');
     }
-    await client.auth.updateUser(
-      UserAttributes(data: {'name': name, 'phone': normalizedPhone}),
-    );
-    await _upsertProfile(
-      user: user,
-      name: name,
+    await _ensureProfilePhoneAvailable(
       email: current.email,
       phone: normalizedPhone,
-      privacyPolicyAccepted: current.privacyPolicyAccepted,
-      privacyPolicyAcceptedAt: current.privacyPolicyAcceptedAt,
-      privacyPolicyVersion: current.privacyPolicyVersion,
+    );
+    try {
+      await _upsertProfile(
+        user: user,
+        name: name,
+        email: current.email,
+        phone: normalizedPhone,
+        privacyPolicyAccepted: current.privacyPolicyAccepted,
+        privacyPolicyAcceptedAt: current.privacyPolicyAcceptedAt,
+        privacyPolicyVersion: current.privacyPolicyVersion,
+      );
+    } catch (error) {
+      await _throwProfilePhoneConflictIfPresent(
+        email: current.email,
+        phone: normalizedPhone,
+      );
+      rethrow;
+    }
+    await client.auth.updateUser(
+      UserAttributes(data: {'name': name, 'phone': normalizedPhone}),
     );
     final updated = current.copyWith(name: name, phone: normalizedPhone);
     _setProfile(updated);
@@ -411,6 +436,92 @@ class SupabaseAuthRepository implements AuthRepository {
     throw AuthException(
       'You have reached the maximum OTP request limit. '
       'Please try again after 60 minutes.',
+    );
+  }
+
+  Future<void> _ensureRegistrationIdentityAvailable({
+    required String email,
+    required String phone,
+  }) async {
+    final conflicts = await _identityConflicts(email: email, phone: phone);
+    if (conflicts.emailRegistered) {
+      throw AuthException('Email ID is already registered.');
+    }
+    if (conflicts.phoneRegistered) {
+      throw AuthException('Phone number is already registered.');
+    }
+  }
+
+  Future<void> _throwRegistrationConflictIfPresent({
+    required String email,
+    required String phone,
+  }) async {
+    try {
+      await _ensureRegistrationIdentityAvailable(email: email, phone: phone);
+    } on AuthException {
+      rethrow;
+    } catch (_) {
+      // Preserve the original signup error if the diagnostic RPC also fails.
+    }
+  }
+
+  Future<void> _ensureProfilePhoneAvailable({
+    required String email,
+    required String phone,
+  }) async {
+    final conflicts = await _identityConflicts(email: email, phone: phone);
+    if (conflicts.phoneRegistered) {
+      throw AuthException(
+        'Phone number is already registered with another email ID.',
+      );
+    }
+  }
+
+  Future<void> _throwProfilePhoneConflictIfPresent({
+    required String email,
+    required String phone,
+  }) async {
+    try {
+      await _ensureProfilePhoneAvailable(email: email, phone: phone);
+    } on AuthException {
+      rethrow;
+    } catch (_) {
+      // Preserve the original profile write error if the recheck also fails.
+    }
+  }
+
+  Future<_AuthIdentityConflicts> _identityConflicts({
+    required String email,
+    required String phone,
+  }) async {
+    final client = _client;
+    if (client == null) {
+      return const _AuthIdentityConflicts();
+    }
+    Object response;
+    try {
+      response = await client.rpc<Object>(
+        'auth_identity_conflicts',
+        params: {'request_email': email, 'request_phone': phone},
+      );
+    } on PostgrestException catch (error) {
+      if (error.code != 'PGRST202') {
+        throw AuthException(
+          'We could not verify your account details. Please try again.',
+        );
+      }
+      final registeredEmail = await _registeredEmailForPhone(phone);
+      return _AuthIdentityConflicts(phoneRegistered: registeredEmail != null);
+    }
+    final row = switch (response) {
+      final List<dynamic> rows when rows.isNotEmpty =>
+        Map<String, dynamic>.from(rows.first as Map),
+      final Map<dynamic, dynamic> value => Map<String, dynamic>.from(value),
+      _ => const <String, dynamic>{},
+    };
+    return _AuthIdentityConflicts(
+      emailRegistered: row['email_registered'] == true,
+      phoneRegistered: row['phone_registered'] == true,
     );
   }
 
@@ -513,9 +624,13 @@ class SupabaseAuthRepository implements AuthRepository {
   }
 
   Future<String> _emailForPhone(String phone) async {
+    return await _registeredEmailForPhone(phone) ?? phone;
+  }
+
+  Future<String?> _registeredEmailForPhone(String phone) async {
     final client = _client;
     if (client == null) {
-      return phone;
+      return null;
     }
     try {
       final email = await client.rpc<String>(
@@ -526,9 +641,9 @@ class SupabaseAuthRepository implements AuthRepository {
         return email;
       }
     } catch (_) {
-      // Fall through to a clearer auth error from signInWithPassword.
+      // Treat an unavailable compatibility lookup as no known phone match.
     }
-    return phone;
+    return null;
   }
 
   Future<void> _upsertProfile({
@@ -619,4 +734,14 @@ class _PendingRegistrationProfile {
   final String name;
   final String phone;
   final bool privacyPolicyAccepted;
+}
+
+class _AuthIdentityConflicts {
+  const _AuthIdentityConflicts({
+    this.emailRegistered = false,
+    this.phoneRegistered = false,
+  });
+
+  final bool emailRegistered;
+  final bool phoneRegistered;
 }

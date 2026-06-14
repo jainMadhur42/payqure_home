@@ -22,13 +22,15 @@ import '../widgets/ledger_screen_shared.dart';
 import '../widgets/loading_skeleton.dart';
 import '../widgets/month_selector.dart';
 import '../widgets/quick_entry_actions.dart';
-import '../widgets/service_icon.dart';
+import '../widgets/service_identity_header.dart';
+import '../widgets/service_reminder_editor.dart';
 
 import 'currency_screen.dart';
 import 'contacts_screen.dart';
 import 'global_history_screen.dart';
 import 'home_screen.dart';
 import 'manage_service_screen.dart';
+import 'notifications_screen.dart';
 import 'payment_history_screen.dart';
 import 'service_detail_screen.dart';
 import 'service_contribution_screen.dart';
@@ -137,6 +139,9 @@ class LedgerFlowScreen extends StatelessWidget {
         LedgerRoute.profile => _ProfileView(controller: controller),
         LedgerRoute.currency => CurrencyScreen(controller: controller),
         LedgerRoute.theme => ThemeScreen(controller: controller),
+        LedgerRoute.notifications => NotificationsScreen(
+          controller: controller,
+        ),
         LedgerRoute.privacyPolicy => const PrivacyPolicyView(),
         LedgerRoute.termsDisclaimer => const TermsDisclaimerView(),
         LedgerRoute.deleteMyData => DeleteMyDataView(
@@ -261,6 +266,8 @@ class LedgerFlowScreen extends StatelessWidget {
             ? 'Currency'
             : controller.route == LedgerRoute.theme
             ? 'Theme'
+            : controller.route == LedgerRoute.notifications
+            ? 'Notifications'
             : controller.route == LedgerRoute.privacyPolicy
             ? 'Privacy Policy'
             : controller.route == LedgerRoute.termsDisclaimer
@@ -296,7 +303,8 @@ class LedgerFlowScreen extends StatelessWidget {
       LedgerRoute.serviceAdvanceHistory => controller.serviceActionReturnRoute,
       LedgerRoute.globalPaymentHistory ||
       LedgerRoute.advanceHistory ||
-      LedgerRoute.theme => LedgerRoute.more,
+      LedgerRoute.theme ||
+      LedgerRoute.notifications => LedgerRoute.more,
       LedgerRoute.contacts => LedgerRoute.more,
       LedgerRoute.privacyPolicy ||
       LedgerRoute.termsDisclaimer ||
@@ -769,6 +777,11 @@ class _SettingsView extends StatelessWidget {
               title: 'Theme (${_themeLabel(controller.selectedThemeMode)})',
               onTap: () => controller.goTo(LedgerRoute.theme),
             ),
+            _MoreTile(
+              icon: Icons.notifications_none_rounded,
+              title: 'Notifications',
+              onTap: () => controller.goTo(LedgerRoute.notifications),
+            ),
           ],
         ),
         _AppVersionFooter(versionLabel: controller.appVersionLabel),
@@ -1109,6 +1122,7 @@ class _FormSectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return SizedBox(
       width: double.infinity,
       child: Column(
@@ -1117,16 +1131,16 @@ class _FormSectionHeader extends StatelessWidget {
           Text(
             title,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: AppColors.ink,
+              color: colorScheme.onSurface,
               fontWeight: FontWeight.w900,
             ),
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
             subtitle,
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: AppColors.muted),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
           ),
         ],
       ),
@@ -1184,6 +1198,7 @@ class _CreateServiceViewState extends State<_CreateServiceView> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.lg),
       children: [
@@ -1235,8 +1250,8 @@ class _CreateServiceViewState extends State<_CreateServiceView> {
                           style: Theme.of(context).textTheme.bodyLarge
                               ?.copyWith(
                                 color: _selectedTemplate == null
-                                    ? AppColors.muted
-                                    : AppColors.ink,
+                                    ? colorScheme.onSurfaceVariant
+                                    : colorScheme.onSurface,
                                 fontWeight: FontWeight.w800,
                               ),
                         ),
@@ -1281,8 +1296,8 @@ class _CreateServiceViewState extends State<_CreateServiceView> {
                             style: Theme.of(context).textTheme.bodyLarge
                                 ?.copyWith(
                                   color: _selectedUnit == null
-                                      ? AppColors.muted
-                                      : AppColors.ink,
+                                      ? colorScheme.onSurfaceVariant
+                                      : colorScheme.onSurface,
                                   fontWeight: FontWeight.w800,
                                 ),
                           ),
@@ -1338,44 +1353,17 @@ class _CreateServiceViewState extends State<_CreateServiceView> {
                     'Optional. Set a service time and choose when to be reminded.',
               ),
               const SizedBox(height: AppSpacing.md),
-              TextFormField(
-                controller: _serviceTimeController,
-                readOnly: true,
-                onTap: _pickServiceTime,
-                decoration: InputDecoration(
-                  labelText: 'Time of Service',
-                  hintText: 'Not set',
-                  suffixIcon: _serviceTimeController.text.isEmpty
-                      ? const Icon(Icons.schedule_outlined)
-                      : IconButton(
-                          tooltip: 'Clear service time',
-                          onPressed: () {
-                            setState(() {
-                              _serviceTimeController.clear();
-                              _remindBeforeMinutes = 0;
-                            });
-                          },
-                          icon: const Icon(Icons.close),
-                        ),
+              ServiceReminderFields(
+                value: ServiceReminderValue(
+                  serviceTime: _serviceTimeController.text,
+                  remindBeforeMinutes: _remindBeforeMinutes,
                 ),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              DropdownButtonFormField<int>(
-                key: ValueKey(_remindBeforeMinutes),
-                initialValue: _remindBeforeMinutes,
-                decoration: const InputDecoration(labelText: 'Remind me'),
-                items: const [
-                  DropdownMenuItem(value: 0, child: Text('No reminder')),
-                  DropdownMenuItem(value: 10, child: Text('10 minutes before')),
-                  DropdownMenuItem(value: 15, child: Text('15 minutes before')),
-                  DropdownMenuItem(value: 30, child: Text('30 minutes before')),
-                  DropdownMenuItem(value: 60, child: Text('1 hour before')),
-                  DropdownMenuItem(value: 120, child: Text('2 hours before')),
-                ],
-                onChanged: _serviceTimeController.text.isEmpty
-                    ? null
-                    : (value) =>
-                          setState(() => _remindBeforeMinutes = value ?? 0),
+                onChanged: (value) {
+                  setState(() {
+                    _serviceTimeController.text = value.serviceTime;
+                    _remindBeforeMinutes = value.remindBeforeMinutes;
+                  });
+                },
               ),
             ],
           ),
@@ -1477,17 +1465,6 @@ class _CreateServiceViewState extends State<_CreateServiceView> {
       return;
     }
     setState(() => _selectedUnit = selected);
-  }
-
-  Future<void> _pickServiceTime() async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.now(),
-    );
-    if (picked == null) {
-      return;
-    }
-    setState(() => _serviceTimeController.text = picked.format(context));
   }
 
   Future<void> _pickStartDate() async {
@@ -1712,84 +1689,15 @@ class _ServiceReviewHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = draft.templateType.color;
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(
-          color: Theme.of(context).dividerColor.withValues(alpha: 0.55),
-        ),
-        gradient: LinearGradient(
-          colors: [
-            Theme.of(context).colorScheme.surface,
-            Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
-          ],
-        ),
-      ),
-      child: Row(
-        children: [
-          ServiceIcon(
-            icon: draft.serviceIcon,
-            color: accent,
-            serviceName: draft.serviceName,
-            templateType: draft.templateType,
-            size: 72,
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  draft.serviceName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text.rich(
-                  TextSpan(
-                    text: 'Provider: ',
-                    children: [
-                      TextSpan(
-                        text: draft.providerName,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.primary,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.sm,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: accent.withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(AppRadius.sm),
-                  ),
-                  child: Text(
-                    draft.templateType.label,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: accent,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+    return AppCard(
+      key: const ValueKey('service-review-hero-card'),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: ServiceIdentityHeader(
+        icon: draft.serviceIcon,
+        accentColor: draft.templateType.color,
+        serviceName: draft.serviceName,
+        providerName: draft.providerName,
+        templateType: draft.templateType,
       ),
     );
   }

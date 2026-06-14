@@ -43,7 +43,8 @@ class SupabaseLedgerRemoteDataSource implements LedgerRemoteDataSource {
     if (client == null) {
       return null;
     }
-    return client.rpc<int>('ledger_schema_version');
+    final response = await client.rpc<Object?>('ledger_schema_version');
+    return parseLedgerSchemaVersion(response);
   }
 
   @override
@@ -303,4 +304,19 @@ class SupabaseLedgerRemoteDataSource implements LedgerRemoteDataSource {
   String _nextMonthKey(String monthKey) {
     return LedgerMonth.parse(monthKey).shift(1).key;
   }
+}
+
+int? parseLedgerSchemaVersion(Object? value) {
+  return switch (value) {
+    final int version => version,
+    final num version => version.toInt(),
+    final String version => int.tryParse(version),
+    final List<dynamic> rows when rows.isNotEmpty => parseLedgerSchemaVersion(
+      rows.first,
+    ),
+    final Map<dynamic, dynamic> row => parseLedgerSchemaVersion(
+      row['ledger_schema_version'] ?? row['version'],
+    ),
+    _ => null,
+  };
 }

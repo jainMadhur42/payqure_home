@@ -22,6 +22,7 @@ import '../../domain/entities/payment_transaction.dart';
 import '../../domain/entities/payment_settlement_preview.dart';
 import '../../domain/entities/service_entry.dart';
 import '../../domain/entities/service_history_item.dart';
+import '../../domain/entities/service_metadata.dart';
 import '../../domain/entities/service_template.dart';
 import '../../domain/entities/service_template_catalog.dart';
 import '../../domain/entities/user_profile.dart';
@@ -423,7 +424,7 @@ class LedgerController extends ChangeNotifier {
       monthlyAmountCents: draft.templateType == ServiceTemplateType.fixedMonthly
           ? amountCents
           : 0,
-      routeAfterSave: LedgerRoute.dashboard,
+      routeAfterSave: LedgerRoute.calendar,
     );
     addServiceDraft = null;
   }
@@ -892,6 +893,44 @@ class LedgerController extends ChangeNotifier {
     });
   }
 
+  Future<void> updateServiceReminder({
+    required HouseholdService service,
+    required String serviceTime,
+    required int remindBeforeMinutes,
+  }) async {
+    await _run(() async {
+      final metadata = ServiceMetadata.parse(service.description);
+      final updatedMetadata = metadata.copyWith(
+        serviceTime: serviceTime.trim(),
+        remindBeforeMinutes: remindBeforeMinutes,
+      );
+      final startMonthKey = updatedMetadata.startDate == null
+          ? service.monthKey
+          : _monthKeyForDate(updatedMetadata.startDate!);
+      final updated = await _ledgerRepository.updateService(
+        id: service.id,
+        monthKey: startMonthKey,
+        name: service.name,
+        description: updatedMetadata.encode(),
+        unit: service.unit,
+        defaultQuantity: service.defaultQuantity,
+        rateCents: service.rateCents,
+        monthlyAmountCents: service.monthlyAmountCents,
+      );
+      _applyOptimisticService(updated);
+      await _configureServiceReminders(
+        overview?.services ?? [updated],
+        requestPermission: remindBeforeMinutes > 0,
+        force: true,
+      );
+      _showToast(
+        remindBeforeMinutes > 0
+            ? '${service.name} reminder updated.'
+            : '${service.name} reminder turned off.',
+      );
+    });
+  }
+
   Future<void> deleteService(HouseholdService service) async {
     await _run(() async {
       await _ledgerRepository.deleteService(
@@ -945,6 +984,7 @@ class LedgerController extends ChangeNotifier {
       _showToast(
         EntryFeedbackMessage.customized(
           day: selectedDay,
+          monthKey: monthKey,
           entry: entry,
           templateType: service.templateType,
         ),
@@ -972,6 +1012,7 @@ class LedgerController extends ChangeNotifier {
       _showToast(
         EntryFeedbackMessage.statusUpdated(
           day: day,
+          monthKey: monthKey,
           status: entry.status,
           templateType: service.templateType,
         ),
@@ -998,6 +1039,7 @@ class LedgerController extends ChangeNotifier {
       _showToast(
         EntryFeedbackMessage.statusUpdated(
           day: day,
+          monthKey: monthKey,
           status: entry.status,
           templateType: service.templateType,
         ),
@@ -1754,6 +1796,38 @@ class LedgerController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _applyOptimisticService(HouseholdService updated) {
+    if (selectedService?.id == updated.id) {
+      selectedService = updated.copyWith(
+        monthKey: monthKey,
+        entries: selectedService?.entries ?? updated.entries,
+      );
+    }
+    final currentOverview = overview;
+    if (currentOverview != null) {
+      final services = currentOverview.services
+          .map(
+            (service) => service.id == updated.id
+                ? updated.copyWith(
+                    monthKey: currentOverview.monthKey,
+                    entries: service.entries,
+                  )
+                : service,
+          )
+          .toList(growable: false);
+      overview = LedgerOverview(
+        profile: currentOverview.profile,
+        monthKey: currentOverview.monthKey,
+        monthLabel: currentOverview.monthLabel,
+        services: services,
+        totalPayableCents: currentOverview.totalPayableCents,
+        advancePaidCents: currentOverview.advancePaidCents,
+      );
+    }
+    _invalidateHomeSummaries();
+    notifyListeners();
+  }
+
   void _invalidateHomeSummaries() {
     _homeSummariesRevision++;
     _homeSummariesFuture = null;
@@ -1785,7 +1859,8 @@ class LedgerController extends ChangeNotifier {
       LedgerRoute.contacts ||
       LedgerRoute.profile ||
       LedgerRoute.currency ||
-      LedgerRoute.theme => 3,
+      LedgerRoute.theme ||
+      LedgerRoute.notifications => 3,
       LedgerRoute.privacyPolicy ||
       LedgerRoute.termsDisclaimer ||
       LedgerRoute.deleteMyData => 3,

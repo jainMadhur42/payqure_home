@@ -19,6 +19,7 @@ class UnitPickerScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(title: const Text('Select unit')),
       body: ListView(
@@ -27,7 +28,7 @@ class UnitPickerScreen extends StatelessWidget {
           Text(
             'Select unit',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: AppColors.ink,
+              color: colorScheme.onSurface,
               fontWeight: FontWeight.w900,
             ),
           ),
@@ -36,9 +37,9 @@ class UnitPickerScreen extends StatelessWidget {
             serviceName.isEmpty
                 ? 'Choose how this service quantity is measured.'
                 : 'Choose how $serviceName quantity is measured.',
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: AppColors.muted),
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
           ),
           const SizedBox(height: AppSpacing.lg),
           AppCard(
@@ -73,56 +74,63 @@ class _UnitTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Column(
       children: [
-        ListTile(
-          onTap: () {
-            HapticFeedback.selectionClick();
-            Navigator.pop(context, unit);
-          },
-          minLeadingWidth: 44,
-          leading: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            width: 44,
-            height: 44,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: isSelected ? AppColors.primarySoft : AppColors.surface,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: isSelected ? AppColors.primary : AppColors.line,
+        Material(
+          color: Colors.transparent,
+          child: ListTile(
+            onTap: () {
+              HapticFeedback.selectionClick();
+              Navigator.pop(context, unit);
+            },
+            minLeadingWidth: 44,
+            leading: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              width: 44,
+              height: 44,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? colorScheme.primaryContainer
+                    : colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: isSelected
+                      ? colorScheme.primary
+                      : colorScheme.outlineVariant,
+                ),
+              ),
+              child: Icon(
+                Icons.straighten_rounded,
+                color: isSelected ? colorScheme.primary : colorScheme.onSurface,
+                size: 21,
               ),
             ),
-            child: Icon(
-              Icons.straighten_rounded,
-              color: isSelected ? AppColors.primary : AppColors.ink,
-              size: 21,
+            title: Text(
+              unit,
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                color: colorScheme.onSurface,
+                fontWeight: FontWeight.w800,
+              ),
             ),
-          ),
-          title: Text(
-            unit,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: AppColors.ink,
-              fontWeight: FontWeight.w800,
+            trailing: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 180),
+              child: isSelected
+                  ? const Icon(
+                      Icons.check_circle,
+                      key: ValueKey('selected'),
+                      color: AppColors.primary,
+                    )
+                  : const Icon(
+                      Icons.chevron_right,
+                      key: ValueKey('unselected'),
+                    ),
             ),
-          ),
-          trailing: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 180),
-            child: isSelected
-                ? const Icon(
-                    Icons.check_circle,
-                    key: ValueKey('selected'),
-                    color: AppColors.primary,
-                  )
-                : const Icon(
-                    Icons.chevron_right,
-                    key: ValueKey('unselected'),
-                    color: AppColors.muted,
-                  ),
           ),
         ),
         if (!isLast)
-          const Divider(height: 1, indent: 72, color: AppColors.line),
+          Divider(height: 1, indent: 72, color: colorScheme.outlineVariant),
       ],
     );
   }

@@ -69,8 +69,7 @@ class MonthDataController {
           )
           .timeout(const Duration(seconds: 15));
     } catch (_) {
-      if (useCacheOnFailure &&
-          await _repository.isMonthCached(userId: userId, monthKey: monthKey)) {
+      if (useCacheOnFailure) {
         return;
       }
       rethrow;

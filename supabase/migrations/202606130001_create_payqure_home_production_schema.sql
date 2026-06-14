@@ -424,10 +424,54 @@ revoke all on table public.auth_otp_request_limits from authenticated;
 comment on table public.auth_otp_request_limits is
 'Private OTP request counters. Three requests are allowed per email and purpose; the fourth request blocks new OTPs for 60 minutes, after which the RPC resets the counter automatically.';
 
+create or replace function public.auth_identity_conflicts(
+  request_email text,
+  request_phone text
+)
+returns table (
+  email_registered boolean,
+  phone_registered boolean
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    exists (
+      select 1
+      from auth.users
+      where email = lower(trim(request_email))
+        and (auth.uid() is null or id <> auth.uid())
+    ) as email_registered,
+    exists (
+      select 1
+      from public.profiles
+      where phone = trim(request_phone)
+        and (auth.uid() is null or id <> auth.uid())
+    ) as phone_registered;
+$$;
+
+revoke all on function public.auth_identity_conflicts(text, text) from public;
+grant execute on function public.auth_identity_conflicts(text, text) to anon;
+grant execute on function public.auth_identity_conflicts(text, text)
+  to authenticated;
+
 insert into public.app_schema_versions (id, version)
 values ('ledger', 5)
 on conflict (id) do update
 set version = excluded.version,
     applied_at = now();
+
+
+
+-- Existing Supabase projects may already have public.profiles. In that case,
+-- CREATE TABLE IF NOT EXISTS from the production bootstrap does not add newer
+-- columns required by the auth.users signup trigger.
+alter table public.profiles
+  add column if not exists privacy_policy_accepted boolean not null default false,
+  add column if not exists privacy_policy_accepted_at timestamptz null,
+  add column if not exists privacy_policy_version text null;
+
 
 commit;

@@ -9,10 +9,11 @@ void main() {
       expect(
         EntryFeedbackMessage.statusUpdated(
           day: 29,
+          monthKey: '2026-06',
           status: ServiceEntryStatus.notDelivered,
           templateType: ServiceTemplateType.quantity,
         ),
-        '29 has been marked as Not Delivered.',
+        '29 Jun has been marked as Not Delivered.',
       );
     });
 
@@ -20,10 +21,11 @@ void main() {
       expect(
         EntryFeedbackMessage.statusUpdated(
           day: 29,
+          monthKey: '2026-06',
           status: ServiceEntryStatus.delivered,
           templateType: ServiceTemplateType.attendance,
         ),
-        '29 has been marked as Present.',
+        '29 Jun has been marked as Present.',
       );
     });
 
@@ -45,10 +47,11 @@ void main() {
       expect(
         EntryFeedbackMessage.customized(
           day: 29,
+          monthKey: '2026-06',
           entry: entry,
           templateType: ServiceTemplateType.quantity,
         ),
-        '29 quantity has been updated to 1.25 L.',
+        '29 Jun quantity has been updated to 1.25 L.',
       );
     });
   });

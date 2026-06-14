@@ -56,6 +56,30 @@ void main() {
 
     expect(plans, isEmpty);
   });
+
+  test('schedule updates preserve unrelated service metadata', () {
+    final original = ServiceMetadata(
+      providerName: 'Ramesh',
+      contactNumber: '9876543210',
+      serviceTime: '8:30 AM',
+      startDate: DateTime(2026, 6, 1),
+      remindBeforeMinutes: 15,
+      templateId: 'milkman',
+    );
+
+    final updated = original.copyWith(
+      serviceTime: '9:00 AM',
+      remindBeforeMinutes: 30,
+    );
+    final decoded = ServiceMetadata.parse(updated.encode());
+
+    expect(decoded.providerName, 'Ramesh');
+    expect(decoded.contactNumber, '9876543210');
+    expect(decoded.startDate, DateTime(2026, 6, 1));
+    expect(decoded.templateId, 'milkman');
+    expect(decoded.serviceTime, '9:00 AM');
+    expect(decoded.remindBeforeMinutes, 30);
+  });
 }
 
 HouseholdService service({required ServiceMetadata metadata}) {

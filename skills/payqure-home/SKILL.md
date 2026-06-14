@@ -54,6 +54,8 @@ Important entry points:
 | Payment and advance operations | `lib/features/ledger/presentation/controllers/payment_operations_controller.dart` |
 | Ledger analytics event mapping | `lib/features/ledger/presentation/analytics/ledger_analytics_mapper.dart` |
 | Reminder permission and schedule reconciliation | `lib/features/ledger/presentation/controllers/service_reminder_coordinator.dart` |
+| Reminder list and per-service controls | `lib/features/ledger/presentation/screens/notifications_screen.dart` |
+| Shared reminder schedule editor | `lib/features/ledger/presentation/widgets/service_reminder_editor.dart` |
 | PDF generation | `lib/features/ledger/data/services/pdf_statement_service.dart` |
 | Legal content and policy version | `lib/features/legal/domain/legal_content.dart` |
 | Legal screens | `lib/features/legal/presentation/legal_screens.dart` |
@@ -171,6 +173,9 @@ Home     +     More
   action sheet.
 - More contains account, records, preferences, legal, and logout.
 - Contacts is opened from More, not from bottom navigation.
+- Settings > Notifications lists service reminder schedules. Reminder timing is
+  edited through the shared schedule editor also used by Add/Edit Service, and
+  Service Detail exposes the same per-service toggle and timing action.
 - Calendar, settlement, payments, advances, and PDF are service-specific flows.
 - Entry back behavior depends on `EntrySource` (`quickLog` or `calendar`).
 
@@ -318,9 +323,21 @@ supabase/migrations/202606130001_create_payqure_home_production_schema.sql
 
 This single bootstrap creates the complete schema at ledger version 5,
 including payment allocations, privacy acceptance, OTP request limits, and
-optimized service month logs. It is intended for a new Supabase project and
-must not be run as a replacement migration on an existing populated database.
-It deliberately does not create the obsolete `service_entries` table.
+registration identity checks, plus optimized service month logs. It is
+intended for a new Supabase project and must not be run as a replacement
+migration on an existing populated database. It deliberately does not create
+the obsolete `service_entries` table.
+
+For an existing project that already ran the production bootstrap before the
+identity check was added, run:
+
+```text
+supabase/migrations/202606130002_add_auth_identity_conflict_check.sql
+```
+
+The app calls this RPC before signup and profile phone updates so duplicate
+emails and phone numbers produce specific user-facing errors instead of
+generic Auth trigger failures.
 
 OTP request limiting allows three signup-verification or password-recovery
 requests per email and purpose. Support reset instructions are in:

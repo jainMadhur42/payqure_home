@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../../common/widgets/app_empty_state.dart';
 import '../../../../common/widgets/selection_card.dart';
-import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../domain/entities/household_service.dart';
 import '../../domain/entities/service_template.dart';
@@ -19,32 +19,11 @@ class ContactsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final contacts = _contacts;
     if (contacts.isEmpty) {
-      return ListView(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        children: [
-          const SizedBox(height: AppSpacing.xl),
-          const Icon(
-            Icons.contacts_outlined,
-            size: 48,
-            color: AppColors.primary,
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            'No service contacts',
-            textAlign: TextAlign.center,
-            style: Theme.of(
-              context,
-            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
+      return const AppEmptyState(
+        icon: Icons.contacts_outlined,
+        title: 'No service contacts',
+        message:
             'Provider contact details will appear here after you add them to a service.',
-            textAlign: TextAlign.center,
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: AppColors.muted),
-          ),
-        ],
       );
     }
 

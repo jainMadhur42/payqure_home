@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../common/widgets/app_card.dart';
+import '../../../../common/widgets/app_empty_state.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/utils/currency_formatter.dart';
@@ -529,29 +530,11 @@ class _HistoryEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isPayment = type == ServiceHistoryType.payment;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              isPayment
-                  ? Icons.account_balance_wallet_outlined
-                  : Icons.savings_outlined,
-              color: AppColors.primary,
-              size: 44,
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Text(
-              isPayment ? 'No payments yet' : 'No advances yet',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
-            ),
-          ],
-        ),
-      ),
+    return AppEmptyState(
+      icon: isPayment
+          ? Icons.account_balance_wallet_outlined
+          : Icons.savings_outlined,
+      title: isPayment ? 'No payments yet' : 'No advances yet',
     );
   }
 }

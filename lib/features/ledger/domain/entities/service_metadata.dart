@@ -15,6 +15,24 @@ class ServiceMetadata {
   final int remindBeforeMinutes;
   final String templateId;
 
+  ServiceMetadata copyWith({
+    String? providerName,
+    String? contactNumber,
+    String? serviceTime,
+    DateTime? startDate,
+    int? remindBeforeMinutes,
+    String? templateId,
+  }) {
+    return ServiceMetadata(
+      providerName: providerName ?? this.providerName,
+      contactNumber: contactNumber ?? this.contactNumber,
+      serviceTime: serviceTime ?? this.serviceTime,
+      startDate: startDate ?? this.startDate,
+      remindBeforeMinutes: remindBeforeMinutes ?? this.remindBeforeMinutes,
+      templateId: templateId ?? this.templateId,
+    );
+  }
+
   factory ServiceMetadata.parse(String description) {
     final fields = <String, String>{};
     for (final item in description.split(' • ')) {

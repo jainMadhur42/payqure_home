@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../common/widgets/app_card.dart';
+import '../../../../common/widgets/app_switch.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
@@ -9,6 +10,7 @@ import '../../../../core/utils/currency_formatter.dart';
 import '../../domain/entities/household_service.dart';
 import '../../domain/entities/ledger_month.dart';
 import '../../domain/entities/service_entry.dart';
+import '../../domain/entities/service_metadata.dart';
 import '../../domain/entities/service_template.dart';
 import '../../domain/services/service_start_date_resolver.dart';
 import '../../domain/services/entry_value_resolver.dart';
@@ -19,6 +21,7 @@ import '../widgets/quick_entry_actions.dart';
 import '../widgets/record_payment_bottom_sheet.dart';
 import '../widgets/service_quick_actions_sheet.dart';
 import '../widgets/service_icon.dart';
+import '../widgets/service_reminder_editor.dart';
 
 class ServiceDetailScreen extends StatelessWidget {
   const ServiceDetailScreen({
@@ -83,6 +86,12 @@ class ServiceDetailScreen extends StatelessWidget {
               monthKey: service.monthKey,
               service: service,
               entry: selectedEntry,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            ServiceReminderDetailCard(
+              service: service,
+              onToggle: (enabled) => _toggleReminder(context, service, enabled),
+              onEdit: () => _editReminder(context, service),
             ),
           ],
         ),
@@ -205,6 +214,146 @@ class ServiceDetailScreen extends StatelessWidget {
       status: status,
     );
   }
+
+  Future<void> _toggleReminder(
+    BuildContext context,
+    HouseholdService service,
+    bool enabled,
+  ) async {
+    final metadata = ServiceMetadata.parse(service.description);
+    if (!enabled) {
+      await controller.updateServiceReminder(
+        service: service,
+        serviceTime: metadata.serviceTime,
+        remindBeforeMinutes: 0,
+      );
+      return;
+    }
+    if (metadata.serviceTime.isEmpty) {
+      await _editReminder(context, service);
+      return;
+    }
+    await controller.updateServiceReminder(
+      service: service,
+      serviceTime: metadata.serviceTime,
+      remindBeforeMinutes: metadata.remindBeforeMinutes > 0
+          ? metadata.remindBeforeMinutes
+          : 15,
+    );
+  }
+
+  Future<void> _editReminder(
+    BuildContext context,
+    HouseholdService service,
+  ) async {
+    final metadata = ServiceMetadata.parse(service.description);
+    final value = await showServiceReminderBottomSheet(
+      context: context,
+      serviceName: service.name,
+      initialValue: ServiceReminderValue(
+        serviceTime: metadata.serviceTime,
+        remindBeforeMinutes: metadata.remindBeforeMinutes,
+      ),
+    );
+    if (value == null) {
+      return;
+    }
+    await controller.updateServiceReminder(
+      service: service,
+      serviceTime: value.serviceTime,
+      remindBeforeMinutes: value.remindBeforeMinutes,
+    );
+  }
+}
+
+class ServiceReminderDetailCard extends StatelessWidget {
+  const ServiceReminderDetailCard({
+    required this.service,
+    required this.onToggle,
+    required this.onEdit,
+    super.key,
+  });
+
+  final HouseholdService service;
+  final ValueChanged<bool> onToggle;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final metadata = ServiceMetadata.parse(service.description);
+    final enabled =
+        metadata.serviceTime.isNotEmpty && metadata.remindBeforeMinutes > 0;
+    final colorScheme = Theme.of(context).colorScheme;
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+                child: Icon(
+                  enabled
+                      ? Icons.notifications_active_outlined
+                      : Icons.notifications_none_rounded,
+                  color: colorScheme.onPrimaryContainer,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Service Reminder',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      enabled
+                          ? '${metadata.serviceTime} · ${_reminderLabel(metadata.remindBeforeMinutes)}'
+                          : 'No notification scheduled',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              AppSwitch(value: enabled, onChanged: onToggle),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: onEdit,
+              icon: const Icon(Icons.schedule_outlined, size: 18),
+              label: Text(enabled ? 'Change time' : 'Set reminder'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _reminderLabel(int minutes) {
+    return switch (minutes) {
+      60 => '1 hour before',
+      120 => '2 hours before',
+      _ => '$minutes minutes before',
+    };
+  }
 }
 
 class SelectedDayDetailCard extends StatelessWidget {
@@ -272,15 +421,14 @@ class _EntryStatusHeader extends StatelessWidget {
           Text(
             'Current Status',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppColors.muted,
-              fontWeight: FontWeight.w700,
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
           const Spacer(),
           Text(
             status,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppColors.primary,
+              color: Theme.of(context).colorScheme.onSurface,
               fontWeight: FontWeight.w900,
             ),
           ),

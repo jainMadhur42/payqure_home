@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../common/widgets/app_card.dart';
+import '../../../../common/widgets/app_empty_state.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
@@ -77,27 +78,13 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
           return const Center(child: CircularProgressIndicator());
         }
         if (payments.isEmpty) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              child: AppCard(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.history_outlined, color: AppColors.muted),
-                    const SizedBox(height: AppSpacing.md),
-                    Text(
-                      'No payments recorded yet.',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    FilledButton(
-                      onPressed: () => _showRecordPaymentSheet(context),
-                      child: const Text('Record Payment'),
-                    ),
-                  ],
-                ),
-              ),
+          return AppEmptyState(
+            icon: Icons.account_balance_wallet_outlined,
+            title: 'No payments recorded yet',
+            card: true,
+            action: FilledButton(
+              onPressed: () => _showRecordPaymentSheet(context),
+              child: const Text('Record Payment'),
             ),
           );
         }

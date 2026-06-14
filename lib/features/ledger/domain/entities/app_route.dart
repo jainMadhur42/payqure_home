@@ -26,6 +26,7 @@ enum LedgerRoute {
   profile,
   currency,
   theme,
+  notifications,
   privacyPolicy,
   termsDisclaimer,
   deleteMyData,

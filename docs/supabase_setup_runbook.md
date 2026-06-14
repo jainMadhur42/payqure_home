@@ -108,6 +108,16 @@ Environment defaults and telemetry behavior are centralized in
 Debug/profile builds use the non-production Supabase project. Release builds
 use the production Supabase project.
 
+For an existing project created before registration identity checks were
+introduced, also run:
+
+```text
+supabase/migrations/202606130002_add_auth_identity_conflict_check.sql
+```
+
+This installs the RPC used to report duplicate signup emails, duplicate signup
+phone numbers, and phone conflicts during profile edits before a write fails.
+
 ## 5. Smoke Test
 
 1. Register with name, email, phone, and password.

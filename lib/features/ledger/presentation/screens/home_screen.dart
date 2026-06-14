@@ -16,7 +16,7 @@ import '../controllers/ledger_controller.dart';
 import '../widgets/ledger_screen_shared.dart';
 import '../widgets/loading_skeleton.dart';
 import '../widgets/month_selector.dart';
-import '../widgets/service_icon.dart';
+import '../widgets/service_identity_header.dart';
 import '../widgets/service_contribution_stats.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -329,9 +329,7 @@ class HomeHeroSummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: AppColors.primary,
         borderRadius: BorderRadius.circular(AppRadius.lg),
         boxShadow: [
           BoxShadow(
@@ -341,72 +339,250 @@ class HomeHeroSummaryCard extends StatelessWidget {
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Amount Due',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Colors.white.withValues(alpha: 0.72),
-              fontWeight: FontWeight.w700,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        child: DecoratedBox(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [AppColors.primary, AppColors.primaryDark],
             ),
           ),
-          const SizedBox(height: AppSpacing.xs),
-          AmountText(
-            amount: summary.totalDueCents / 100,
-            large: true,
-            color: Colors.white,
-          ),
-          const SizedBox(height: AppSpacing.xl),
-          Row(
+          child: Stack(
             children: [
-              Expanded(
-                child: _HeroMetricItem(
-                  label: 'This month Charges',
-                  value: CurrencyFormatter.rupees(summary.usageCents / 100),
-                ),
+              const Positioned.fill(
+                child: IgnorePointer(child: _HeroFloatingIconLayer()),
               ),
-              const SizedBox(width: AppSpacing.lg),
-              Expanded(
-                child: _HeroMetricItem(
-                  label: 'Previous Balance',
-                  value: CurrencyFormatter.rupees(
-                    summary.previousPendingCents / 100,
+              Positioned(
+                left: -50,
+                top: -72,
+                child: IgnorePointer(
+                  child: Container(
+                    width: 190,
+                    height: 190,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          Colors.white.withValues(alpha: 0.12),
+                          Colors.transparent,
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          Row(
-            children: [
-              Expanded(
-                child: _HeroMetricItem(
-                  label: 'Advance balance',
-                  value: CurrencyFormatter.rupees(summary.advanceCents / 100),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.lg),
-              Expanded(
-                child: _HeroMetricItem(
-                  label: 'Paid this month',
-                  value: CurrencyFormatter.rupees(summary.paidCents / 100),
-                ),
+              Padding(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: _HeroSummaryContent(summary: summary),
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.lg),
-          Text(
-            '${summary.serviceCount} Active Services',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ],
+        ),
       ),
+    );
+  }
+}
+
+class _HeroFloatingIconLayer extends StatelessWidget {
+  const _HeroFloatingIconLayer();
+
+  @override
+  Widget build(BuildContext context) {
+    final opacity = Theme.of(context).brightness == Brightness.dark
+        ? 0.07
+        : 0.09;
+    return Stack(
+      key: const ValueKey('hero-floating-service-icons'),
+      children: [
+        Positioned(
+          right: 24,
+          top: 22,
+          child: FloatingHeroIcon(
+            icon: Icons.local_drink_outlined,
+            size: 42,
+            opacity: opacity,
+            rotation: -0.12,
+          ),
+        ),
+        Positioned(
+          right: 88,
+          top: 76,
+          child: FloatingHeroIcon(
+            icon: Icons.water_drop_outlined,
+            size: 34,
+            opacity: opacity,
+            rotation: 0.10,
+          ),
+        ),
+        Positioned(
+          right: 22,
+          top: 118,
+          child: FloatingHeroIcon(
+            icon: Icons.local_car_wash_outlined,
+            size: 48,
+            opacity: opacity,
+            rotation: 0.08,
+          ),
+        ),
+        Positioned(
+          right: 108,
+          bottom: 72,
+          child: FloatingHeroIcon(
+            icon: Icons.cleaning_services_outlined,
+            size: 38,
+            opacity: opacity,
+            rotation: -0.10,
+          ),
+        ),
+        Positioned(
+          right: 28,
+          bottom: 68,
+          child: FloatingHeroIcon(
+            icon: Icons.article_outlined,
+            size: 36,
+            opacity: opacity,
+            rotation: 0.09,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class FloatingHeroIcon extends StatelessWidget {
+  const FloatingHeroIcon({
+    required this.icon,
+    required this.size,
+    required this.opacity,
+    required this.rotation,
+    super.key,
+  });
+
+  final IconData icon;
+  final double size;
+  final double opacity;
+  final double rotation;
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: opacity,
+      child: Transform.rotate(
+        angle: rotation,
+        child: Icon(icon, size: size, color: Colors.white),
+      ),
+    );
+  }
+}
+
+class _HeroSummaryContent extends StatelessWidget {
+  const _HeroSummaryContent({required this.summary});
+
+  final HomeMonthlySummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Amount Due',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: Colors.white.withValues(alpha: 0.72),
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        AmountText(
+          amount: summary.totalDueCents / 100,
+          large: true,
+          color: Colors.white,
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        Row(
+          children: [
+            Expanded(
+              child: _HeroMetricItem(
+                label: 'This month Charges',
+                value: CurrencyFormatter.rupees(summary.usageCents / 100),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.lg),
+            Expanded(
+              child: _HeroMetricItem(
+                label: 'Previous Balance',
+                value: CurrencyFormatter.rupees(
+                  summary.previousPendingCents / 100,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        Row(
+          children: [
+            Expanded(
+              child: _HeroMetricItem(
+                label: 'Advance balance',
+                value: CurrencyFormatter.rupees(summary.advanceCents / 100),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.lg),
+            Expanded(
+              child: _HeroMetricItem(
+                label: 'Paid this month',
+                value: CurrencyFormatter.rupees(summary.paidCents / 100),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        Container(
+          height: 54,
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.12),
+                ),
+                child: const Icon(
+                  Icons.home_repair_service_outlined,
+                  color: Colors.white,
+                  size: 19,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  '${summary.serviceCount} Active Services',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: Colors.white.withValues(alpha: 0.78),
+                size: 22,
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -620,74 +796,38 @@ class _HomeServiceCardState extends State<HomeServiceCard> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            ServiceIcon(
-                              icon: service.icon,
-                              color: service.templateType.color,
-                              serviceName: service.name,
-                              templateType: service.templateType,
-                            ),
-                            const SizedBox(width: AppSpacing.md),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    service.name,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium
-                                        ?.copyWith(fontWeight: FontWeight.w900),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    'Provider: ${providerName(service)}',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(context).textTheme.bodySmall
-                                        ?.copyWith(color: AppColors.muted),
-                                  ),
-                                  Text(
-                                    '${widget.monthLabel} · ${service.templateType.label}',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(context).textTheme.bodySmall
-                                        ?.copyWith(color: AppColors.muted),
-                                  ),
-                                ],
+                        ServiceIdentityHeader(
+                          icon: service.icon,
+                          accentColor: service.templateType.color,
+                          serviceName: service.name,
+                          providerName: providerName(service),
+                          templateType: service.templateType,
+                          contextLabel: widget.monthLabel,
+                          trailing: Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                summary.primaryLabel,
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(
+                                      color: AppColors.muted,
+                                      fontWeight: FontWeight.w700,
+                                    ),
                               ),
-                            ),
-                            const SizedBox(width: AppSpacing.sm),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text(
-                                  summary.primaryLabel,
-                                  style: Theme.of(context).textTheme.bodySmall
-                                      ?.copyWith(
-                                        color: AppColors.muted,
-                                        fontWeight: FontWeight.w700,
-                                      ),
+                              Text(
+                                CurrencyFormatter.rupees(
+                                  summary.primaryAmountCents / 100,
                                 ),
-                                Text(
-                                  CurrencyFormatter.rupees(
-                                    summary.primaryAmountCents / 100,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.titleMedium
-                                      ?.copyWith(
-                                        color: primaryColor,
-                                        fontWeight: FontWeight.w900,
-                                      ),
-                                ),
-                              ],
-                            ),
-                          ],
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(
+                                      color: primaryColor,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                              ),
+                            ],
+                          ),
                         ),
                         const SizedBox(height: AppSpacing.md),
                         ServiceMetricLine(text: summary.metricLabel),

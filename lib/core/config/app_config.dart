@@ -3,9 +3,9 @@ import 'package:flutter/foundation.dart';
 enum AppEnvironment { debug, release }
 
 class AppConfig {
-  static const debugSupabaseUrl = 'https://pvnwygtqsghdqyxbrnho.supabase.co';
+  static const debugSupabaseUrl = 'https://xqklnkqzaibwagqhvpfm.supabase.co';
   static const debugSupabasePublishableKey =
-      'sb_publishable_B02yGi_bAbWxfeOlY7_yHA_AGIX-gWk';
+      'sb_publishable_sr96_9dOCRnxphqD4mkKMg_iWpeRP_x';
   static const releaseSupabaseUrl = 'https://rhjxissoqjlthznivwut.supabase.co';
   static const releaseSupabasePublishableKey =
       'sb_publishable_YkKDhIRCp80aOv24R7IB0Q_wUpkXv6i';

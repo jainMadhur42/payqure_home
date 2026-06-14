@@ -20,6 +20,7 @@ class ServiceTemplatePickerScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     final templatesByCategory = {
       for (final category in ServiceTemplateCategory.values)
         category: ServiceTemplateCatalog.templates
@@ -33,7 +34,7 @@ class ServiceTemplatePickerScreen extends StatelessWidget {
           'Select service',
           style: Theme.of(context).textTheme.titleLarge?.copyWith(
             fontWeight: FontWeight.w900,
-            color: AppColors.ink,
+            color: colorScheme.onSurface,
           ),
         ),
         const SizedBox(height: AppSpacing.xs),
@@ -41,14 +42,14 @@ class ServiceTemplatePickerScreen extends StatelessWidget {
           'Choose the household service you want to track.',
           style: Theme.of(
             context,
-          ).textTheme.bodyMedium?.copyWith(color: AppColors.muted),
+          ).textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant),
         ),
         const SizedBox(height: AppSpacing.lg),
         for (final category in ServiceTemplateCategory.values) ...[
           Text(
             category.label,
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: AppColors.ink,
+              color: colorScheme.onSurface,
               fontWeight: FontWeight.w900,
             ),
           ),
@@ -113,6 +114,7 @@ class _TemplateTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Column(
       children: [
         Material(
@@ -126,10 +128,14 @@ class _TemplateTile extends StatelessWidget {
               height: 44,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: isSelected ? AppColors.primarySoft : AppColors.surface,
+                color: isSelected
+                    ? colorScheme.primaryContainer
+                    : colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color: isSelected ? AppColors.primary : AppColors.line,
+                  color: isSelected
+                      ? colorScheme.primary
+                      : colorScheme.outlineVariant,
                 ),
               ),
               child: Text(template.emoji, style: const TextStyle(fontSize: 23)),
@@ -137,12 +143,15 @@ class _TemplateTile extends StatelessWidget {
             title: Text(
               template.title,
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: AppColors.ink,
+                color: colorScheme.onSurface,
                 fontWeight: FontWeight.w800,
               ),
             ),
             subtitle: template.isCustom
-                ? const Text('Create your own service')
+                ? Text(
+                    'Create your own service',
+                    style: TextStyle(color: colorScheme.onSurfaceVariant),
+                  )
                 : null,
             trailing: AnimatedSwitcher(
               duration: const Duration(milliseconds: 180),
@@ -155,13 +164,12 @@ class _TemplateTile extends StatelessWidget {
                   : const Icon(
                       Icons.chevron_right,
                       key: ValueKey('unselected'),
-                      color: AppColors.muted,
                     ),
             ),
           ),
         ),
         if (!isLast)
-          const Divider(height: 1, indent: 72, color: AppColors.line),
+          Divider(height: 1, indent: 72, color: colorScheme.outlineVariant),
       ],
     );
   }

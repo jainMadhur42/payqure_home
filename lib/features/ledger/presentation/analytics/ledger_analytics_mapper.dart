@@ -245,6 +245,7 @@ class LedgerAnalyticsMapper {
       LedgerRoute.profile => 'profile',
       LedgerRoute.currency => 'currency_picker',
       LedgerRoute.theme => 'theme_picker',
+      LedgerRoute.notifications => 'notifications',
       LedgerRoute.privacyPolicy => 'privacy_policy',
       LedgerRoute.termsDisclaimer => 'terms_disclaimer',
       LedgerRoute.deleteMyData => 'delete_my_data',
