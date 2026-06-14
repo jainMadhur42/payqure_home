@@ -2,6 +2,7 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:payqure_home/common/widgets/app_logo_mark.dart';
 import 'package:payqure_home/features/ledger/data/database/ledger_database.dart';
 import 'package:payqure_home/features/ledger/data/repositories/drift_ledger_repository.dart';
 import 'package:payqure_home/features/ledger/data/repositories/supabase_auth_repository.dart';
@@ -28,6 +29,8 @@ void main() {
     );
 
     expect(find.text('Track Household\nServices Easily'), findsOneWidget);
+    final logo = tester.widget<AppLogoMark>(find.byType(AppLogoMark));
+    expect(logo.size, 52);
 
     expect(find.text('Next'), findsOneWidget);
 

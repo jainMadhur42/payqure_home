@@ -1,5 +1,6 @@
 abstract final class AppAssets {
-  static const appIcon = 'assets/images/app_icon.png';
+  static const appIcon =
+      'ios/Runner/Assets.xcassets/AppIcon.appiconset/AppIcon.png';
   static const onboardingServices = 'assets/images/onboarding/services.png';
   static const onboardingDailyLog = 'assets/images/onboarding/daily_log.png';
   static const onboardingWallet = 'assets/images/onboarding/wallet.png';

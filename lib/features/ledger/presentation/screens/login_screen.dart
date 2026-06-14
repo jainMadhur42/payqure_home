@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../../common/widgets/app_logo_mark.dart';
 import '../../../../core/auth/auth_validators.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
@@ -11,7 +12,6 @@ import '../../../legal/domain/legal_content.dart';
 import '../../../legal/presentation/legal_screens.dart';
 import '../../domain/entities/app_route.dart';
 import '../controllers/ledger_controller.dart';
-import '../widgets/service_icon.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({required this.controller, super.key});

@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/assets/app_assets.dart';
-import '../../../../core/theme/app_colors.dart';
 import '../../domain/entities/service_template.dart';
 import '../../domain/entities/service_template_catalog.dart';
 
@@ -71,36 +69,5 @@ class ServiceIcon extends StatelessWidget {
       'custom_monthly' => Icons.calendar_month_outlined,
       _ => Icons.home_repair_service_outlined,
     };
-  }
-}
-
-class AppLogoMark extends StatelessWidget {
-  const AppLogoMark({this.size = 88, super.key});
-
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(size * 0.22),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.32),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Image.asset(
-        AppAssets.appIcon,
-        width: size,
-        height: size,
-        fit: BoxFit.cover,
-      ),
-    );
   }
 }

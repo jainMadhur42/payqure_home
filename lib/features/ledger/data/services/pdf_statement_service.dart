@@ -101,7 +101,11 @@ class PdfStatementService {
         pw.ClipRRect(
           horizontalRadius: 8,
           verticalRadius: 8,
-          child: pw.Image(appIcon, width: 38, height: 38, fit: pw.BoxFit.cover),
+          child: pw.SizedBox(
+            width: 38,
+            height: 38,
+            child: pw.Image(appIcon, fit: pw.BoxFit.cover),
+          ),
         ),
         pw.SizedBox(width: 10),
         pw.Expanded(
@@ -877,16 +881,12 @@ class PdfStatementService {
 
   pw.Widget _logoMark(pw.ImageProvider appIcon) {
     return pw.ClipRRect(
-      horizontalRadius: 14,
-      verticalRadius: 14,
-      child: pw.Container(
+      horizontalRadius: 10,
+      verticalRadius: 10,
+      child: pw.SizedBox(
         width: 44,
         height: 44,
-        decoration: pw.BoxDecoration(
-          color: PdfColors.white.shade(0.18),
-          border: pw.Border.all(color: PdfColors.white.shade(0.36)),
-        ),
-        child: pw.Image(appIcon, width: 44, height: 44, fit: pw.BoxFit.cover),
+        child: pw.Image(appIcon, fit: pw.BoxFit.cover),
       ),
     );
   }

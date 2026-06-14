@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 
+import '../../../../common/widgets/app_logo_mark.dart';
 import '../../../../core/theme/app_spacing.dart';
-import '../widgets/service_icon.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({required this.onDone, super.key});
