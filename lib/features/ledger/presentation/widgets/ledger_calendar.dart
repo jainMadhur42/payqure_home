@@ -6,6 +6,7 @@ import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../domain/entities/ledger_month.dart';
 import '../../domain/entities/service_entry.dart';
+import '../../domain/services/calendar_entry_status_resolver.dart';
 
 class LedgerCalendar extends StatelessWidget {
   const LedgerCalendar({
@@ -15,7 +16,7 @@ class LedgerCalendar extends StatelessWidget {
     this.configuredQuantity,
     this.serviceStartDate,
     this.onBlockedDaySelected,
-    this.selectedDay = 29,
+    required this.selectedDay,
     super.key,
   });
 
@@ -58,8 +59,11 @@ class LedgerCalendar extends StatelessWidget {
           final isFuture = date.isAfter(todayDate);
           final entry = entryByDay[day];
           final status = isFuture
-              ? CalendarDayStatus.noEntry
-              : _calendarStatus(entry, configuredQuantity);
+              ? CalendarEntryVisualStatus.noEntry
+              : CalendarEntryStatusResolver.resolve(
+                  entry: entry,
+                  configuredQuantity: configuredQuantity,
+                );
           return SizedBox.square(
             dimension: cellSize.clamp(44.0, 58.0),
             child: CalendarDayCell(
@@ -115,30 +119,7 @@ class LedgerCalendar extends StatelessWidget {
       },
     );
   }
-
-  CalendarDayStatus _calendarStatus(
-    ServiceEntry? entry,
-    double? configuredQuantity,
-  ) {
-    if (entry == null) {
-      return CalendarDayStatus.noEntry;
-    }
-    if (entry.status == ServiceEntryStatus.delivered &&
-        configuredQuantity != null &&
-        (entry.quantity - configuredQuantity).abs() > 0.000001) {
-      return CalendarDayStatus.quantityChanged;
-    }
-    return switch (entry.status) {
-      ServiceEntryStatus.delivered => CalendarDayStatus.delivered,
-      ServiceEntryStatus.notDelivered => CalendarDayStatus.notDelivered,
-      ServiceEntryStatus.rateChanged => CalendarDayStatus.quantityChanged,
-      ServiceEntryStatus.halfDay => CalendarDayStatus.quantityChanged,
-      ServiceEntryStatus.noEntry => CalendarDayStatus.noEntry,
-    };
-  }
 }
-
-enum CalendarDayStatus { delivered, notDelivered, quantityChanged, noEntry }
 
 class CalendarDayCell extends StatelessWidget {
   const CalendarDayCell({
@@ -152,7 +133,7 @@ class CalendarDayCell extends StatelessWidget {
   });
 
   final DateTime date;
-  final CalendarDayStatus status;
+  final CalendarEntryVisualStatus status;
   final bool isSelected;
   final bool isToday;
   final bool isBlocked;
@@ -229,27 +210,30 @@ class _StatusColors {
   final Color foreground;
 }
 
-_StatusColors _entryColors(BuildContext context, CalendarDayStatus status) {
+_StatusColors _entryColors(
+  BuildContext context,
+  CalendarEntryVisualStatus status,
+) {
   final scheme = Theme.of(context).colorScheme;
   final isDark = Theme.of(context).brightness == Brightness.dark;
   if (isDark) {
     return switch (status) {
-      CalendarDayStatus.delivered => _StatusColors(
+      CalendarEntryVisualStatus.delivered => _StatusColors(
         AppColors.success.withValues(alpha: 0.18),
         AppColors.success.withValues(alpha: 0.50),
         const Color(0xFF75E7A3),
       ),
-      CalendarDayStatus.notDelivered => _StatusColors(
+      CalendarEntryVisualStatus.notDelivered => _StatusColors(
         AppColors.danger.withValues(alpha: 0.18),
         AppColors.danger.withValues(alpha: 0.52),
         const Color(0xFFFF8EA1),
       ),
-      CalendarDayStatus.quantityChanged => _StatusColors(
+      CalendarEntryVisualStatus.quantityChanged => _StatusColors(
         AppColors.warning.withValues(alpha: 0.18),
         AppColors.warning.withValues(alpha: 0.52),
         const Color(0xFFFFB181),
       ),
-      CalendarDayStatus.noEntry => _StatusColors(
+      CalendarEntryVisualStatus.noEntry => _StatusColors(
         scheme.surfaceContainerHighest,
         scheme.outlineVariant,
         scheme.onSurfaceVariant,
@@ -257,22 +241,22 @@ _StatusColors _entryColors(BuildContext context, CalendarDayStatus status) {
     };
   }
   return switch (status) {
-    CalendarDayStatus.delivered => const _StatusColors(
+    CalendarEntryVisualStatus.delivered => const _StatusColors(
       AppColors.successSoft,
       Color(0xFFBFE9CF),
       AppColors.success,
     ),
-    CalendarDayStatus.notDelivered => const _StatusColors(
+    CalendarEntryVisualStatus.notDelivered => const _StatusColors(
       AppColors.dangerSoft,
       Color(0xFFFFCAD2),
       AppColors.danger,
     ),
-    CalendarDayStatus.quantityChanged => const _StatusColors(
+    CalendarEntryVisualStatus.quantityChanged => const _StatusColors(
       AppColors.warningSoft,
       Color(0xFFFFD7BD),
       AppColors.warning,
     ),
-    CalendarDayStatus.noEntry => const _StatusColors(
+    CalendarEntryVisualStatus.noEntry => const _StatusColors(
       Color(0xFFF1F3F8),
       AppColors.line,
       AppColors.muted,

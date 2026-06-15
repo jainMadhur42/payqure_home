@@ -12,6 +12,7 @@ import '../../domain/entities/monthly_settlement.dart';
 import '../../domain/entities/payment_transaction.dart';
 import '../../domain/entities/service_entry.dart';
 import '../../domain/entities/service_template.dart';
+import '../../domain/services/calendar_entry_status_resolver.dart';
 
 class PdfStatementService {
   const PdfStatementService();
@@ -31,7 +32,6 @@ class PdfStatementService {
   static const _warning = PdfColor.fromInt(0xFFFF6B1A);
   static const _warningSoft = PdfColor.fromInt(0xFFFFF0E8);
   static const _info = PdfColor.fromInt(0xFF1668E8);
-  static const _infoSoft = PdfColor.fromInt(0xFFE8F0FF);
 
   Future<Uint8List> buildStatement(MonthlyBill bill) async {
     final fonts = await _StatementFonts.load();
@@ -414,13 +414,18 @@ class PdfStatementService {
     final entriesByDay = {
       for (final entry in bill.service.entries) entry.day: entry,
     };
+    final configuredQuantity = _configuredQuantity(bill);
     final cells = <pw.Widget>[];
     for (var index = 0; index < 42; index++) {
       final day = index - leadingBlanks + 1;
       cells.add(
         day < 1 || day > daysInMonth
             ? pw.Container()
-            : _compactCalendarCell(day, entriesByDay[day]),
+            : _compactCalendarCell(
+                day,
+                entriesByDay[day],
+                configuredQuantity: configuredQuantity,
+              ),
       );
     }
     return pw.Column(
@@ -458,15 +463,21 @@ class PdfStatementService {
     );
   }
 
-  pw.Widget _compactCalendarCell(int day, ServiceEntry? entry) {
-    final status = entry?.status ?? ServiceEntryStatus.noEntry;
-    final hasStatus = entry != null && status != ServiceEntryStatus.noEntry;
+  pw.Widget _compactCalendarCell(
+    int day,
+    ServiceEntry? entry, {
+    required double? configuredQuantity,
+  }) {
+    final status = CalendarEntryStatusResolver.resolve(
+      entry: entry,
+      configuredQuantity: configuredQuantity,
+    );
+    final hasStatus = status != CalendarEntryVisualStatus.noEntry;
     final color = switch (status) {
-      ServiceEntryStatus.delivered => _success,
-      ServiceEntryStatus.notDelivered => _danger,
-      ServiceEntryStatus.halfDay => _warning,
-      ServiceEntryStatus.rateChanged => _info,
-      ServiceEntryStatus.noEntry => PdfColors.white,
+      CalendarEntryVisualStatus.delivered => _success,
+      CalendarEntryVisualStatus.notDelivered => _danger,
+      CalendarEntryVisualStatus.quantityChanged => _warning,
+      CalendarEntryVisualStatus.noEntry => PdfColors.white,
     };
     return pw.Container(
       alignment: pw.Alignment.center,
@@ -970,6 +981,7 @@ class PdfStatementService {
     final entriesByDay = {
       for (final entry in bill.service.entries) entry.day: entry,
     };
+    final configuredQuantity = _configuredQuantity(bill);
     final rows = <List<pw.Widget>>[];
     var day = 1;
     for (var week = 0; week < 6; week++) {
@@ -979,7 +991,13 @@ class PdfStatementService {
         if (cellIndex < leadingBlanks || day > daysInMonth) {
           row.add(pw.SizedBox(height: 24));
         } else {
-          row.add(_calendarCell(day, entriesByDay[day]));
+          row.add(
+            _calendarCell(
+              day,
+              entriesByDay[day],
+              configuredQuantity: configuredQuantity,
+            ),
+          );
           day++;
         }
       }
@@ -1038,11 +1056,18 @@ class PdfStatementService {
     );
   }
 
-  pw.Widget _calendarCell(int day, ServiceEntry? entry) {
-    final color = _entryBackground(entry?.status ?? ServiceEntryStatus.noEntry);
-    final border = _entryBorder(entry?.status ?? ServiceEntryStatus.noEntry);
-    final textColor =
-        entry == null || entry.status == ServiceEntryStatus.noEntry
+  pw.Widget _calendarCell(
+    int day,
+    ServiceEntry? entry, {
+    required double? configuredQuantity,
+  }) {
+    final status = CalendarEntryStatusResolver.resolve(
+      entry: entry,
+      configuredQuantity: configuredQuantity,
+    );
+    final color = _entryBackground(status);
+    final border = _entryBorder(status);
+    final textColor = status == CalendarEntryVisualStatus.noEntry
         ? _muted
         : _ink;
     return pw.Container(
@@ -1072,8 +1097,7 @@ class PdfStatementService {
       children: [
         _legendDot('Delivered', _success),
         _legendDot('Not Delivered', _danger),
-        _legendDot('Quantity / Half Day', _warning),
-        _legendDot('Rate Changed', _info),
+        _legendDot('Quantity Change / Half Day', _warning),
         _legendDot('No Entry', _muted),
       ],
     );
@@ -1593,44 +1617,43 @@ class PdfStatementService {
         .toList();
   }
 
-  PdfColor _entryBackground(ServiceEntryStatus status) {
+  PdfColor _entryBackground(CalendarEntryVisualStatus status) {
     return switch (status) {
-      ServiceEntryStatus.delivered => _successSoft,
-      ServiceEntryStatus.notDelivered => _dangerSoft,
-      ServiceEntryStatus.halfDay => _warningSoft,
-      ServiceEntryStatus.rateChanged => _infoSoft,
-      ServiceEntryStatus.noEntry => _background,
+      CalendarEntryVisualStatus.delivered => _successSoft,
+      CalendarEntryVisualStatus.notDelivered => _dangerSoft,
+      CalendarEntryVisualStatus.quantityChanged => _warningSoft,
+      CalendarEntryVisualStatus.noEntry => _background,
     };
   }
 
-  PdfColor _entryBorder(ServiceEntryStatus status) {
+  PdfColor _entryBorder(CalendarEntryVisualStatus status) {
     return switch (status) {
-      ServiceEntryStatus.delivered => PdfColor(
+      CalendarEntryVisualStatus.delivered => PdfColor(
         _success.red,
         _success.green,
         _success.blue,
         0.28,
       ),
-      ServiceEntryStatus.notDelivered => PdfColor(
+      CalendarEntryVisualStatus.notDelivered => PdfColor(
         _danger.red,
         _danger.green,
         _danger.blue,
         0.28,
       ),
-      ServiceEntryStatus.halfDay => PdfColor(
+      CalendarEntryVisualStatus.quantityChanged => PdfColor(
         _warning.red,
         _warning.green,
         _warning.blue,
         0.28,
       ),
-      ServiceEntryStatus.rateChanged => PdfColor(
-        _info.red,
-        _info.green,
-        _info.blue,
-        0.28,
-      ),
-      ServiceEntryStatus.noEntry => _line,
+      CalendarEntryVisualStatus.noEntry => _line,
     };
+  }
+
+  double? _configuredQuantity(MonthlyBill bill) {
+    return bill.service.templateType == ServiceTemplateType.quantity
+        ? bill.service.defaultQuantity
+        : null;
   }
 
   String _providerName(MonthlyBill bill) {

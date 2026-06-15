@@ -133,7 +133,7 @@ class LedgerController extends ChangeNotifier {
   LedgerOverview? overview;
   UserProfile? profile;
   HouseholdService? selectedService;
-  int selectedDay = 29;
+  int selectedDay = DateTime.now().day;
   EntrySource entrySource = EntrySource.calendar;
   PdfSource pdfSource = PdfSource.serviceDetail;
   LedgerRoute serviceActionReturnRoute = LedgerRoute.calendar;
@@ -608,14 +608,7 @@ class LedgerController extends ChangeNotifier {
 
   void selectService(HouseholdService service) {
     selectedService = service;
-    final startDate = _serviceStartDateResolver.resolve(service);
-    final selectedMonth = _dateForMonthKey(monthKey);
-    if (startDate != null &&
-        startDate.year == selectedMonth.year &&
-        startDate.month == selectedMonth.month &&
-        selectedDay < startDate.day) {
-      selectedDay = startDate.day;
-    }
+    selectedDay = _defaultSelectedDayForService(service);
     _setRoute(LedgerRoute.calendar);
     notifyListeners();
   }
@@ -1594,7 +1587,7 @@ class LedgerController extends ChangeNotifier {
       monthKey: nextMonthKey,
       onActivated: () {
         monthKey = nextMonthKey;
-        selectedDay = 1;
+        selectedDay = _defaultSelectedDayForMonth(nextMonthKey);
         selectedService = null;
         overview = null;
       },
@@ -1685,14 +1678,7 @@ class LedgerController extends ChangeNotifier {
     }
     final service = matches.first;
     selectedService = service;
-    final startDate = _serviceStartDateResolver.resolve(service);
-    final selectedMonth = _dateForMonthKey(monthKey);
-    if (startDate != null &&
-        startDate.year == selectedMonth.year &&
-        startDate.month == selectedMonth.month &&
-        selectedDay < startDate.day) {
-      selectedDay = startDate.day;
-    }
+    selectedDay = _defaultSelectedDayForService(service);
     _pendingReminderServiceId = null;
     _setRoute(LedgerRoute.calendar);
   }
@@ -1984,6 +1970,28 @@ class LedgerController extends ChangeNotifier {
       return startDate.day;
     }
     return day;
+  }
+
+  int _defaultSelectedDayForService(HouseholdService service) {
+    return _validEntryDayForService(
+      service,
+      _defaultSelectedDayForMonth(monthKey),
+    );
+  }
+
+  int _defaultSelectedDayForMonth(String targetMonthKey) {
+    final selectedMonth = _dateForMonthKey(targetMonthKey);
+    final now = DateTime.now();
+    final currentMonth = DateTime(now.year, now.month);
+    final targetMonth = DateTime(selectedMonth.year, selectedMonth.month);
+
+    if (targetMonth == currentMonth) {
+      return now.day;
+    }
+    if (targetMonth.isBefore(currentMonth)) {
+      return DateTime(selectedMonth.year, selectedMonth.month + 1, 0).day;
+    }
+    return 1;
   }
 
   bool _isPastDate(DateTime date) {

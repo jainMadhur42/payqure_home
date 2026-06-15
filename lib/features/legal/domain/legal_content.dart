@@ -4,7 +4,7 @@ abstract final class LegalContent {
   static const policyVersion = '2026-06';
   static const appName = 'Daily Wages';
   static const developer = 'Syntech';
-  static const supportEmail = 'support@payqurehome.com';
+  static const supportEmail = 'support_home@payqure.com';
 
   static const privacyPolicy = <LegalSection>[
     LegalSection(
@@ -87,7 +87,7 @@ abstract final class LegalContent {
     LegalSection(
       id: 'contact',
       title: 'Contact Us',
-      body: 'For questions, contact support@payqurehome.com.',
+      body: 'For questions, contact $supportEmail.',
     ),
   ];
 
@@ -120,6 +120,11 @@ abstract final class LegalContent {
       title: 'Service Disputes',
       body:
           'The app is not responsible for disputes between a customer and a service provider.',
+    ),
+    LegalSection(
+      id: 'terms_contact',
+      title: 'Contact Us',
+      body: 'For questions, contact $supportEmail.',
     ),
   ];
 }

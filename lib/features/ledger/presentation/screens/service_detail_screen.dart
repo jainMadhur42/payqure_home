@@ -598,7 +598,7 @@ class ServiceDetailSummaryCard extends StatelessWidget {
             ? '$deliveredDays Present'
             : service.templateType == ServiceTemplateType.fixedMonthly
             ? 'Fixed Monthly'
-            : '$quantity${service.unit.isEmpty ? '' : service.unit}';
+            : '$quantity${service.unit.trim().isEmpty ? '' : ' ${service.unit.trim()}'}';
         final dueLabel = _isCurrentMonth(controller.monthKey)
             ? 'Due till today'
             : 'Monthly Due';

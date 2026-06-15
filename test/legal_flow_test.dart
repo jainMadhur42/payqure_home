@@ -16,6 +16,18 @@ import 'package:payqure_home/features/ledger/presentation/screens/ledger_home_sc
 import 'package:payqure_home/features/ledger/presentation/screens/login_screen.dart';
 
 void main() {
+  test('privacy policy and terms use the canonical support email', () {
+    final privacyContact = LegalContent.privacyPolicy.firstWhere(
+      (section) => section.title == 'Contact Us',
+    );
+    final termsContact = LegalContent.termsDisclaimer.firstWhere(
+      (section) => section.title == 'Contact Us',
+    );
+
+    expect(privacyContact.body, contains(LegalContent.supportEmail));
+    expect(termsContact.body, contains(LegalContent.supportEmail));
+  });
+
   testWidgets('registration stays disabled until privacy policy is accepted', (
     tester,
   ) async {

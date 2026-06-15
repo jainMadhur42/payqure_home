@@ -148,19 +148,18 @@ class DeleteMyDataView extends StatelessWidget {
           icon: const Icon(Icons.mail_outline),
           label: const Text('Request Data Deletion'),
         ),
-        const SizedBox(height: AppSpacing.sm),
-        TextButton.icon(
-          onPressed: () => _copySupportEmail(context),
-          icon: const Icon(Icons.content_copy_outlined),
-          label: const Text('Copy support email'),
-        ),
         const SizedBox(height: AppSpacing.md),
         Text(
-          LegalContent.supportEmail,
+          'Need help with your data deletion request?',
           textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
             color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
+        ),
+        TextButton.icon(
+          onPressed: () => _contactSupport(context),
+          icon: const Icon(Icons.support_agent_outlined, size: 18),
+          label: const Text(LegalContent.supportEmail),
         ),
       ],
     );
@@ -195,6 +194,21 @@ class DeleteMyDataView extends StatelessWidget {
             content: Text('Email app is unavailable. Support email copied.'),
           ),
         );
+    }
+  }
+
+  Future<void> _contactSupport(BuildContext context) async {
+    final uri = Uri(
+      scheme: 'mailto',
+      path: LegalContent.supportEmail,
+      queryParameters: {'subject': 'Payqure Home data deletion support'},
+    );
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+      return;
+    }
+    if (context.mounted) {
+      _copySupportEmail(context);
     }
   }
 

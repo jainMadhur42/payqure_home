@@ -24,6 +24,7 @@ import '../widgets/month_selector.dart';
 import '../widgets/quick_entry_actions.dart';
 import '../widgets/service_identity_header.dart';
 import '../widgets/service_reminder_editor.dart';
+import '../widgets/zoomable_pdf_pages.dart';
 
 import 'currency_screen.dart';
 import 'contacts_screen.dart';
@@ -721,11 +722,12 @@ class _PdfPreviewState extends State<_PdfPreview> {
         if (bytes == null) {
           return const Center(child: CircularProgressIndicator());
         }
-        return PdfPreview(
+        return PdfPreview.builder(
           build: (_) async => bytes,
           canChangeOrientation: false,
           canChangePageFormat: false,
           initialPageFormat: PdfPageFormat.a4,
+          pagesBuilder: (context, pages) => ZoomablePdfPages(pages: pages),
         );
       },
     );

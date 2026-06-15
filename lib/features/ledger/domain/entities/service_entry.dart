@@ -36,15 +36,16 @@ class ServiceEntry {
   final DateTime updatedAt;
 
   String get quantityLabel {
+    final normalizedUnit = unit.trim();
+    final formattedQuantity = quantity.toStringAsFixed(
+      quantity.truncateToDouble() == quantity ? 0 : 1,
+    );
     return switch (status) {
       ServiceEntryStatus.notDelivered => '0',
       ServiceEntryStatus.noEntry => '-',
       ServiceEntryStatus.halfDay => 'HD',
-      _ when unit.isEmpty => quantity.toStringAsFixed(
-        quantity.truncateToDouble() == quantity ? 0 : 1,
-      ),
-      _ =>
-        '${quantity.toStringAsFixed(quantity.truncateToDouble() == quantity ? 0 : 1)}$unit',
+      _ when normalizedUnit.isEmpty => formattedQuantity,
+      _ => '$formattedQuantity $normalizedUnit',
     };
   }
 

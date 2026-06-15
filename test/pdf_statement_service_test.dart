@@ -21,7 +21,7 @@ void main() {
         day: index + 1,
         monthKey: '2026-06',
         status: ServiceEntryStatus.delivered,
-        quantity: 1,
+        quantity: index == 5 ? 2 : 1,
         unit: 'Day',
         rateCents: 1000,
         amountCents: 1000,
