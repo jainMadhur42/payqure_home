@@ -2,18 +2,42 @@
 
 ## 1. Apply Database Migration
 
-For a new production Supabase project, run the single bootstrap file:
+For a new production Supabase project, run the bootstrap first:
 
 ```text
 supabase/migrations/202606130001_create_payqure_home_production_schema.sql
 ```
 
 Run the complete file once in the Supabase SQL editor or migration pipeline.
-It creates the final schema, indexes, functions, Row Level Security policies,
+It creates the base schema, indexes, functions, Row Level Security policies,
 privacy fields, OTP request limits, payment allocation fields, and optimized
 monthly JSON logs.
 
-After applying it, verify:
+Then apply every later migration in filename order. The current compatibility
+migration is:
+
+```text
+supabase/migrations/202606150002_add_app_compatibility_config.sql
+```
+
+It advances the ledger schema and installs the mobile compatibility policy.
+Treat the migration row as server policy, not as the source of the installed
+Flutter app version.
+
+`app_schema_versions` is the only stored source for the current schema version.
+The compatibility RPC reads the ledger version from that table and returns it
+with the compatibility settings in one response.
+
+The installed app version has one source of truth:
+
+```text
+pubspec.yaml -> version
+```
+
+Android and iOS build versions are generated from it, and Flutter reads the
+same installed value at runtime through `PackageInfo`.
+
+After applying all migrations, verify:
 
 ```sql
 select public.ledger_schema_version();
@@ -22,7 +46,13 @@ select public.ledger_schema_version();
 Expected result:
 
 ```text
-5
+6
+```
+
+Also verify the mobile compatibility contract:
+
+```sql
+select public.get_app_compatibility_config();
 ```
 
 ## 2. Configure Auth
@@ -130,6 +160,10 @@ phone numbers, and phone conflicts during profile edits before a write fails.
 ## 6. Troubleshooting
 
 - If ledger sync fails with a schema message, verify the bootstrap completed
-  successfully and `public.ledger_schema_version()` returns `5`.
+  successfully, every later migration ran, and
+  `public.ledger_schema_version()` returns `6`.
+- If the app shows a forced-update screen unexpectedly, verify
+  `public.get_app_compatibility_config()` and compare the installed app version
+  with `minimum_app_version`.
 - If phone login fails, confirm the phone is stored normalized in E.164 format in `public.profiles`.
 - If email verification does not route back into the app, check Supabase redirect URLs and platform deep-link configuration.

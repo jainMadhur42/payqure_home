@@ -90,7 +90,7 @@ class LocalNotificationService implements ServiceReminderScheduler {
 
   @override
   Future<String?> consumeLaunchServiceId() async {
-    if (kIsWeb || _launchPayloadConsumed) {
+    if (_launchPayloadConsumed) {
       return null;
     }
     await _initialize();
@@ -104,9 +104,6 @@ class LocalNotificationService implements ServiceReminderScheduler {
 
   @override
   Future<bool> requestPermission() async {
-    if (kIsWeb) {
-      return false;
-    }
     await _initialize();
     final android = _plugin
         .resolvePlatformSpecificImplementation<
@@ -128,9 +125,6 @@ class LocalNotificationService implements ServiceReminderScheduler {
 
   @override
   Future<bool> notificationsEnabled() async {
-    if (kIsWeb) {
-      return false;
-    }
     await _initialize();
     return switch (defaultTargetPlatform) {
       TargetPlatform.android =>
@@ -154,9 +148,6 @@ class LocalNotificationService implements ServiceReminderScheduler {
 
   @override
   Future<void> scheduleServices(List<HouseholdService> services) async {
-    if (kIsWeb) {
-      return;
-    }
     await _initialize();
     await cancelServiceReminders();
     for (final plan in _planner.plansFor(services)) {

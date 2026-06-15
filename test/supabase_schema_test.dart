@@ -29,4 +29,25 @@ void main() {
     expect(sql, contains('blocked = false,'));
     expect(sql, contains('if current_record.request_count >= 3 then'));
   });
+
+  test('compatibility config uses one schema-version source of truth', () {
+    final sql = File(
+      'supabase/migrations/'
+      '202606150002_add_app_compatibility_config.sql',
+    ).readAsStringSync();
+    final createTable = sql.substring(
+      sql.indexOf('create table if not exists public.app_compatibility_config'),
+      sql.indexOf(');') + 2,
+    );
+
+    expect(createTable, isNot(contains('current_schema_version')));
+    expect(
+      sql,
+      contains("'current_schema_version', public.ledger_schema_version()"),
+    );
+    expect(
+      sql,
+      contains('drop column if exists current_schema_version cascade'),
+    );
+  });
 }

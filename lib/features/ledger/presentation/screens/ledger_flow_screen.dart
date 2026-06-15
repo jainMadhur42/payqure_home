@@ -268,7 +268,7 @@ class LedgerFlowScreen extends StatelessWidget {
             : controller.route == LedgerRoute.theme
             ? 'Theme'
             : controller.route == LedgerRoute.notifications
-            ? 'Notifications'
+            ? 'Reminders'
             : controller.route == LedgerRoute.privacyPolicy
             ? 'Privacy Policy'
             : controller.route == LedgerRoute.termsDisclaimer
@@ -781,7 +781,7 @@ class _SettingsView extends StatelessWidget {
             ),
             _MoreTile(
               icon: Icons.notifications_none_rounded,
-              title: 'Notifications',
+              title: 'Reminders',
               onTap: () => controller.goTo(LedgerRoute.notifications),
             ),
           ],

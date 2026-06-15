@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:drift/drift.dart';
 
 import '../../../../core/analytics/app_analytics.dart';
+import '../../../../core/app_info/app_compatibility.dart';
 import '../../../../core/utils/id_generator.dart';
 import '../../domain/entities/advance_payment.dart';
 import '../../domain/entities/household_service.dart';
@@ -28,7 +29,8 @@ import '../sync/ledger_sync_coordinator.dart';
 import '../sync/supabase_ledger_remote_data_source.dart';
 
 class DriftLedgerRepository implements LedgerRepository {
-  static const requiredRemoteSchemaVersion = 5;
+  static const requiredRemoteSchemaVersion =
+      AppCompatibilityContract.clientSchemaVersion;
 
   DriftLedgerRepository({
     required LedgerDatabase database,

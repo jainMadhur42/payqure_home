@@ -1,5 +1,6 @@
 enum LedgerRoute {
   splash,
+  appUpdateRequired,
   onboarding,
   login,
   register,

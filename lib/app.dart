@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/analytics/app_analytics.dart';
 import 'core/app_info/app_version_provider.dart';
+import 'core/app_info/app_compatibility_repository.dart';
 import 'core/theme/app_theme.dart';
 import 'common/widgets/keyboard_done_accessory.dart';
 import 'features/ledger/data/database/ledger_database.dart';
@@ -59,6 +60,9 @@ class _PayqureHomeAppState extends State<PayqureHomeApp>
       reminderScheduler: LocalNotificationService(),
       analytics: analytics,
       appVersionProvider: const PackageInfoAppVersionProvider(),
+      appCompatibilityRepository: SupabaseAppCompatibilityRepository(
+        widget.supabaseClient,
+      ),
     );
   }
 

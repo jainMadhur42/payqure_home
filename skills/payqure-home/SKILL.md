@@ -28,6 +28,13 @@ Core capabilities:
 - Store phone as profile data; there is no phone verification flow.
 - Require acceptance of the current Privacy Policy.
 
+Supported platforms:
+
+- Android phones
+- iPhones
+
+Do not recreate Web, macOS, Linux, Windows, or iPad targets.
+
 ## Start Here
 
 Important entry points:
@@ -321,12 +328,37 @@ Fresh production schema:
 supabase/migrations/202606130001_create_payqure_home_production_schema.sql
 ```
 
-This single bootstrap creates the complete schema at ledger version 5,
+This bootstrap creates the base schema at ledger version 5,
 including payment allocations, privacy acceptance, OTP request limits, and
 registration identity checks, plus optimized service month logs. It is
 intended for a new Supabase project and must not be run as a replacement
 migration on an existing populated database. It deliberately does not create
 the obsolete `service_entries` table.
+
+After the bootstrap, apply every later migration in filename order. The
+current compatibility migration is:
+
+```text
+supabase/migrations/202606150002_add_app_compatibility_config.sql
+```
+
+The current remote ledger schema version is stored only in
+`app_schema_versions`. The mobile compatibility record stores the minimum
+supported schema, minimum app version, and latest app version as server policy.
+
+`get_app_compatibility_config()` derives `current_schema_version` from
+`app_schema_versions` so startup needs one RPC without duplicating stored
+schema state.
+
+`pubspec.yaml` is the only source of truth for the installed Flutter app
+version. Android/iOS receive that version during build, and runtime UI reads it
+through `PackageInfo`. Do not add a hardcoded current app version to Dart.
+
+Clients below the minimum app version or minimum supported schema show the
+forced-update screen. A client schema newer than the backend shows a temporary
+backend-upgrade screen. Supported older app versions remain usable. Temporary
+compatibility-fetch failures use the last cached contract and otherwise fail
+open so a network outage does not lock users out.
 
 For an existing project that already ran the production bootstrap before the
 identity check was added, run:
@@ -357,7 +389,7 @@ When changing a required remote contract:
 
 1. Add an incremental SQL migration.
 2. Update the schema version record/function as needed.
-3. Update `requiredRemoteSchemaVersion`.
+3. Update `AppCompatibilityContract.clientSchemaVersion`.
 4. Add a test for missing/outdated schema behavior.
 
 Never embed a Supabase service-role key. Only the public publishable key may be
@@ -506,7 +538,7 @@ Invariants:
 
 After PDF changes, run `pdf_statement_service_test.dart`.
 
-The `printing` package currently emits an iOS/macOS Swift Package Manager
+The `printing` package currently emits an iOS Swift Package Manager
 warning. It is known; do not remove PDF support merely to silence it.
 
 ## Legal and Data Deletion
@@ -557,7 +589,7 @@ Run build runner only when Drift-generated code needs regeneration.
 Known analyzer warning:
 
 ```text
-printing does not support Swift Package Manager for iOS/macOS
+printing does not support Swift Package Manager for iOS
 ```
 
 Treat new analyzer errors or test failures as regressions; do not dismiss them

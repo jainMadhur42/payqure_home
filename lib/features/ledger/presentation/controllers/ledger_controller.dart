@@ -1,9 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
 import '../../../../core/analytics/app_analytics.dart';
+import '../../../../core/app_info/app_compatibility.dart';
+import '../../../../core/app_info/app_compatibility_repository.dart';
 import '../../../../core/app_info/app_version_provider.dart';
 import '../../../../core/utils/error_message_mapper.dart';
 import '../../../../core/utils/currency_formatter.dart';
@@ -50,6 +53,7 @@ class LedgerController extends ChangeNotifier {
   static const _currencyPreferenceKey = 'currency_code';
   static const _themePreferenceKey = 'theme_mode';
   static const _onboardingPreferenceKey = 'has_seen_onboarding';
+  static const _compatibilityCacheKey = 'app_compatibility_config';
 
   LedgerController({
     required AuthRepository authRepository,
@@ -59,6 +63,8 @@ class LedgerController extends ChangeNotifier {
         const NoopServiceReminderScheduler(),
     AppAnalytics? analytics,
     AppVersionProvider appVersionProvider = const FallbackAppVersionProvider(),
+    AppCompatibilityRepository appCompatibilityRepository =
+        const NoopAppCompatibilityRepository(),
   }) : this._(
          authRepository,
          ledgerRepository,
@@ -66,6 +72,7 @@ class LedgerController extends ChangeNotifier {
          reminderScheduler,
          analytics ?? AppAnalytics.disabled(),
          appVersionProvider,
+         appCompatibilityRepository,
        );
 
   LedgerController._(
@@ -75,6 +82,7 @@ class LedgerController extends ChangeNotifier {
     ServiceReminderScheduler reminderScheduler,
     this._analytics,
     this._appVersionProvider,
+    this._appCompatibilityRepository,
   ) : _reminderScheduler = reminderScheduler,
       _sessionController = SessionController(authRepository),
       _monthDataController = MonthDataController(_ledgerRepository),
@@ -83,7 +91,8 @@ class LedgerController extends ChangeNotifier {
       _reminderCoordinator = ServiceReminderCoordinator(reminderScheduler) {
     unawaited(restoreCurrencyPreference());
     unawaited(restoreThemePreference());
-    unawaited(_loadAppVersion());
+    _appVersionLoadFuture = _loadAppVersion();
+    unawaited(_appVersionLoadFuture);
     _authSubscription = _sessionController.watchProfile().listen(
       (nextProfile) => unawaited(_handleProfileChange(nextProfile)),
     );
@@ -100,6 +109,7 @@ class LedgerController extends ChangeNotifier {
   final ServiceReminderScheduler _reminderScheduler;
   final AppAnalytics _analytics;
   final AppVersionProvider _appVersionProvider;
+  final AppCompatibilityRepository _appCompatibilityRepository;
   final SessionController _sessionController;
   final MonthDataController _monthDataController;
   final EntryOperationsController _entryOperations;
@@ -123,10 +133,9 @@ class LedgerController extends ChangeNotifier {
   bool _disposed = false;
   String? _pendingReminderServiceId;
   Future<void> _notificationNavigationTail = Future<void>.value();
-  AppVersionInfo _appVersionInfo = const AppVersionInfo(
-    version: '1.0.0',
-    buildNumber: '1',
-  );
+  late final Future<void> _appVersionLoadFuture;
+  AppVersionInfo _appVersionInfo = AppVersionInfo.unknown;
+  AppCompatibilityDecision? appCompatibilityDecision;
 
   LedgerRoute route = LedgerRoute.splash;
   bool isBackwardNavigation = false;
@@ -151,6 +160,9 @@ class LedgerController extends ChangeNotifier {
   HouseholdService? editingService;
 
   String get appVersionLabel => _appVersionInfo.label;
+  bool get isAppUpdateRequired =>
+      appCompatibilityDecision?.status ==
+      AppCompatibilityStatus.appUpdateRequired;
   AppCurrency selectedCurrency = AppCurrency.usd;
   final ValueNotifier<ThemeMode> themeModeListenable = ValueNotifier(
     ThemeMode.system,
@@ -229,6 +241,9 @@ class LedgerController extends ChangeNotifier {
         _pendingReminderServiceId =
             await _reminderScheduler.consumeLaunchServiceId() ??
             _pendingReminderServiceId;
+        if (await _applyCompatibilityGate()) {
+          return;
+        }
         final hasSeenOnboarding = await _ledgerRepository.getLocalPreference(
           _onboardingPreferenceKey,
         );
@@ -253,6 +268,15 @@ class LedgerController extends ChangeNotifier {
         profile = null;
         _setRoute(LedgerRoute.login);
         rethrow;
+      }
+    });
+  }
+
+  Future<void> retryCompatibilityCheck() async {
+    await _run(() async {
+      final blocked = await _applyCompatibilityGate(forceRemote: true);
+      if (!blocked) {
+        _setRoute(LedgerRoute.splash);
       }
     });
   }
@@ -1511,6 +1535,10 @@ class LedgerController extends ChangeNotifier {
 
   Future<void> _handleProfileChange(UserProfile? nextProfile) async {
     profile = nextProfile;
+    if (route == LedgerRoute.appUpdateRequired) {
+      notifyListeners();
+      return;
+    }
     if (nextProfile == null) {
       await _monthDataController.cancel();
       overview = null;
@@ -1828,6 +1856,7 @@ class LedgerController extends ChangeNotifier {
   int _routeDepth(LedgerRoute route) {
     return switch (route) {
       LedgerRoute.splash => 0,
+      LedgerRoute.appUpdateRequired => 1,
       LedgerRoute.onboarding => 1,
       LedgerRoute.login ||
       LedgerRoute.register ||
@@ -1858,6 +1887,76 @@ class LedgerController extends ChangeNotifier {
       LedgerRoute.serviceAdvanceHistory => 6,
       LedgerRoute.pdfPreview => 7,
     };
+  }
+
+  Future<bool> _applyCompatibilityGate({bool forceRemote = false}) async {
+    await _appVersionLoadFuture;
+    AppCompatibilityConfig? config;
+
+    try {
+      config = await _appCompatibilityRepository.fetch().timeout(
+        const Duration(seconds: 5),
+      );
+      if (config != null) {
+        await _ledgerRepository.saveLocalPreference(
+          key: _compatibilityCacheKey,
+          value: jsonEncode(config.toJson()),
+        );
+      }
+    } catch (error, stackTrace) {
+      _analytics.logErrorContext(
+        error,
+        stackTrace: stackTrace,
+        reason: 'app_compatibility_fetch_failed',
+        keys: const {AnalyticsParams.screenName: 'startup'},
+      );
+    }
+
+    config ??= await _cachedCompatibilityConfig();
+    if (config == null) {
+      if (forceRemote) {
+        errorMessage = 'Could not check for updates. Please try again.';
+      }
+      return false;
+    }
+
+    try {
+      final decision = AppCompatibilityEvaluator.evaluate(
+        config: config,
+        installedAppVersion: _appVersionInfo.version,
+        clientSchemaVersion: AppCompatibilityContract.clientSchemaVersion,
+      );
+      appCompatibilityDecision = decision;
+      if (decision.blocksApp) {
+        _setRoute(LedgerRoute.appUpdateRequired);
+        return true;
+      }
+      return false;
+    } on FormatException catch (error, stackTrace) {
+      _analytics.logErrorContext(
+        error,
+        stackTrace: stackTrace,
+        reason: 'app_compatibility_parse_failed',
+        keys: const {AnalyticsParams.screenName: 'startup'},
+      );
+      return false;
+    }
+  }
+
+  Future<AppCompatibilityConfig?> _cachedCompatibilityConfig() async {
+    final cached = await _ledgerRepository.getLocalPreference(
+      _compatibilityCacheKey,
+    );
+    if (cached == null || cached.isEmpty) {
+      return null;
+    }
+    try {
+      return AppCompatibilityConfig.fromJson(
+        jsonDecode(cached) as Map<String, dynamic>,
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> _run(Future<void> Function() action) async {

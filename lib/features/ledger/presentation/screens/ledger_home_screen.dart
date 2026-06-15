@@ -4,6 +4,7 @@ import '../../domain/entities/app_route.dart';
 import '../../../legal/presentation/legal_screens.dart';
 import '../../../onboarding/presentation/onboarding_screen.dart';
 import '../controllers/ledger_controller.dart';
+import 'app_update_required_screen.dart';
 import 'ledger_flow_screen.dart';
 import 'login_screen.dart';
 import 'splash_screen.dart';
@@ -94,6 +95,7 @@ class _LedgerHomeScreenState extends State<LedgerHomeScreen> {
                 ),
                 if (controller.isLoading &&
                     controller.route != LedgerRoute.splash &&
+                    controller.route != LedgerRoute.appUpdateRequired &&
                     controller.route != LedgerRoute.onboarding &&
                     controller.route != LedgerRoute.dashboard)
                   const Positioned.fill(
@@ -115,6 +117,11 @@ class _LedgerHomeScreenState extends State<LedgerHomeScreen> {
       LedgerRoute.splash => SplashScreen(
         key: const ValueKey('splash'),
         onDone: controller.completeSplash,
+      ),
+      LedgerRoute.appUpdateRequired => AppUpdateRequiredScreen(
+        key: const ValueKey('app-update-required'),
+        decision: controller.appCompatibilityDecision!,
+        onRetry: controller.retryCompatibilityCheck,
       ),
       LedgerRoute.onboarding => OnboardingScreen(
         key: const ValueKey('onboarding'),

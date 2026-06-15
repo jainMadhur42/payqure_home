@@ -74,13 +74,3 @@ ios/**/*.mode2v3
 ios/**/*.moved-aside
 ios/**/*.pbxuser
 ios/**/*.perspectivev3
-
-# macOS
-macos/Flutter/ephemeral/
-macos/Pods/
-macos/**/xcuserdata/
-macos/**/DerivedData/
-
-# Linux / Windows
-linux/flutter/ephemeral/
-windows/flutter/ephemeral/

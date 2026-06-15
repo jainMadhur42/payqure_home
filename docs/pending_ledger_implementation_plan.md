@@ -58,10 +58,10 @@ The Flutter ledger prototype is now implemented as a functional local-first app 
 - Phone verification.
 - Phone-login email resolution tests.
 - PDF share/download work.
-- `printing` package Swift Package Manager warning for iOS/macOS.
+- `printing` package Swift Package Manager warning for iOS.
 
 ## Current Pending Coding Work
 
 - Continue splitting the remaining dashboard, quick-log, add-service, more, profile, and PDF preview sections out of `ledger_flow_screen.dart`.
 - Implement real Firebase Analytics if product analytics events are still required.
-- Replace or monitor the `printing` package iOS/macOS Swift Package Manager warning.
+- Replace or monitor the `printing` package iOS Swift Package Manager warning.

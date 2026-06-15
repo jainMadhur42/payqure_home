@@ -3,6 +3,8 @@ import 'package:package_info_plus/package_info_plus.dart';
 class AppVersionInfo {
   const AppVersionInfo({required this.version, required this.buildNumber});
 
+  static const unknown = AppVersionInfo(version: '0.0.0', buildNumber: '');
+
   final String version;
   final String buildNumber;
 
@@ -35,7 +37,5 @@ class FallbackAppVersionProvider implements AppVersionProvider {
   const FallbackAppVersionProvider();
 
   @override
-  Future<AppVersionInfo> load() async {
-    return const AppVersionInfo(version: '1.0.0', buildNumber: '1');
-  }
+  Future<AppVersionInfo> load() async => AppVersionInfo.unknown;
 }

@@ -250,6 +250,7 @@ class LedgerAnalyticsMapper {
       LedgerRoute.termsDisclaimer => 'terms_disclaimer',
       LedgerRoute.deleteMyData => 'delete_my_data',
       LedgerRoute.privacyPolicyAcceptance => 'privacy_policy_acceptance',
+      LedgerRoute.appUpdateRequired => 'app_update_required',
     };
   }
 }
