@@ -789,7 +789,7 @@ class _FakeRemoteDataSource implements LedgerRemoteDataSource {
   List<Map<String, dynamic>> advances = const [];
   List<Map<String, dynamic>> payments = const [];
   List<Map<String, dynamic>> settlements = const [];
-  int? schemaVersion = 6;
+  int? schemaVersion = 8;
   bool failOnMonthLogPush = false;
   int pushedServices = 0;
   int pushedMonthLogs = 0;

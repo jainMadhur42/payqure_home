@@ -21,6 +21,7 @@ import '../../domain/entities/ledger_month.dart';
 import '../../domain/entities/ledger_overview.dart';
 import '../../domain/entities/monthly_bill.dart';
 import '../../domain/entities/monthly_settlement.dart';
+import '../../domain/entities/otp_request_status.dart';
 import '../../domain/entities/payment_transaction.dart';
 import '../../domain/entities/payment_settlement_preview.dart';
 import '../../domain/entities/service_entry.dart';
@@ -156,6 +157,9 @@ class LedgerController extends ChangeNotifier {
   String pendingVerificationEmail = '';
   String pendingPasswordResetEmail = '';
   DateTime? emailVerificationResendAvailableAt;
+  DateTime? passwordResetResendAvailableAt;
+  OtpRequestStatus? emailVerificationOtpStatus;
+  OtpRequestStatus? passwordResetOtpStatus;
   AddServiceDraft? addServiceDraft;
   HouseholdService? editingService;
 
@@ -172,8 +176,14 @@ class LedgerController extends ChangeNotifier {
   bool get isEditingService => editingService != null;
   bool get canResendEmailVerification =>
       emailVerificationResendRemaining == Duration.zero;
-  Duration get emailVerificationResendRemaining {
-    final availableAt = emailVerificationResendAvailableAt;
+  Duration get emailVerificationResendRemaining =>
+      _otpResendRemaining(emailVerificationResendAvailableAt);
+  bool get canResendPasswordReset =>
+      passwordResetResendRemaining == Duration.zero;
+  Duration get passwordResetResendRemaining =>
+      _otpResendRemaining(passwordResetResendAvailableAt);
+
+  Duration _otpResendRemaining(DateTime? availableAt) {
     if (availableAt == null) {
       return Duration.zero;
     }
@@ -223,6 +233,18 @@ class LedgerController extends ChangeNotifier {
       key: _currencyPreferenceKey,
       value: currency.code,
     );
+    final currentProfile = profile;
+    if (currentProfile != null &&
+        !_sessionController.isLocalDevelopmentProfile(currentProfile)) {
+      try {
+        profile = await _sessionController.updatePreferredCurrency(
+          currency.code,
+        );
+      } catch (error) {
+        errorMessage = ErrorMessageMapper.userFacing(error);
+        notifyListeners();
+      }
+    }
     _setAnalyticsUserProperties();
   }
 
@@ -516,7 +538,11 @@ class LedgerController extends ChangeNotifier {
         parameters: const {AnalyticsParams.method: 'email_password'},
       );
       pendingVerificationEmail = profile!.email;
-      _startEmailVerificationResendCooldown();
+      emailVerificationOtpStatus = _otpStatusAfterRequest(
+        OtpRequestPurpose.signup,
+        emailVerificationOtpStatus,
+      );
+      emailVerificationResendAvailableAt = _nextOtpResendTime();
       _setRoute(LedgerRoute.emailVerificationPending);
     });
   }
@@ -537,9 +563,21 @@ class LedgerController extends ChangeNotifier {
     }
     await _run(() async {
       await _sessionController.resendEmailVerification(email);
-      _startEmailVerificationResendCooldown();
+      emailVerificationResendAvailableAt = _nextOtpResendTime();
       successMessage = 'Verification OTP sent again.';
     });
+    final serverStatus = _sessionController.otpRequestStatus(
+      OtpRequestPurpose.signup,
+    );
+    if (serverStatus != null) {
+      emailVerificationOtpStatus = serverStatus;
+    } else if (successMessage == 'Verification OTP sent again.') {
+      emailVerificationOtpStatus = _otpStatusAfterRequest(
+        OtpRequestPurpose.signup,
+        emailVerificationOtpStatus,
+      );
+    }
+    notifyListeners();
   }
 
   Future<void> verifyEmailOtp({
@@ -553,14 +591,9 @@ class LedgerController extends ChangeNotifier {
       );
       pendingVerificationEmail = '';
       emailVerificationResendAvailableAt = null;
+      emailVerificationOtpStatus = null;
       await _openAuthenticatedDestination(profile!);
     });
-  }
-
-  void _startEmailVerificationResendCooldown() {
-    emailVerificationResendAvailableAt = DateTime.now().toUtc().add(
-      const Duration(minutes: 2),
-    );
   }
 
   Future<void> continueAfterEmailVerification() async {
@@ -605,8 +638,55 @@ class LedgerController extends ChangeNotifier {
       pendingPasswordResetEmail = await _sessionController.requestPasswordReset(
         identifier,
       );
+      passwordResetResendAvailableAt = _nextOtpResendTime();
       _setRoute(LedgerRoute.resetPasswordOtp);
     });
+    final serverStatus = _sessionController.otpRequestStatus(
+      OtpRequestPurpose.passwordReset,
+    );
+    if (serverStatus != null) {
+      passwordResetOtpStatus = serverStatus;
+    } else if (pendingPasswordResetEmail.isNotEmpty &&
+        route == LedgerRoute.resetPasswordOtp) {
+      passwordResetOtpStatus = _otpStatusAfterRequest(
+        OtpRequestPurpose.passwordReset,
+        passwordResetOtpStatus,
+      );
+    }
+    notifyListeners();
+  }
+
+  Future<void> resendPasswordResetOtp() async {
+    if (!canResendPasswordReset) {
+      errorMessage = 'Please wait before requesting another OTP.';
+      notifyListeners();
+      return;
+    }
+    final email = pendingPasswordResetEmail.trim();
+    if (email.isEmpty) {
+      errorMessage = 'Email is not available for password recovery.';
+      notifyListeners();
+      return;
+    }
+    await _run(() async {
+      pendingPasswordResetEmail = await _sessionController.requestPasswordReset(
+        email,
+      );
+      passwordResetResendAvailableAt = _nextOtpResendTime();
+      successMessage = 'Recovery OTP sent again.';
+    });
+    final serverStatus = _sessionController.otpRequestStatus(
+      OtpRequestPurpose.passwordReset,
+    );
+    if (serverStatus != null) {
+      passwordResetOtpStatus = serverStatus;
+    } else if (successMessage == 'Recovery OTP sent again.') {
+      passwordResetOtpStatus = _otpStatusAfterRequest(
+        OtpRequestPurpose.passwordReset,
+        passwordResetOtpStatus,
+      );
+    }
+    notifyListeners();
   }
 
   Future<void> resetPassword({
@@ -625,9 +705,40 @@ class LedgerController extends ChangeNotifier {
         parameters: const {AnalyticsParams.method: 'email_password'},
       );
       pendingPasswordResetEmail = '';
+      passwordResetResendAvailableAt = null;
+      passwordResetOtpStatus = null;
       successMessage = 'Password updated. Sign in with your new password.';
       _setRoute(LedgerRoute.login);
     });
+  }
+
+  DateTime _nextOtpResendTime() {
+    return DateTime.now().toUtc().add(const Duration(minutes: 2));
+  }
+
+  OtpRequestStatus _otpStatusAfterRequest(
+    OtpRequestPurpose purpose,
+    OtpRequestStatus? previous,
+  ) {
+    final serverStatus = _sessionController.otpRequestStatus(purpose);
+    if (serverStatus != null) {
+      return serverStatus;
+    }
+    final now = DateTime.now().toUtc();
+    final activePrevious =
+        previous != null && previous.remaining(now) > Duration.zero
+        ? previous
+        : null;
+    final usedCount = ((activePrevious?.usedCount ?? 0) + 1).clamp(
+      0,
+      OtpRequestStatus.maximumRequests,
+    );
+    return OtpRequestStatus(
+      usedCount: usedCount,
+      windowResetsAt:
+          activePrevious?.windowResetsAt ?? now.add(const Duration(hours: 1)),
+      blocked: usedCount >= OtpRequestStatus.maximumRequests,
+    );
   }
 
   void selectService(HouseholdService service) {
@@ -1564,6 +1675,7 @@ class LedgerController extends ChangeNotifier {
       _setRoute(LedgerRoute.privacyPolicyAcceptance);
       return;
     }
+    await _applyProfileCurrency(current);
     monthKey = defaultMonthKey();
     await _monthDataController.hydrate(
       userId: current.id,
@@ -1576,6 +1688,16 @@ class LedgerController extends ChangeNotifier {
     if (route != LedgerRoute.calendar) {
       _setRoute(LedgerRoute.dashboard);
     }
+  }
+
+  Future<void> _applyProfileCurrency(UserProfile current) async {
+    final currency = AppCurrency.fromCode(current.preferredCurrencyCode);
+    selectedCurrency = currency;
+    CurrencyFormatter.setCurrency(currency);
+    await _ledgerRepository.saveLocalPreference(
+      key: _currencyPreferenceKey,
+      value: currency.code,
+    );
   }
 
   Future<void> _startLedger(

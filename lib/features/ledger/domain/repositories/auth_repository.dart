@@ -1,5 +1,9 @@
 import '../entities/user_profile.dart';
 
+abstract interface class PreferredCurrencyRepository {
+  Future<UserProfile> updatePreferredCurrency(String currencyCode);
+}
+
 abstract interface class AuthRepository {
   Stream<UserProfile?> watchProfile();
   UserProfile? get currentProfile;
@@ -23,6 +27,7 @@ abstract interface class AuthRepository {
     required String name,
     required String phone,
   });
+
   /// Accepts an email or phone identifier (same as login) and returns the
   /// email address the recovery OTP was actually sent to.
   Future<String> requestPasswordReset(String identifier);

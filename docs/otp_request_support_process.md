@@ -1,8 +1,8 @@
 # OTP Request Support Process
 
 Email-confirmation and password-recovery OTP requests are limited to three per
-email and purpose. The fourth request blocks further OTP sends for 60 minutes.
-The next request after the block expires automatically resets the counter.
+email and purpose in a fixed 60-minute window. The fourth request is rejected.
+When the window expires, the next request automatically resets the counter.
 
 ## Optional Support Reset
 

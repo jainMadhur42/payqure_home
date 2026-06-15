@@ -8,6 +8,7 @@ class UserProfile {
     this.privacyPolicyAccepted = false,
     this.privacyPolicyAcceptedAt,
     this.privacyPolicyVersion = '',
+    this.preferredCurrencyCode = 'USD',
   });
 
   final String id;
@@ -18,6 +19,7 @@ class UserProfile {
   final bool privacyPolicyAccepted;
   final DateTime? privacyPolicyAcceptedAt;
   final String privacyPolicyVersion;
+  final String preferredCurrencyCode;
 
   UserProfile copyWith({
     String? name,
@@ -27,6 +29,7 @@ class UserProfile {
     bool? privacyPolicyAccepted,
     DateTime? privacyPolicyAcceptedAt,
     String? privacyPolicyVersion,
+    String? preferredCurrencyCode,
   }) {
     return UserProfile(
       id: id,
@@ -39,6 +42,8 @@ class UserProfile {
       privacyPolicyAcceptedAt:
           privacyPolicyAcceptedAt ?? this.privacyPolicyAcceptedAt,
       privacyPolicyVersion: privacyPolicyVersion ?? this.privacyPolicyVersion,
+      preferredCurrencyCode:
+          preferredCurrencyCode ?? this.preferredCurrencyCode,
     );
   }
 }

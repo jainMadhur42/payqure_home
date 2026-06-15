@@ -231,7 +231,7 @@ class _FirstOnboardingPage extends StatelessWidget {
                     style: const TextStyle(
                       fontSize: 30,
                       fontWeight: FontWeight.w900,
-                      color: AppColors.ink,
+                      color: AppColors.primary,
                       height: 1.15,
                     ),
                   ),
