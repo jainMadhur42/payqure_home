@@ -119,6 +119,24 @@ class DriftLedgerRepository implements LedgerRepository {
     );
   }
 
+  @override
+  Future<List<HouseholdService>> getAllServices({
+    required String userId,
+  }) async {
+    final rows =
+        await (_database.select(_database.serviceRecords)
+              ..where(
+                (table) =>
+                    table.userId.equals(userId) & table.isDeleted.equals(false),
+              )
+              ..orderBy([
+                (table) => OrderingTerm.asc(table.monthKey),
+                (table) => OrderingTerm.asc(table.name),
+              ]))
+            .get();
+    return rows.map((row) => row.toDomain(const [])).toList();
+  }
+
   Stream<void> _watchLedgerChanges(String userId) {
     late final StreamController<void> controller;
     final subscriptions = <StreamSubscription<dynamic>>[];

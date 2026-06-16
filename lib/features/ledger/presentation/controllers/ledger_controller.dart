@@ -1501,7 +1501,11 @@ class LedgerController extends ChangeNotifier {
   }
 
   Future<List<ServiceHistoryItem>> loadGlobalPaymentHistory() async {
-    final services = overview?.services ?? const <HouseholdService>[];
+    final userId = profile?.id ?? overview?.profile.id;
+    if (userId == null) {
+      return const [];
+    }
+    final services = await _ledgerRepository.getAllServices(userId: userId);
     return _paymentOperations.globalPaymentHistory(services);
   }
 

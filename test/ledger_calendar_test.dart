@@ -115,6 +115,7 @@ void main() {
     );
     final decoration = container.decoration! as BoxDecoration;
 
-    expect(decoration.color, AppColors.warningSoft);
+    expect(decoration.color, AppColors.warning.withValues(alpha: 0.10));
+    expect(decoration.shape, BoxShape.circle);
   });
 }
