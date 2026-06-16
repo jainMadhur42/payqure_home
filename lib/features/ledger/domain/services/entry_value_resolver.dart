@@ -23,7 +23,10 @@ class EntryValueResolver {
     required HouseholdService service,
     required ServiceEntry entry,
   }) {
-    final rate = service.templateType == ServiceTemplateType.fixedMonthly
+    final rate =
+        service.templateType == ServiceTemplateType.fixedMonthly ||
+            (service.templateType == ServiceTemplateType.attendance &&
+                service.monthlyAmountCents > 0)
         ? fixedDailyRateCents(service: service, monthKey: entry.monthKey)
         : entry.rateCents > 0
         ? entry.rateCents

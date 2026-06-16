@@ -379,13 +379,9 @@ class DriftLedgerRepository implements LedgerRepository {
                 pendingSync: const Value(true),
               ),
             );
-        await _reallocatePayments(
+        await _recalculateSettlementChain(
           serviceId: entry.serviceId,
-          monthKey: entry.monthKey,
-        );
-        await _recalculateSettlement(
-          serviceId: entry.serviceId,
-          monthKey: entry.monthKey,
+          fromMonthKey: entry.monthKey,
         );
       });
     });
@@ -410,13 +406,9 @@ class DriftLedgerRepository implements LedgerRepository {
                 pendingSync: const Value(true),
               ),
             );
-        await _reallocatePayments(
+        await _recalculateSettlementChain(
           serviceId: advance.serviceId,
-          monthKey: advance.monthKey,
-        );
-        await _recalculateSettlement(
-          serviceId: advance.serviceId,
-          monthKey: advance.monthKey,
+          fromMonthKey: advance.monthKey,
         );
       });
     });
@@ -436,13 +428,9 @@ class DriftLedgerRepository implements LedgerRepository {
             pendingSync: const Value(true),
           ),
         );
-        await _reallocatePayments(
+        await _recalculateSettlementChain(
           serviceId: advance.serviceId,
-          monthKey: advance.monthKey,
-        );
-        await _recalculateSettlement(
-          serviceId: advance.serviceId,
-          monthKey: advance.monthKey,
+          fromMonthKey: advance.monthKey,
         );
       });
     });

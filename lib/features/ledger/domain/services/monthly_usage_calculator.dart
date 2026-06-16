@@ -109,10 +109,17 @@ class MonthlyUsageCalculator {
           .amountCents;
     }
 
-    if (service.templateType == ServiceTemplateType.fixedMonthly) {
+    if (service.templateType == ServiceTemplateType.attendance &&
+        service.monthlyAmountCents > 0) {
       amount = _fixedMonthlyAmount(
         monthlyAmountCents: service.monthlyAmountCents,
-        deliveredDays: deliveredDays,
+        deliveredUnits: totalQuantity,
+        daysInMonth: monthEnd.day,
+      );
+    } else if (service.templateType == ServiceTemplateType.fixedMonthly) {
+      amount = _fixedMonthlyAmount(
+        monthlyAmountCents: service.monthlyAmountCents,
+        deliveredUnits: deliveredDays.toDouble(),
         daysInMonth: monthEnd.day,
       );
     }
@@ -128,13 +135,13 @@ class MonthlyUsageCalculator {
 
   int _fixedMonthlyAmount({
     required int monthlyAmountCents,
-    required int deliveredDays,
+    required double deliveredUnits,
     required int daysInMonth,
   }) {
-    if (monthlyAmountCents <= 0 || deliveredDays <= 0 || daysInMonth <= 0) {
+    if (monthlyAmountCents <= 0 || deliveredUnits <= 0 || daysInMonth <= 0) {
       return 0;
     }
-    return (monthlyAmountCents * deliveredDays / daysInMonth).round();
+    return (monthlyAmountCents * deliveredUnits / daysInMonth).round();
   }
 
   ServiceEntry _defaultEntry(

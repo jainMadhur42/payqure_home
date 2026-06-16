@@ -63,8 +63,8 @@ class ServiceDetailScreen extends StatelessWidget {
                 selectedDay: controller.selectedDay,
                 serviceStartDate: serviceStartDate,
                 onDaySelected: (day) => _handleDayTap(context, day),
-                onBlockedDaySelected: (_) =>
-                    _showServiceStartMessage(context, serviceStartDate),
+                onBlockedDaySelected: (date) =>
+                    _showBlockedDateMessage(context, date, serviceStartDate),
               ),
             ),
             const SizedBox(height: AppSpacing.md),
@@ -73,12 +73,21 @@ class ServiceDetailScreen extends StatelessWidget {
             QuickEntryActionCard(
               service: service,
               selectedStatus: selectedEntry?.status,
-              onQuickMark: (status) =>
-                  _saveQuickAction(day: controller.selectedDay, status: status),
-              onCustomize: () => controller.customizeEntryForService(
-                service: service,
-                day: controller.selectedDay,
-              ),
+              onQuickMark: (status) {
+                if (!_canEditSelectedDay(context, serviceStartDate)) {
+                  return;
+                }
+                _saveQuickAction(day: controller.selectedDay, status: status);
+              },
+              onCustomize: () {
+                if (!_canEditSelectedDay(context, serviceStartDate)) {
+                  return;
+                }
+                controller.customizeEntryForService(
+                  service: service,
+                  day: controller.selectedDay,
+                );
+              },
             ),
             const SizedBox(height: AppSpacing.md),
             SelectedDayDetailCard(
@@ -191,16 +200,67 @@ class ServiceDetailScreen extends StatelessWidget {
       'Nov',
       'Dec',
     ][serviceStartDate.month - 1];
+    _showSnackBar(
+      context,
+      'Service started from ${serviceStartDate.day} $month ${serviceStartDate.year} '
+      'can not update delivery before that. Edit service started date to mark '
+      'the entry.',
+    );
+  }
+
+  void _showBlockedDateMessage(
+    BuildContext context,
+    DateTime date,
+    DateTime? serviceStartDate,
+  ) {
+    if (_isFutureDate(date)) {
+      _showSnackBar(
+        context,
+        'Entries can only be logged on or after the service date.',
+      );
+      return;
+    }
+    _showServiceStartMessage(context, serviceStartDate);
+  }
+
+  bool _canEditSelectedDay(BuildContext context, DateTime? serviceStartDate) {
+    final month = LedgerMonth.parse(service.monthKey);
+    final selectedDate = DateTime(
+      month.year,
+      month.month,
+      controller.selectedDay,
+    );
+    if (_isFutureDate(selectedDate)) {
+      _showSnackBar(
+        context,
+        'Entries can only be logged on or after the service date.',
+      );
+      return false;
+    }
+    if (serviceStartDate != null) {
+      final start = DateTime(
+        serviceStartDate.year,
+        serviceStartDate.month,
+        serviceStartDate.day,
+      );
+      if (selectedDate.isBefore(start)) {
+        _showServiceStartMessage(context, serviceStartDate);
+        return false;
+      }
+    }
+    return true;
+  }
+
+  bool _isFutureDate(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    return DateTime(date.year, date.month, date.day).isAfter(today);
+  }
+
+  void _showSnackBar(BuildContext context, String message) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(
-            'Service started on ${serviceStartDate.day} $month ${serviceStartDate.year}. '
-            'You cannot add an entry before this date.',
-          ),
-        ),
-      );
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _saveQuickAction({
@@ -457,8 +517,10 @@ class _LoggedEntryDetails extends StatelessWidget {
         if (entry.status != ServiceEntryStatus.notDelivered) ...[
           if (service.templateType == ServiceTemplateType.attendance)
             DetailRow(
-              label: 'Daily Wage',
-              value: CurrencyFormatter.rupees(resolved.rateCents / 100),
+              label: 'Monthly Charge',
+              value: CurrencyFormatter.rupees(
+                _attendanceMonthlyAmountCents(service) / 100,
+              ),
             )
           else
             DetailRow(label: 'Quantity', value: entry.quantityLabel),
@@ -602,10 +664,9 @@ class ServiceDetailSummaryCard extends StatelessWidget {
         final dueLabel = _isCurrentMonth(controller.monthKey)
             ? 'Due till today'
             : 'Monthly Due';
-        final currentMonthRemaining =
-            settlement?.currentMonthRemainingCents ?? 0;
+        final currentMonthCharges = settlement?.usageAmountCents ?? 0;
         final previousBalance = settlement?.previousBalanceRemainingCents ?? 0;
-        final advanceApplied = settlement?.advanceUsedCents ?? 0;
+        final advanceBalance = settlement?.advanceBalanceCents ?? 0;
         final paidThisMonth = settlement?.paidThisMonthCents ?? 0;
         return AppCard(
           padding: const EdgeInsets.all(AppSpacing.md),
@@ -673,7 +734,7 @@ class ServiceDetailSummaryCard extends StatelessWidget {
                     child: _StatementMetric(
                       label: 'Current month',
                       value: CurrencyFormatter.rupees(
-                        currentMonthRemaining / 100,
+                        currentMonthCharges / 100,
                       ),
                     ),
                   ),
@@ -690,8 +751,8 @@ class ServiceDetailSummaryCard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: _StatementMetric(
-                      label: 'Advance applied',
-                      value: CurrencyFormatter.rupees(advanceApplied / 100),
+                      label: 'Advance balance',
+                      value: CurrencyFormatter.rupees(advanceBalance / 100),
                     ),
                   ),
                   Expanded(
@@ -796,8 +857,7 @@ class EntryViewState extends State<EntryView> {
       text: _formatQuantity(entry?.quantity ?? widget.service.defaultQuantity),
     );
     _rateController = TextEditingController(
-      text: ((entry?.rateCents ?? widget.service.rateCents) / 100)
-          .toStringAsFixed(0),
+      text: (_initialRateCents(entry) / 100).toStringAsFixed(0),
     );
     _noteController = TextEditingController(text: entry?.note ?? '');
   }
@@ -895,11 +955,13 @@ class EntryViewState extends State<EntryView> {
                   const SizedBox(height: AppSpacing.lg),
                   TextField(
                     controller: _rateController,
+                    enabled:
+                        widget.service.templateType ==
+                        ServiceTemplateType.quantity,
                     keyboardType: TextInputType.number,
                     scrollPadding: _entryScrollPadding,
                     decoration: InputDecoration(
-                      labelText:
-                          'Rate (${CurrencyFormatter.symbol} / ${widget.service.unit})',
+                      labelText: _rateLabel,
                       errorText: _rateError,
                     ),
                     onChanged: (_) {
@@ -1047,6 +1109,30 @@ class EntryViewState extends State<EntryView> {
       const _EntryStatusOption(ServiceEntryStatus.noEntry, 'No Entry'),
     ];
   }
+
+  int _initialRateCents(ServiceEntry? entry) {
+    if (widget.service.templateType == ServiceTemplateType.attendance &&
+        widget.service.monthlyAmountCents > 0) {
+      return const EntryValueResolver().fixedDailyRateCents(
+        service: widget.service,
+        monthKey: widget.controller.monthKey,
+      );
+    }
+    return entry?.rateCents ?? widget.service.rateCents;
+  }
+
+  String get _rateLabel {
+    if (widget.service.templateType == ServiceTemplateType.attendance) {
+      return 'Daily value from monthly charge (${CurrencyFormatter.symbol})';
+    }
+    return 'Rate (${CurrencyFormatter.symbol} / ${widget.service.unit})';
+  }
+}
+
+int _attendanceMonthlyAmountCents(HouseholdService service) {
+  return service.monthlyAmountCents > 0
+      ? service.monthlyAmountCents
+      : service.rateCents;
 }
 
 class _EntryStatusOption {

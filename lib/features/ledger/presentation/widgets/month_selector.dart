@@ -15,7 +15,10 @@ class MonthSelector extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final colorScheme = theme.colorScheme;
-    final months = _monthOptions(controller.monthKey);
+    final months = controller.availableMonthKeys;
+    final selectedMonthKey = months.contains(controller.monthKey)
+        ? controller.monthKey
+        : null;
     return Container(
       height: 36,
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
@@ -33,7 +36,14 @@ class MonthSelector extends StatelessWidget {
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
-          value: controller.monthKey,
+          value: selectedMonthKey,
+          hint: Text(
+            monthLabelShort(controller.monthKey),
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: colorScheme.onSurface,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
           dropdownColor: colorScheme.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(AppRadius.md),
           icon: Icon(
@@ -67,13 +77,5 @@ class MonthSelector extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  List<String> _monthOptions(String activeKey) {
-    final base = monthDate(activeKey);
-    return List.generate(13, (index) {
-      final date = DateTime(base.year, base.month - 6 + index);
-      return '${date.year}-${date.month.toString().padLeft(2, '0')}';
-    });
   }
 }

@@ -32,9 +32,10 @@ class LedgerAnalyticsMapper {
       },
       ServiceTemplateType.attendance => {
         ...base,
-        AnalyticsParams.dailyWage: service.rateCents / 100,
-        AnalyticsParams.dailyWageBucket: AmountAnalyticsHelper.centsBucket(
-          service.rateCents,
+        AnalyticsParams.monthlyAmount:
+            _attendanceMonthlyAmountCents(service) / 100,
+        AnalyticsParams.monthlyAmountBucket: AmountAnalyticsHelper.centsBucket(
+          _attendanceMonthlyAmountCents(service),
         ),
         AnalyticsParams.allowHalfDay: true,
       },
@@ -89,9 +90,10 @@ class LedgerAnalyticsMapper {
     if (service.templateType == ServiceTemplateType.attendance) {
       return {
         ...base,
-        AnalyticsParams.dailyWage: entry.rateCents / 100,
-        AnalyticsParams.dailyWageBucket: AmountAnalyticsHelper.centsBucket(
-          entry.rateCents,
+        AnalyticsParams.monthlyAmount:
+            _attendanceMonthlyAmountCents(service) / 100,
+        AnalyticsParams.monthlyAmountBucket: AmountAnalyticsHelper.centsBucket(
+          _attendanceMonthlyAmountCents(service),
         ),
       };
     }
@@ -252,5 +254,11 @@ class LedgerAnalyticsMapper {
       LedgerRoute.privacyPolicyAcceptance => 'privacy_policy_acceptance',
       LedgerRoute.appUpdateRequired => 'app_update_required',
     };
+  }
+
+  int _attendanceMonthlyAmountCents(HouseholdService service) {
+    return service.monthlyAmountCents > 0
+        ? service.monthlyAmountCents
+        : service.rateCents;
   }
 }

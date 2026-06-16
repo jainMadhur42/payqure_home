@@ -628,7 +628,10 @@ class _QuickLogServiceRowState extends State<_QuickLogServiceRow> {
 
   String _defaultSummary(HouseholdService service) {
     if (service.templateType == ServiceTemplateType.attendance) {
-      return '${CurrencyFormatter.rupees(service.rateCents / 100)}/day';
+      final monthlyAmount = service.monthlyAmountCents > 0
+          ? service.monthlyAmountCents
+          : service.rateCents;
+      return '${CurrencyFormatter.rupees(monthlyAmount / 100)}/month';
     }
     if (service.templateType == ServiceTemplateType.fixedMonthly) {
       return 'Delivered';
@@ -1401,7 +1404,7 @@ class _CreateServiceViewState extends State<_CreateServiceView> {
   String get _amountLabel {
     final template = _selectedTemplate;
     if (template?.templateType == ServiceTemplateType.attendance) {
-      return 'Daily Wage (${CurrencyFormatter.symbol})';
+      return 'Fixed Monthly Charge (${CurrencyFormatter.symbol})';
     }
     if (template?.templateType == ServiceTemplateType.fixedMonthly) {
       return 'Monthly Amount (${CurrencyFormatter.symbol})';
@@ -1869,7 +1872,7 @@ class _ReviewPricingCard extends StatelessWidget {
         ),
         _ReviewMetric(
           icon: Icons.currency_rupee,
-          label: 'Daily Wage',
+          label: 'Monthly Charge',
           value: CurrencyFormatter.rupees(draft.amount),
           color: Theme.of(context).colorScheme.primary,
         ),

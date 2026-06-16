@@ -116,17 +116,48 @@ class EntryOperationsController {
     required String monthKey,
     required int day,
   }) {
+    final month = LedgerMonth.parse(monthKey);
+    final entryDate = DateTime(month.year, month.month, day);
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    if (entryDate.isAfter(today)) {
+      throw StateError(
+        'Entries can only be logged on or after the service date.',
+      );
+    }
     final startDate = _startDateResolver.resolve(service);
     if (startDate == null) {
       return;
     }
-    final month = LedgerMonth.parse(monthKey);
-    final entryDate = DateTime(month.year, month.month, day);
-    if (entryDate.isBefore(startDate)) {
+    final serviceStartDate = DateTime(
+      startDate.year,
+      startDate.month,
+      startDate.day,
+    );
+    if (entryDate.isBefore(serviceStartDate)) {
       throw StateError(
-        'Entries cannot be added before the service start date.',
+        'Service started from ${_formatDate(serviceStartDate)} can not update '
+        'delivery before that. Edit service started date to mark the entry.',
       );
     }
+  }
+
+  String _formatDate(DateTime date) {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${date.day} ${months[date.month - 1]} ${date.year}';
   }
 
   double defaultQuantity(HouseholdService service, ServiceEntryStatus status) {
@@ -144,7 +175,9 @@ class EntryOperationsController {
   }
 
   int defaultRate(HouseholdService service, String monthKey) {
-    if (service.templateType == ServiceTemplateType.fixedMonthly) {
+    if (service.templateType == ServiceTemplateType.fixedMonthly ||
+        (service.templateType == ServiceTemplateType.attendance &&
+            service.monthlyAmountCents > 0)) {
       return _entryValueResolver.fixedDailyRateCents(
         service: service,
         monthKey: monthKey,

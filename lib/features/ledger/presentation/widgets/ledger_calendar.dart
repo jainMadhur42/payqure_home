@@ -57,6 +57,7 @@ class LedgerCalendar extends StatelessWidget {
                 ),
               );
           final isFuture = date.isAfter(todayDate);
+          final isInteractionBlocked = isBlocked || isFuture;
           final entry = entryByDay[day];
           final status = isFuture
               ? CalendarEntryVisualStatus.noEntry
@@ -70,11 +71,11 @@ class LedgerCalendar extends StatelessWidget {
               key: ValueKey('calendar-day-${date.toIso8601String()}'),
               date: date,
               status: status,
-              isSelected: selected && !isBlocked,
+              isSelected: selected && !isInteractionBlocked,
               isToday: date == todayDate,
-              isBlocked: isBlocked,
+              isBlocked: isInteractionBlocked,
               onTap: () {
-                if (isBlocked) {
+                if (isInteractionBlocked) {
                   onBlockedDaySelected?.call(date);
                   return;
                 }

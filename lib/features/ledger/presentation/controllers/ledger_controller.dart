@@ -195,6 +195,31 @@ class LedgerController extends ChangeNotifier {
 
   List<AppCurrency> get currencies => AppCurrency.values;
 
+  List<String> get availableMonthKeys {
+    final currentMonth = LedgerMonth.fromDate(DateTime.now());
+    final oldestAllowedMonth = currentMonth.shift(-11);
+    final earliestServiceMonth = _earliestServiceMonth();
+    var startMonth = earliestServiceMonth ?? currentMonth;
+    if (startMonth.key.compareTo(oldestAllowedMonth.key) < 0) {
+      startMonth = oldestAllowedMonth;
+    }
+    if (startMonth.key.compareTo(currentMonth.key) > 0) {
+      startMonth = currentMonth;
+    }
+
+    final monthKeys = <String>[];
+    var cursor = startMonth;
+    while (cursor.key.compareTo(currentMonth.key) <= 0) {
+      monthKeys.add(cursor.key);
+      cursor = cursor.shift(1);
+    }
+    return monthKeys;
+  }
+
+  bool canSelectMonth(String targetMonthKey) {
+    return availableMonthKeys.contains(targetMonthKey);
+  }
+
   Future<void> restoreThemePreference() async {
     final value = await _ledgerRepository.getLocalPreference(
       _themePreferenceKey,
@@ -449,7 +474,10 @@ class LedgerController extends ChangeNotifier {
         defaultQuantity: draft.defaultQuantity,
         rateCents: amountCents,
         monthlyAmountCents:
-            serviceBeingEdited.templateType == ServiceTemplateType.fixedMonthly
+            serviceBeingEdited.templateType ==
+                    ServiceTemplateType.fixedMonthly ||
+                serviceBeingEdited.templateType ==
+                    ServiceTemplateType.attendance
             ? amountCents
             : 0,
         routeAfterSave: serviceEditReturnRoute,
@@ -467,7 +495,9 @@ class LedgerController extends ChangeNotifier {
       unit: draft.unit,
       defaultQuantity: draft.defaultQuantity,
       rateCents: amountCents,
-      monthlyAmountCents: draft.templateType == ServiceTemplateType.fixedMonthly
+      monthlyAmountCents:
+          draft.templateType == ServiceTemplateType.fixedMonthly ||
+              draft.templateType == ServiceTemplateType.attendance
           ? amountCents
           : 0,
       routeAfterSave: LedgerRoute.calendar,
@@ -898,6 +928,9 @@ class LedgerController extends ChangeNotifier {
   Future<void> goToNextMonth() => _changeMonth(1);
 
   Future<void> selectMonth(String nextMonthKey) async {
+    if (!canSelectMonth(nextMonthKey)) {
+      return;
+    }
     final userId = profile?.id ?? overview?.profile.id;
     if (userId == null || nextMonthKey == monthKey) {
       return;
@@ -1176,6 +1209,7 @@ class LedgerController extends ChangeNotifier {
       return entry;
     } catch (error) {
       errorMessage = ErrorMessageMapper.userFacing(error);
+      _showToast(errorMessage!);
       notifyListeners();
       return null;
     }
@@ -1183,6 +1217,24 @@ class LedgerController extends ChangeNotifier {
 
   DateTime _dateForMonthKey(String key) {
     return LedgerMonth.parse(key).firstDay;
+  }
+
+  LedgerMonth? _earliestServiceMonth() {
+    final services = <HouseholdService>[
+      ...(overview?.services ?? const <HouseholdService>[]),
+      ?selectedService,
+    ];
+    LedgerMonth? earliest;
+    for (final service in services) {
+      final startDate = _serviceStartDateResolver.resolve(service);
+      final serviceMonth = startDate != null
+          ? LedgerMonth.fromDate(startDate)
+          : LedgerMonth.parse(service.monthKey);
+      if (earliest == null || serviceMonth.key.compareTo(earliest.key) < 0) {
+        earliest = serviceMonth;
+      }
+    }
+    return earliest;
   }
 
   Future<void> clearQuickEntryForService({

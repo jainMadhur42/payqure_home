@@ -1561,8 +1561,11 @@ class PdfStatementService {
     final lines = groups.values.map((group) {
       final dayLabel = group.halfDay ? 'Half Day' : 'Present Day';
       final multiplier = group.halfDay ? ' × 0.5' : '';
+      final rateLabel = bill.service.monthlyAmountCents > 0
+          ? '${_money(group.rateCents)} daily value'
+          : '${_money(group.rateCents)} / day';
       return _CalculationLine(
-        '${group.days} $dayLabel${group.days == 1 ? '' : 's'} × ${_money(group.rateCents)} / day$multiplier',
+        '${group.days} $dayLabel${group.days == 1 ? '' : 's'} × $rateLabel$multiplier',
         group.amountCents,
       );
     }).toList();

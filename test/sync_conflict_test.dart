@@ -426,6 +426,147 @@ void main() {
   });
 
   test(
+    'extra payment remains advance and is consumed by later entries',
+    () async {
+      final now = DateTime.utc(2026, 5, 20);
+      await _insertLocalService(
+        database,
+        name: 'Milkman',
+        updatedAt: now,
+        pendingSync: false,
+      );
+      await repository.saveEntry(
+        ServiceEntry(
+          id: 'entry-before-overpayment',
+          serviceId: serviceId,
+          monthKey: monthKey,
+          day: 20,
+          status: ServiceEntryStatus.delivered,
+          quantity: 1,
+          unit: 'L',
+          rateCents: 35000,
+          amountCents: 35000,
+          updatedAt: now,
+        ),
+      );
+      await repository.savePayment(
+        PaymentTransaction(
+          id: 'payment-overpayment',
+          userId: userId,
+          serviceId: serviceId,
+          monthKey: monthKey,
+          amountCents: 100000,
+          paymentDate: now,
+          mode: PaymentMode.upi,
+          updatedAt: now,
+        ),
+      );
+
+      final overpaid = await repository.getSettlement(
+        serviceId: serviceId,
+        monthKey: monthKey,
+      );
+      expect(overpaid.remainingAmountCents, 0);
+      expect(overpaid.advanceToNextMonthCents, 65000);
+
+      await repository.saveEntry(
+        ServiceEntry(
+          id: 'entry-after-overpayment',
+          serviceId: serviceId,
+          monthKey: monthKey,
+          day: 21,
+          status: ServiceEntryStatus.delivered,
+          quantity: 1,
+          unit: 'L',
+          rateCents: 5000,
+          amountCents: 5000,
+          updatedAt: now.add(const Duration(days: 1)),
+        ),
+      );
+
+      final afterEntry = await repository.getSettlement(
+        serviceId: serviceId,
+        monthKey: monthKey,
+      );
+      final payment = (await repository.getPaymentHistory(
+        serviceId: serviceId,
+      )).single;
+      expect(afterEntry.remainingAmountCents, 0);
+      expect(afterEntry.advanceToNextMonthCents, 60000);
+      expect(payment.currentMonthAmountCents, 40000);
+      expect(payment.previousBalanceAmountCents, 0);
+      expect(payment.advanceAmountCents, 60000);
+    },
+  );
+
+  test(
+    'payment settles previous month then current month before advance',
+    () async {
+      final mayDate = DateTime.utc(2026, 5, 31);
+      final juneDate = DateTime.utc(2026, 6, 20);
+      await _insertLocalService(
+        database,
+        name: 'Milkman',
+        updatedAt: mayDate,
+        pendingSync: false,
+      );
+      await repository.saveEntry(
+        ServiceEntry(
+          id: 'entry-previous-due',
+          serviceId: serviceId,
+          monthKey: monthKey,
+          day: 31,
+          status: ServiceEntryStatus.delivered,
+          quantity: 1,
+          unit: 'L',
+          rateCents: 20000,
+          amountCents: 20000,
+          updatedAt: mayDate,
+        ),
+      );
+      await repository.saveEntry(
+        ServiceEntry(
+          id: 'entry-current-due',
+          serviceId: serviceId,
+          monthKey: '2026-06',
+          day: 20,
+          status: ServiceEntryStatus.delivered,
+          quantity: 1,
+          unit: 'L',
+          rateCents: 35000,
+          amountCents: 35000,
+          updatedAt: juneDate,
+        ),
+      );
+      await repository.savePayment(
+        PaymentTransaction(
+          id: 'payment-oldest-first',
+          userId: userId,
+          serviceId: serviceId,
+          monthKey: '2026-06',
+          amountCents: 100000,
+          paymentDate: juneDate,
+          mode: PaymentMode.upi,
+          updatedAt: juneDate,
+        ),
+      );
+
+      final payment = (await repository.getPaymentHistory(
+        serviceId: serviceId,
+      )).single;
+      final juneSettlement = await repository.getSettlement(
+        serviceId: serviceId,
+        monthKey: '2026-06',
+      );
+      expect(payment.previousBalanceAmountCents, 20000);
+      expect(payment.currentMonthAmountCents, 35000);
+      expect(payment.advanceAmountCents, 45000);
+      expect(juneSettlement.remainingAmountCents, 0);
+      expect(juneSettlement.advanceToNextMonthCents, 45000);
+    },
+  );
+
+  test(
     'future payment settles previous month and appears in previous month history',
     () async {
       final mayDate = DateTime.utc(2026, 5, 31);

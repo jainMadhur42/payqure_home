@@ -60,7 +60,7 @@ class HomeSummaryBuilder {
       paidCents: summaries.fold(0, (sum, summary) => sum + summary.paidCents),
       advanceCents: summaries.fold(
         0,
-        (sum, summary) => sum + summary.advanceUsedCents,
+        (sum, summary) => sum + summary.advanceCents,
       ),
       serviceCount: summaries.length,
     );

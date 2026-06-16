@@ -13,6 +13,7 @@ import 'package:payqure_home/features/ledger/data/services/local_notification_se
 import 'package:payqure_home/features/ledger/data/sync/supabase_ledger_remote_data_source.dart';
 import 'package:payqure_home/features/ledger/domain/entities/app_route.dart';
 import 'package:payqure_home/features/ledger/domain/entities/household_service.dart';
+import 'package:payqure_home/features/ledger/domain/entities/service_metadata.dart';
 import 'package:payqure_home/features/ledger/domain/entities/service_template.dart';
 import 'package:payqure_home/features/ledger/presentation/controllers/ledger_controller.dart';
 import 'package:payqure_home/features/ledger/presentation/screens/login_screen.dart';
@@ -80,7 +81,7 @@ void main() {
     expect(find.text('Dev Bypass Login'), findsNothing);
   });
 
-  test('Controller can switch months', () async {
+  test('Controller exposes only valid month filters', () async {
     final database = LedgerDatabase(NativeDatabase.memory());
     addTearDown(database.close);
     final controller = LedgerController(
@@ -107,11 +108,82 @@ void main() {
 
     expect(controller.monthKey, currentMonthKey);
     expect(controller.overview?.services, isEmpty);
+    expect(controller.availableMonthKeys, [currentMonthKey]);
 
     await controller.goToNextMonth();
 
-    expect(controller.monthKey, nextMonthKey);
-    expect(controller.overview?.services, isEmpty);
+    expect(controller.monthKey, currentMonthKey);
+    expect(controller.availableMonthKeys, isNot(contains(nextMonthKey)));
+  });
+
+  test('Controller month filters start from earliest service month', () async {
+    final database = LedgerDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final controller = LedgerController(
+      authRepository: SupabaseAuthRepository(client: null),
+      ledgerRepository: DriftLedgerRepository(
+        database: database,
+        remoteDataSource: SupabaseLedgerRemoteDataSource(null),
+      ),
+      pdfStatementService: const PdfStatementService(),
+    );
+    addTearDown(controller.dispose);
+
+    await controller.signIn(
+      identifier: 'local@payqure.local',
+      password: 'password123',
+    );
+
+    final now = DateTime.now();
+    final currentMonthKey =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}';
+    final startDate = DateTime(now.year, now.month - 2, 5);
+    final startMonthKey =
+        '${startDate.year}-${startDate.month.toString().padLeft(2, '0')}';
+    final previousMonth = DateTime(startDate.year, startDate.month - 1);
+    final previousMonthKey =
+        '${previousMonth.year}-${previousMonth.month.toString().padLeft(2, '0')}';
+    final futureMonth = DateTime(now.year, now.month + 1);
+    final futureMonthKey =
+        '${futureMonth.year}-${futureMonth.month.toString().padLeft(2, '0')}';
+
+    await controller.createService(
+      startMonthKey: startMonthKey,
+      name: 'Milkman',
+      description: ServiceMetadata(
+        providerName: 'Ramesh',
+        startDate: startDate,
+      ).encode(),
+      icon: 'milkman',
+      templateType: ServiceTemplateType.quantity,
+      unit: 'liter',
+      defaultQuantity: 1,
+      rateCents: 6000,
+      monthlyAmountCents: 0,
+      routeAfterSave: LedgerRoute.dashboard,
+    );
+    await controller.refreshSelectedMonth();
+
+    expect(controller.availableMonthKeys.first, startMonthKey);
+    expect(controller.availableMonthKeys.last, currentMonthKey);
+    expect(controller.availableMonthKeys.length, lessThanOrEqualTo(12));
+    expect(controller.availableMonthKeys, isNot(contains(previousMonthKey)));
+    expect(controller.availableMonthKeys, isNot(contains(futureMonthKey)));
+
+    await controller.selectMonth(startMonthKey);
+
+    expect(controller.monthKey, startMonthKey);
+
+    await controller.goToPreviousMonth();
+
+    expect(controller.monthKey, startMonthKey);
+
+    await controller.selectMonth(futureMonthKey);
+
+    expect(controller.monthKey, startMonthKey);
+    expect(controller.overview?.services.map((service) => service.name), [
+      'Milkman',
+    ]);
   });
 
   test('Controller persists selected theme mode', () async {
@@ -161,9 +233,14 @@ void main() {
       identifier: 'local@payqure.local',
       password: 'password123',
     );
+    final now = DateTime.now();
+    final previousMonth = DateTime(now.year, now.month - 1, 5);
+    final previousMonthKey =
+        '${previousMonth.year}-${previousMonth.month.toString().padLeft(2, '0')}';
     await controller.createService(
+      startMonthKey: previousMonthKey,
       name: 'Milkman',
-      description: '',
+      description: ServiceMetadata(startDate: previousMonth).encode(),
       icon: 'milkman',
       templateType: ServiceTemplateType.quantity,
       unit: 'L',
