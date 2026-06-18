@@ -80,7 +80,7 @@ void main() {
 
     expect(
       compatibilityMigration,
-      contains("values ('mobile', 3, '1.2.0', '1.5.0')"),
+      contains("values ('mobile', 3, '1.2.0', '1.6.0')"),
     );
     expect(otpMigration, contains('public.claim_auth_otp_request(text, text)'));
     expect(
