@@ -126,9 +126,9 @@ class ServiceDetailScreen extends StatelessWidget {
           Navigator.pop(sheetContext);
           _showRecordPaymentSheet(context);
         },
-        onGeneratePdf: () {
+        onBillingSummary: () {
           Navigator.pop(sheetContext);
-          _generatePdf(context);
+          controller.openSettlementDetail(service);
         },
         onManageService: () {
           Navigator.pop(sheetContext);
@@ -154,25 +154,6 @@ class ServiceDetailScreen extends StatelessWidget {
         source: 'service_detail',
       ),
     );
-  }
-
-  Future<void> _generatePdf(BuildContext context) async {
-    try {
-      await controller.loadSelectedBill();
-      controller.openPdfPreview(source: PdfSource.serviceDetail);
-    } catch (error) {
-      debugPrint('Could not generate PDF: $error');
-      if (!context.mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(
-            content: Text('Could not generate PDF. Please try again.'),
-          ),
-        );
-    }
   }
 
   void _handleDayTap(BuildContext context, int day) {
@@ -666,7 +647,7 @@ class ServiceDetailSummaryCard extends StatelessWidget {
             : 'Monthly Due';
         final currentMonthCharges = settlement?.usageAmountCents ?? 0;
         final previousBalance = settlement?.previousBalanceRemainingCents ?? 0;
-        final advanceBalance = settlement?.advanceBalanceCents ?? 0;
+        final advancePaidThisMonth = settlement?.manualAdvanceCents ?? 0;
         final paidThisMonth = settlement?.paidThisMonthCents ?? 0;
         return AppCard(
           padding: const EdgeInsets.all(AppSpacing.md),
@@ -751,8 +732,10 @@ class ServiceDetailSummaryCard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: _StatementMetric(
-                      label: 'Advance balance',
-                      value: CurrencyFormatter.rupees(advanceBalance / 100),
+                      label: 'Advance this month',
+                      value: CurrencyFormatter.rupees(
+                        advancePaidThisMonth / 100,
+                      ),
                     ),
                   ),
                   Expanded(

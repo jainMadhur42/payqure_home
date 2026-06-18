@@ -214,6 +214,18 @@ void main() {
     expect(result.carryForwardCents, 70000);
   });
 
+  test('monthly totals sum every payment and advance', () {
+    final result = settlementCalculator.calculate(
+      usageAmountCents: 100000,
+      advances: [_advance(5000), _advance(7000)],
+      payments: [_payment(10000), _payment(20000)],
+    );
+
+    expect(result.manualAdvanceCents, 12000);
+    expect(result.paidThisMonthCents, 30000);
+    expect(result.netDueCents, 58000);
+  });
+
   test('extra payment becomes advance balance', () {
     final result = settlementCalculator.calculate(
       usageAmountCents: 100000,

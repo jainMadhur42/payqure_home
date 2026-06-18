@@ -8,13 +8,13 @@ import 'manage_service_action_tile.dart';
 class ServiceQuickActionsSheet extends StatelessWidget {
   const ServiceQuickActionsSheet({
     required this.onRecordPayment,
-    required this.onGeneratePdf,
+    required this.onBillingSummary,
     required this.onManageService,
     super.key,
   });
 
   final VoidCallback onRecordPayment;
-  final VoidCallback onGeneratePdf;
+  final VoidCallback onBillingSummary;
   final VoidCallback onManageService;
 
   @override
@@ -64,11 +64,11 @@ class ServiceQuickActionsSheet extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.sm),
               ManageServiceActionTile(
-                icon: Icons.picture_as_pdf_outlined,
-                title: 'Generate PDF',
-                subtitle: 'Export monthly statement',
+                icon: Icons.account_balance_wallet_outlined,
+                title: 'Billing Summary',
+                subtitle: 'Usage, dues and balances',
                 tintColor: AppColors.primary,
-                onTap: onGeneratePdf,
+                onTap: onBillingSummary,
               ),
               const SizedBox(height: AppSpacing.sm),
               ManageServiceActionTile(
