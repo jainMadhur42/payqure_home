@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../domain/entities/ledger_month.dart';
 import '../../domain/entities/service_entry.dart';
@@ -57,6 +56,7 @@ class LedgerCalendar extends StatelessWidget {
                 ),
               );
           final isFuture = date.isAfter(todayDate);
+          final isInteractionBlocked = isBlocked || isFuture;
           final entry = entryByDay[day];
           final status = isFuture
               ? CalendarEntryVisualStatus.noEntry
@@ -70,11 +70,11 @@ class LedgerCalendar extends StatelessWidget {
               key: ValueKey('calendar-day-${date.toIso8601String()}'),
               date: date,
               status: status,
-              isSelected: selected && !isBlocked,
+              isSelected: selected && !isInteractionBlocked,
               isToday: date == todayDate,
-              isBlocked: isBlocked,
+              isBlocked: isInteractionBlocked,
               onTap: () {
-                if (isBlocked) {
+                if (isInteractionBlocked) {
                   onBlockedDaySelected?.call(date);
                   return;
                 }
@@ -151,7 +151,7 @@ class CalendarDayCell extends StatelessWidget {
 
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(AppRadius.md),
+      customBorder: const CircleBorder(),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 140),
         constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
@@ -165,7 +165,7 @@ class CalendarDayCell extends StatelessWidget {
               : isBlocked
               ? colorScheme.surfaceContainerHighest.withValues(alpha: 0.45)
               : colors.background,
-          borderRadius: BorderRadius.circular(AppRadius.md),
+          shape: BoxShape.circle,
           border: Border.all(
             color: isBlocked
                 ? colorScheme.outlineVariant.withValues(alpha: 0.55)
@@ -210,6 +210,10 @@ class _StatusColors {
   final Color foreground;
 }
 
+const double _statusFillOpacity = 0.10;
+const double _darkStatusBorderOpacity = 0.34;
+const double _lightStatusBorderOpacity = 0.24;
+
 _StatusColors _entryColors(
   BuildContext context,
   CalendarEntryVisualStatus status,
@@ -219,41 +223,41 @@ _StatusColors _entryColors(
   if (isDark) {
     return switch (status) {
       CalendarEntryVisualStatus.delivered => _StatusColors(
-        AppColors.success.withValues(alpha: 0.18),
-        AppColors.success.withValues(alpha: 0.50),
+        AppColors.success.withValues(alpha: _statusFillOpacity),
+        AppColors.success.withValues(alpha: _darkStatusBorderOpacity),
         const Color(0xFF75E7A3),
       ),
       CalendarEntryVisualStatus.notDelivered => _StatusColors(
-        AppColors.danger.withValues(alpha: 0.18),
-        AppColors.danger.withValues(alpha: 0.52),
+        AppColors.danger.withValues(alpha: _statusFillOpacity),
+        AppColors.danger.withValues(alpha: _darkStatusBorderOpacity),
         const Color(0xFFFF8EA1),
       ),
       CalendarEntryVisualStatus.quantityChanged => _StatusColors(
-        AppColors.warning.withValues(alpha: 0.18),
-        AppColors.warning.withValues(alpha: 0.52),
+        AppColors.warning.withValues(alpha: _statusFillOpacity),
+        AppColors.warning.withValues(alpha: _darkStatusBorderOpacity),
         const Color(0xFFFFB181),
       ),
       CalendarEntryVisualStatus.noEntry => _StatusColors(
-        scheme.surfaceContainerHighest,
-        scheme.outlineVariant,
+        scheme.surfaceContainerHighest.withValues(alpha: 0.45),
+        scheme.outlineVariant.withValues(alpha: 0.70),
         scheme.onSurfaceVariant,
       ),
     };
   }
   return switch (status) {
-    CalendarEntryVisualStatus.delivered => const _StatusColors(
-      AppColors.successSoft,
-      Color(0xFFBFE9CF),
+    CalendarEntryVisualStatus.delivered => _StatusColors(
+      AppColors.success.withValues(alpha: _statusFillOpacity),
+      AppColors.success.withValues(alpha: _lightStatusBorderOpacity),
       AppColors.success,
     ),
-    CalendarEntryVisualStatus.notDelivered => const _StatusColors(
-      AppColors.dangerSoft,
-      Color(0xFFFFCAD2),
+    CalendarEntryVisualStatus.notDelivered => _StatusColors(
+      AppColors.danger.withValues(alpha: _statusFillOpacity),
+      AppColors.danger.withValues(alpha: _lightStatusBorderOpacity),
       AppColors.danger,
     ),
-    CalendarEntryVisualStatus.quantityChanged => const _StatusColors(
-      AppColors.warningSoft,
-      Color(0xFFFFD7BD),
+    CalendarEntryVisualStatus.quantityChanged => _StatusColors(
+      AppColors.warning.withValues(alpha: _statusFillOpacity),
+      AppColors.warning.withValues(alpha: _lightStatusBorderOpacity),
       AppColors.warning,
     ),
     CalendarEntryVisualStatus.noEntry => const _StatusColors(

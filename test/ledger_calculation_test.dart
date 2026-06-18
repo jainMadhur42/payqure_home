@@ -214,6 +214,18 @@ void main() {
     expect(result.carryForwardCents, 70000);
   });
 
+  test('monthly totals sum every payment and advance', () {
+    final result = settlementCalculator.calculate(
+      usageAmountCents: 100000,
+      advances: [_advance(5000), _advance(7000)],
+      payments: [_payment(10000), _payment(20000)],
+    );
+
+    expect(result.manualAdvanceCents, 12000);
+    expect(result.paidThisMonthCents, 30000);
+    expect(result.netDueCents, 58000);
+  });
+
   test('extra payment becomes advance balance', () {
     final result = settlementCalculator.calculate(
       usageAmountCents: 100000,
@@ -224,6 +236,22 @@ void main() {
     expect(result.status, SettlementStatus.overpaid);
     expect(result.advanceBalanceCents, 20000);
   });
+
+  test(
+    'current month charges stay separate from paid and advance settlement',
+    () {
+      final result = settlementCalculator.calculate(
+        usageAmountCents: 36000,
+        advances: const [],
+        payments: [_payment(100000)],
+      );
+
+      expect(result.usageAmountCents, 36000);
+      expect(result.currentMonthRemainingCents, 0);
+      expect(result.netDueCents, 0);
+      expect(result.advanceBalanceCents, 64000);
+    },
+  );
 
   test('previous advance reduces current month due', () {
     final result = settlementCalculator.calculate(
@@ -240,25 +268,20 @@ void main() {
     expect(result.advanceUsedCents, 40000);
   });
 
-  test('attendance present absent and half-day amounts', () {
+  test('attendance present absent and half-day amounts use monthly charge', () {
     final service = _service(
       templateType: ServiceTemplateType.attendance,
       unit: 'Day',
-      rateCents: 35000,
+      rateCents: 0,
+      monthlyAmountCents: 310000,
       entries: [
-        _entry(
-          day: 1,
-          quantity: 1,
-          unit: 'Day',
-          rateCents: 35000,
-          amountCents: 35000,
-        ),
+        _entry(day: 1, quantity: 1, unit: 'Day', rateCents: 0, amountCents: 0),
         _entry(
           day: 2,
           status: ServiceEntryStatus.notDelivered,
           quantity: 0,
           unit: 'Day',
-          rateCents: 35000,
+          rateCents: 0,
           amountCents: 0,
         ),
         _entry(
@@ -266,8 +289,8 @@ void main() {
           status: ServiceEntryStatus.halfDay,
           quantity: 0.5,
           unit: 'Day',
-          rateCents: 35000,
-          amountCents: 17500,
+          rateCents: 0,
+          amountCents: 0,
         ),
       ],
     );
@@ -278,7 +301,7 @@ void main() {
       cutoffDate: DateTime(2026, 5, 3),
     );
 
-    expect(usage.usageAmountCents, 52500);
+    expect(usage.usageAmountCents, 15000);
     expect(usage.deliveredDays, 2);
     expect(usage.missedDays, 1);
   });

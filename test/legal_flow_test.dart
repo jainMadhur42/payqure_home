@@ -2,6 +2,7 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:payqure_home/core/utils/currency_formatter.dart';
 import 'package:payqure_home/features/legal/domain/legal_content.dart';
 import 'package:payqure_home/features/ledger/data/database/ledger_database.dart';
 import 'package:payqure_home/features/ledger/data/repositories/drift_ledger_repository.dart';
@@ -140,6 +141,39 @@ void main() {
     },
   );
 
+  test('session restoration applies the saved profile currency', () async {
+    final database = LedgerDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final authRepository = _RestoringAuthRepository(
+      const UserProfile(
+        id: 'remote-user',
+        name: 'Test User',
+        email: 'test@example.com',
+        phone: '+919999999999',
+        emailVerified: true,
+        privacyPolicyAccepted: true,
+        privacyPolicyVersion: LegalContent.policyVersion,
+        preferredCurrencyCode: 'INR',
+      ),
+    );
+    final controller = _controller(
+      database: database,
+      authRepository: authRepository,
+    );
+    addTearDown(controller.dispose);
+
+    await controller.completeOnboarding();
+    await controller.completeSplash();
+
+    expect(controller.selectedCurrency.code, 'INR');
+    expect(CurrencyFormatter.currency.code, 'INR');
+
+    await controller.selectCurrency(
+      AppCurrency.values.firstWhere((currency) => currency.code == 'EUR'),
+    );
+    expect(authRepository.currentProfile?.preferredCurrencyCode, 'EUR');
+  });
+
   testWidgets('Profile shows Legal and opens Delete My Data', (tester) async {
     final database = LedgerDatabase(NativeDatabase.memory());
     addTearDown(database.close);
@@ -272,7 +306,8 @@ LedgerController _controller({
   );
 }
 
-class _RestoringAuthRepository implements AuthRepository {
+class _RestoringAuthRepository
+    implements AuthRepository, PreferredCurrencyRepository {
   _RestoringAuthRepository(this._profile, {this.failRestore = false});
 
   UserProfile _profile;
@@ -341,6 +376,11 @@ class _RestoringAuthRepository implements AuthRepository {
     required String phone,
   }) async {
     return _profile = _profile.copyWith(name: name, phone: phone);
+  }
+
+  @override
+  Future<UserProfile> updatePreferredCurrency(String currencyCode) async {
+    return _profile = _profile.copyWith(preferredCurrencyCode: currencyCode);
   }
 
   @override

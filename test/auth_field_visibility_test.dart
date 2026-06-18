@@ -160,6 +160,42 @@ void main() {
     );
     expect(resendButton.onPressed, isNull);
     expect(find.textContaining('Resend OTP in 2:'), findsOneWidget);
+    final limitText = tester.widget<Text>(
+      find.textContaining('Maximum 3 otp can be requested per hour'),
+    );
+    expect(limitText.data, contains('you have used 1.'));
+    expect(
+      find.byKey(const ValueKey('otp-hourly-reset-timer')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('password reset OTP resend is disabled for two minutes', (
+    tester,
+  ) async {
+    final fixture = _AuthFixture();
+    addTearDown(fixture.dispose);
+    await tester.binding.setSurfaceSize(const Size(430, 1100));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await fixture.controller.requestPasswordReset('reset@example.com');
+    await tester.pumpWidget(
+      MaterialApp(home: ResetPasswordOtpScreen(controller: fixture.controller)),
+    );
+
+    final resendButton = tester.widget<TextButton>(
+      find.byKey(const ValueKey('resend-password-reset-otp')),
+    );
+    expect(resendButton.onPressed, isNull);
+    expect(find.textContaining('Resend OTP in 2:'), findsOneWidget);
+    final limitText = tester.widget<Text>(
+      find.textContaining('Maximum 3 otp can be requested per hour'),
+    );
+    expect(limitText.data, contains('you have used 1.'));
+    expect(
+      find.byKey(const ValueKey('otp-hourly-reset-timer')),
+      findsOneWidget,
+    );
   });
 }
 

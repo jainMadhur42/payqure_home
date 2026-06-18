@@ -5,10 +5,15 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/auth/auth_identifier.dart';
 import '../../../../core/utils/id_generator.dart';
 import '../../../legal/domain/legal_content.dart';
+import '../../domain/entities/otp_request_status.dart';
 import '../../domain/entities/user_profile.dart';
 import '../../domain/repositories/auth_repository.dart';
 
-class SupabaseAuthRepository implements AuthRepository {
+class SupabaseAuthRepository
+    implements
+        AuthRepository,
+        OtpRequestStatusProvider,
+        PreferredCurrencyRepository {
   SupabaseAuthRepository({required SupabaseClient? client}) : _client = client {
     _authSubscription = client?.auth.onAuthStateChange.listen(
       _handleAuthStateChange,
@@ -22,9 +27,15 @@ class SupabaseAuthRepository implements AuthRepository {
   UserProfile? _currentProfile;
   final Map<String, _PendingRegistrationProfile> _pendingRegistrationProfiles =
       {};
+  final Map<OtpRequestPurpose, OtpRequestStatus> _otpRequestStatuses = {};
 
   @override
   UserProfile? get currentProfile => _currentProfile;
+
+  @override
+  OtpRequestStatus? statusFor(OtpRequestPurpose purpose) {
+    return _otpRequestStatuses[purpose];
+  }
 
   @override
   Stream<UserProfile?> watchProfile() => _profileController.stream;
@@ -84,6 +95,7 @@ class SupabaseAuthRepository implements AuthRepository {
           privacyPolicyAccepted: true,
           privacyPolicyAcceptedAt: DateTime.now(),
           privacyPolicyVersion: LegalContent.policyVersion,
+          preferredCurrencyCode: 'USD',
         ),
       );
       return;
@@ -129,6 +141,7 @@ class SupabaseAuthRepository implements AuthRepository {
           privacyPolicyVersion: privacyPolicyAccepted
               ? LegalContent.policyVersion
               : '',
+          preferredCurrencyCode: 'USD',
         ),
       );
       return;
@@ -188,6 +201,7 @@ class SupabaseAuthRepository implements AuthRepository {
             'privacy_policy_version': privacyPolicyAccepted
                 ? LegalContent.policyVersion
                 : null,
+            'preferred_currency': 'USD',
           },
         ),
       );
@@ -208,6 +222,7 @@ class SupabaseAuthRepository implements AuthRepository {
         privacyPolicyVersion: privacyPolicyAccepted
             ? LegalContent.policyVersion
             : '',
+        preferredCurrencyCode: 'USD',
       );
     }
     _setProfile(
@@ -347,6 +362,7 @@ class SupabaseAuthRepository implements AuthRepository {
         privacyPolicyAccepted: current.privacyPolicyAccepted,
         privacyPolicyAcceptedAt: current.privacyPolicyAcceptedAt,
         privacyPolicyVersion: current.privacyPolicyVersion,
+        preferredCurrencyCode: current.preferredCurrencyCode,
       );
     } catch (error) {
       await _throwProfilePhoneConflictIfPresent(
@@ -359,6 +375,36 @@ class SupabaseAuthRepository implements AuthRepository {
       UserAttributes(data: {'name': name, 'phone': normalizedPhone}),
     );
     final updated = current.copyWith(name: name, phone: normalizedPhone);
+    _setProfile(updated);
+    return updated;
+  }
+
+  @override
+  Future<UserProfile> updatePreferredCurrency(String currencyCode) async {
+    final current = _currentProfile;
+    if (current == null) {
+      throw StateError('Sign in before changing currency.');
+    }
+    final normalizedCode = currencyCode.trim().toUpperCase();
+    final client = _client;
+    if (client != null) {
+      await client
+          .from('profiles')
+          .update({
+            'preferred_currency': normalizedCode,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('id', current.id)
+          .timeout(const Duration(seconds: 6));
+      try {
+        await client.auth.updateUser(
+          UserAttributes(data: {'preferred_currency': normalizedCode}),
+        );
+      } catch (_) {
+        // The profile table is authoritative; metadata is only a fallback.
+      }
+    }
+    final updated = current.copyWith(preferredCurrencyCode: normalizedCode);
     _setProfile(updated);
     return updated;
   }
@@ -409,13 +455,30 @@ class SupabaseAuthRepository implements AuthRepository {
     _setProfile(null);
   }
 
-  Future<void> _claimOtpRequest({
+  Future<OtpRequestStatus> _claimOtpRequest({
     required String email,
     required _OtpRequestPurpose purpose,
   }) async {
     final client = _client;
     if (client == null) {
-      return;
+      final now = DateTime.now().toUtc();
+      final previous = _otpRequestStatuses[purpose.domainValue];
+      final activePrevious =
+          previous != null && previous.remaining(now) > Duration.zero
+          ? previous
+          : null;
+      final usedCount = ((activePrevious?.usedCount ?? 0) + 1).clamp(
+        0,
+        OtpRequestStatus.maximumRequests,
+      );
+      final status = OtpRequestStatus(
+        usedCount: usedCount,
+        windowResetsAt:
+            activePrevious?.windowResetsAt ?? now.add(const Duration(hours: 1)),
+        blocked: usedCount >= OtpRequestStatus.maximumRequests,
+      );
+      _otpRequestStatuses[purpose.domainValue] = status;
+      return status;
     }
     final response = await client.rpc<Object>(
       'claim_auth_otp_request',
@@ -430,13 +493,38 @@ class SupabaseAuthRepository implements AuthRepository {
       final Map<dynamic, dynamic> value => Map<String, dynamic>.from(value),
       _ => const <String, dynamic>{},
     };
+    final status = OtpRequestStatus(
+      usedCount: _asInt(row['request_count']),
+      windowResetsAt: _asDateTime(row['window_resets_at']),
+      blocked: row['blocked'] == true,
+    );
+    _otpRequestStatuses[purpose.domainValue] = status;
     if (row['allowed'] == true) {
-      return;
+      return status;
     }
     throw AuthException(
       'You have reached the maximum OTP request limit. '
       'Please try again after 60 minutes.',
     );
+  }
+
+  int _asInt(Object? value) {
+    return switch (value) {
+      final int number => number,
+      final num number => number.toInt(),
+      final String text => int.tryParse(text) ?? 0,
+      _ => 0,
+    };
+  }
+
+  DateTime? _asDateTime(Object? value) {
+    if (value is DateTime) {
+      return value.toUtc();
+    }
+    if (value is String) {
+      return DateTime.tryParse(value)?.toUtc();
+    }
+    return null;
   }
 
   Future<void> _ensureRegistrationIdentityAvailable({
@@ -579,6 +667,10 @@ class SupabaseAuthRepository implements AuthRepository {
         profileRow?['privacy_policy_version']?.toString() ??
         metadata['privacy_policy_version']?.toString() ??
         '';
+    final preferredCurrencyCode =
+        profileRow?['preferred_currency']?.toString() ??
+        metadata['preferred_currency']?.toString() ??
+        'USD';
 
     unawaited(
       _upsertProfile(
@@ -589,6 +681,7 @@ class SupabaseAuthRepository implements AuthRepository {
         privacyPolicyAccepted: accepted,
         privacyPolicyAcceptedAt: acceptedAt,
         privacyPolicyVersion: policyVersion,
+        preferredCurrencyCode: preferredCurrencyCode,
         suppressErrors: true,
       ),
     );
@@ -602,6 +695,7 @@ class SupabaseAuthRepository implements AuthRepository {
       privacyPolicyAccepted: accepted,
       privacyPolicyAcceptedAt: acceptedAt,
       privacyPolicyVersion: policyVersion,
+      preferredCurrencyCode: preferredCurrencyCode,
     );
   }
 
@@ -654,6 +748,7 @@ class SupabaseAuthRepository implements AuthRepository {
     bool privacyPolicyAccepted = false,
     DateTime? privacyPolicyAcceptedAt,
     String privacyPolicyVersion = '',
+    String preferredCurrencyCode = 'USD',
     bool suppressErrors = false,
   }) async {
     final client = _client;
@@ -676,6 +771,7 @@ class SupabaseAuthRepository implements AuthRepository {
             'privacy_policy_version': privacyPolicyVersion.isEmpty
                 ? null
                 : privacyPolicyVersion,
+            'preferred_currency': preferredCurrencyCode,
             'updated_at': DateTime.now().toUtc().toIso8601String(),
           })
           .timeout(const Duration(seconds: 6));
@@ -722,6 +818,11 @@ enum _OtpRequestPurpose {
   const _OtpRequestPurpose(this.databaseValue);
 
   final String databaseValue;
+
+  OtpRequestPurpose get domainValue => switch (this) {
+    _OtpRequestPurpose.signup => OtpRequestPurpose.signup,
+    _OtpRequestPurpose.passwordReset => OtpRequestPurpose.passwordReset,
+  };
 }
 
 class _PendingRegistrationProfile {

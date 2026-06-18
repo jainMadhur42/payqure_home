@@ -16,7 +16,7 @@ void main() {
           home: Scaffold(
             body: ServiceQuickActionsSheet(
               onRecordPayment: () => selectedAction = 'payment',
-              onGeneratePdf: () => selectedAction = 'pdf',
+              onBillingSummary: () => selectedAction = 'billing',
               onManageService: () => selectedAction = 'manage',
             ),
           ),
@@ -25,11 +25,14 @@ void main() {
 
       expect(find.text('Quick Actions'), findsOneWidget);
       expect(find.text('Record Payment'), findsOneWidget);
-      expect(find.text('Generate PDF'), findsOneWidget);
+      expect(find.text('Billing Summary'), findsOneWidget);
       expect(find.text('Manage Service'), findsOneWidget);
       expect(find.text('Add Credit'), findsNothing);
-      expect(find.text('Billing Summary'), findsNothing);
+      expect(find.text('Generate PDF'), findsNothing);
       expect(tester.takeException(), isNull);
+
+      await tester.tap(find.text('Billing Summary'));
+      expect(selectedAction, 'billing');
 
       await tester.tap(find.text('Manage Service'));
       expect(selectedAction, 'manage');

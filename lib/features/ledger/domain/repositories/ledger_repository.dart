@@ -16,6 +16,7 @@ abstract interface class LedgerRepository {
     required String userId,
     required String monthKey,
   });
+  Future<List<HouseholdService>> getAllServices({required String userId});
   Future<HouseholdService> createService({
     required String userId,
     required String monthKey,

@@ -37,6 +37,43 @@ void main() {
     expect(selectedDay, 25);
   });
 
+  testWidgets('calendar blocks future dates from entry logging', (
+    tester,
+  ) async {
+    final tomorrow = DateTime.now().add(const Duration(days: 1));
+    final monthKey =
+        '${tomorrow.year.toString().padLeft(4, '0')}-${tomorrow.month.toString().padLeft(2, '0')}';
+    int? selectedDay;
+    DateTime? blockedDate;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            child: LedgerCalendar(
+              entries: const [],
+              monthKey: monthKey,
+              selectedDay: tomorrow.day,
+              onDaySelected: (day) => selectedDay = day,
+              onBlockedDaySelected: (date) => blockedDate = date,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(
+      find.byKey(
+        ValueKey(
+          'calendar-day-${DateTime(tomorrow.year, tomorrow.month, tomorrow.day).toIso8601String()}',
+        ),
+      ),
+    );
+    expect(blockedDate, DateTime(tomorrow.year, tomorrow.month, tomorrow.day));
+    expect(selectedDay, isNull);
+  });
+
   testWidgets('calendar highlights quantity differing from service default', (
     tester,
   ) async {
@@ -78,6 +115,7 @@ void main() {
     );
     final decoration = container.decoration! as BoxDecoration;
 
-    expect(decoration.color, AppColors.warningSoft);
+    expect(decoration.color, AppColors.warning.withValues(alpha: 0.10));
+    expect(decoration.shape, BoxShape.circle);
   });
 }

@@ -1,4 +1,5 @@
 import '../../../legal/domain/legal_content.dart';
+import '../../domain/entities/otp_request_status.dart';
 import '../../domain/entities/user_profile.dart';
 import '../../domain/repositories/auth_repository.dart';
 
@@ -10,6 +11,14 @@ class SessionController {
   Stream<UserProfile?> watchProfile() => _repository.watchProfile();
 
   UserProfile? get currentProfile => _repository.currentProfile;
+
+  OtpRequestStatus? otpRequestStatus(OtpRequestPurpose purpose) {
+    final repository = _repository;
+    if (repository is OtpRequestStatusProvider) {
+      return (repository as OtpRequestStatusProvider).statusFor(purpose);
+    }
+    return null;
+  }
 
   Future<UserProfile?> restore({Duration? timeout}) {
     final restoration = _repository.restoreSession();
@@ -63,6 +72,15 @@ class SessionController {
     required String phone,
   }) {
     return _repository.updateProfile(name: name, phone: phone);
+  }
+
+  Future<UserProfile?> updatePreferredCurrency(String currencyCode) async {
+    final repository = _repository;
+    if (repository is PreferredCurrencyRepository) {
+      return (repository as PreferredCurrencyRepository)
+          .updatePreferredCurrency(currencyCode);
+    }
+    return repository.currentProfile;
   }
 
   Future<String> requestPasswordReset(String identifier) {

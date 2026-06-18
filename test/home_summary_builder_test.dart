@@ -67,13 +67,24 @@ void main() {
 
   test('aggregates monthly summary without presentation state', () {
     final service = _service();
-    final first = _homeSummary(service, remaining: 1000, usage: 1200);
-    final second = _homeSummary(service, remaining: 2000, usage: 2500);
+    final first = _homeSummary(
+      service,
+      remaining: 1000,
+      usage: 1200,
+      advance: 400,
+    );
+    final second = _homeSummary(
+      service,
+      remaining: 2000,
+      usage: 2500,
+      advance: 600,
+    );
 
     final summary = builder.buildMonthlySummary([first, second]);
 
     expect(summary.totalDueCents, 3000);
     expect(summary.usageCents, 3700);
+    expect(summary.advanceCents, 1000);
     expect(summary.serviceCount, 2);
   });
 
@@ -138,6 +149,7 @@ HomeServiceSummary _homeSummary(
   HouseholdService service, {
   required int remaining,
   required int usage,
+  int advance = 0,
 }) {
   return HomeServiceSummary(
     service: service,
@@ -145,7 +157,7 @@ HomeServiceSummary _homeSummary(
     payableCents: usage,
     paidCents: 0,
     remainingCents: remaining,
-    advanceCents: 0,
+    advanceCents: advance,
     usageCents: usage,
     previousPendingCents: 0,
     advanceUsedCents: 0,

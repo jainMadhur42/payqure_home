@@ -119,6 +119,24 @@ class DriftLedgerRepository implements LedgerRepository {
     );
   }
 
+  @override
+  Future<List<HouseholdService>> getAllServices({
+    required String userId,
+  }) async {
+    final rows =
+        await (_database.select(_database.serviceRecords)
+              ..where(
+                (table) =>
+                    table.userId.equals(userId) & table.isDeleted.equals(false),
+              )
+              ..orderBy([
+                (table) => OrderingTerm.asc(table.monthKey),
+                (table) => OrderingTerm.asc(table.name),
+              ]))
+            .get();
+    return rows.map((row) => row.toDomain(const [])).toList();
+  }
+
   Stream<void> _watchLedgerChanges(String userId) {
     late final StreamController<void> controller;
     final subscriptions = <StreamSubscription<dynamic>>[];
@@ -379,13 +397,9 @@ class DriftLedgerRepository implements LedgerRepository {
                 pendingSync: const Value(true),
               ),
             );
-        await _reallocatePayments(
+        await _recalculateSettlementChain(
           serviceId: entry.serviceId,
-          monthKey: entry.monthKey,
-        );
-        await _recalculateSettlement(
-          serviceId: entry.serviceId,
-          monthKey: entry.monthKey,
+          fromMonthKey: entry.monthKey,
         );
       });
     });
@@ -410,13 +424,9 @@ class DriftLedgerRepository implements LedgerRepository {
                 pendingSync: const Value(true),
               ),
             );
-        await _reallocatePayments(
+        await _recalculateSettlementChain(
           serviceId: advance.serviceId,
-          monthKey: advance.monthKey,
-        );
-        await _recalculateSettlement(
-          serviceId: advance.serviceId,
-          monthKey: advance.monthKey,
+          fromMonthKey: advance.monthKey,
         );
       });
     });
@@ -436,13 +446,9 @@ class DriftLedgerRepository implements LedgerRepository {
             pendingSync: const Value(true),
           ),
         );
-        await _reallocatePayments(
+        await _recalculateSettlementChain(
           serviceId: advance.serviceId,
-          monthKey: advance.monthKey,
-        );
-        await _recalculateSettlement(
-          serviceId: advance.serviceId,
-          monthKey: advance.monthKey,
+          fromMonthKey: advance.monthKey,
         );
       });
     });

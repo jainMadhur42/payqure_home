@@ -22,7 +22,10 @@ class AddServiceDraft {
   factory AddServiceDraft.fromService(HouseholdService service) {
     final metadata = ServiceMetadata.parse(service.description);
     final startDate = metadata.startDate ?? DateTime.now();
-    final amountCents = service.templateType == ServiceTemplateType.fixedMonthly
+    final amountCents =
+        service.templateType == ServiceTemplateType.fixedMonthly ||
+            (service.templateType == ServiceTemplateType.attendance &&
+                service.monthlyAmountCents > 0)
         ? service.monthlyAmountCents
         : service.rateCents;
     final template = ServiceTemplateCatalog.forService(

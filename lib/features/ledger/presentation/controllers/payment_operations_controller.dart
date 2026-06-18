@@ -118,10 +118,13 @@ class PaymentOperationsController {
   Future<List<ServiceHistoryItem>> globalPaymentHistory(
     List<HouseholdService> services,
   ) async {
+    final today = DateTime.now();
+    final endOfToday = DateTime(today.year, today.month, today.day + 1);
     final serviceItems = await Future.wait(
       services.map((service) async {
         final payments = await paymentHistory(service.id);
         return payments
+            .where((payment) => payment.paymentDate.isBefore(endOfToday))
             .map(
               (payment) => ServiceHistoryItem(
                 id: payment.id,

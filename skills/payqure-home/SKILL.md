@@ -233,12 +233,14 @@ Profile fields:
 - `privacyPolicyAccepted`
 - `privacyPolicyAcceptedAt`
 - `privacyPolicyVersion`
+- `preferredCurrencyCode`
 
 Supabase columns:
 
 - `privacy_policy_accepted`
 - `privacy_policy_accepted_at`
 - `privacy_policy_version`
+- `preferred_currency`
 
 Keep consent in both Supabase `profiles` and auth user metadata. Existing users
 with no acceptance or an old version must see `PrivacyPolicyAcceptanceView`
@@ -342,9 +344,17 @@ current compatibility migration is:
 supabase/migrations/202606150002_add_app_compatibility_config.sql
 ```
 
+Later auth/profile contract migrations are:
+
+```text
+supabase/migrations/202606150003_add_otp_request_window_status.sql
+supabase/migrations/202606150004_add_profile_preferred_currency.sql
+```
+
 The current remote ledger schema version is stored only in
 `app_schema_versions`. The mobile compatibility record stores the minimum
 supported schema, minimum app version, and latest app version as server policy.
+The current remote ledger schema version is `8`.
 
 `get_app_compatibility_config()` derives `current_schema_version` from
 `app_schema_versions` so startup needs one RPC without duplicating stored

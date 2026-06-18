@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -12,6 +10,7 @@ import '../../../legal/domain/legal_content.dart';
 import '../../../legal/presentation/legal_screens.dart';
 import '../../domain/entities/app_route.dart';
 import '../controllers/ledger_controller.dart';
+import '../widgets/otp_resend_panel.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({required this.controller, super.key});
@@ -257,7 +256,6 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _emailController;
   final _otpController = TextEditingController();
-  Timer? _resendCooldownTimer;
 
   @override
   void initState() {
@@ -267,12 +265,10 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
           ? widget.controller.pendingVerificationEmail
           : widget.controller.profile?.email ?? '',
     );
-    _startResendCooldownTicker();
   }
 
   @override
   void dispose() {
-    _resendCooldownTimer?.cancel();
     _emailController.dispose();
     _otpController.dispose();
     super.dispose();
@@ -280,7 +276,6 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final resendRemaining = widget.controller.emailVerificationResendRemaining;
     return _AuthScaffold(
       title: 'Verify your email',
       subtitle: 'Enter the OTP sent to your email',
@@ -322,55 +317,19 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
           child: const Text('Verify Email'),
         ),
         const SizedBox(height: AppSpacing.sm),
-        TextButton(
-          key: const ValueKey('resend-verification-otp'),
-          onPressed:
-              widget.controller.isLoading || resendRemaining > Duration.zero
-              ? null
-              : () async {
-                  await widget.controller.resendEmailVerification();
-                  if (!mounted) {
-                    return;
-                  }
-                  _startResendCooldownTicker();
-                  setState(() {});
-                },
-          child: Text(
-            resendRemaining > Duration.zero
-                ? 'Resend OTP in ${_formatCooldown(resendRemaining)}'
-                : 'Resend OTP',
-          ),
+        OtpResendPanel(
+          buttonKey: const ValueKey('resend-verification-otp'),
+          availableAt: widget.controller.emailVerificationResendAvailableAt,
+          status: widget.controller.emailVerificationOtpStatus,
+          isLoading: widget.controller.isLoading,
+          onResend: widget.controller.resendEmailVerification,
         ),
-        const _OtpLimitNotice(),
         TextButton(
           onPressed: () => widget.controller.goTo(LedgerRoute.login),
           child: const Text('Back to Login'),
         ),
       ],
     );
-  }
-
-  void _startResendCooldownTicker() {
-    _resendCooldownTimer?.cancel();
-    if (widget.controller.emailVerificationResendRemaining == Duration.zero) {
-      return;
-    }
-    _resendCooldownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!mounted) {
-        return;
-      }
-      if (widget.controller.emailVerificationResendRemaining == Duration.zero) {
-        _resendCooldownTimer?.cancel();
-      }
-      setState(() {});
-    });
-  }
-
-  String _formatCooldown(Duration duration) {
-    final totalSeconds = (duration.inMilliseconds / 1000).ceil();
-    final minutes = totalSeconds ~/ 60;
-    final seconds = totalSeconds % 60;
-    return '$minutes:${seconds.toString().padLeft(2, '0')}';
   }
 }
 
@@ -427,7 +386,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           child: const Text('Send OTP'),
         ),
         const SizedBox(height: AppSpacing.sm),
-        const _OtpLimitNotice(),
+        OtpResendPanel(
+          availableAt: null,
+          status: widget.controller.passwordResetOtpStatus,
+          onResend: () async {},
+          showResendButton: false,
+        ),
       ],
     );
   }
@@ -513,6 +477,14 @@ class _ResetPasswordOtpScreenState extends State<ResetPasswordOtpScreen> {
                   );
                 },
           child: const Text('Update Password'),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        OtpResendPanel(
+          buttonKey: const ValueKey('resend-password-reset-otp'),
+          availableAt: widget.controller.passwordResetResendAvailableAt,
+          status: widget.controller.passwordResetOtpStatus,
+          isLoading: widget.controller.isLoading,
+          onResend: widget.controller.resendPasswordResetOtp,
         ),
       ],
     );
@@ -644,21 +616,6 @@ class _AuthSupportFooter extends StatelessWidget {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('Support email copied.')));
-  }
-}
-
-class _OtpLimitNotice extends StatelessWidget {
-  const _OtpLimitNotice();
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      'Maximum 3 OTP requests per hour.',
-      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-        color: Theme.of(context).colorScheme.onSurfaceVariant,
-      ),
-      textAlign: TextAlign.center,
-    );
   }
 }
 

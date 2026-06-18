@@ -97,7 +97,35 @@ void main() {
 
     await expectLater(
       operations.saveDefault(service: service, monthKey: '2026-06', day: 9),
-      throwsStateError,
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('Service started from 10 Jun 2026'),
+        ),
+      ),
+    );
+  });
+
+  test('entry operations reject future delivery dates', () async {
+    final operations = EntryOperationsController(repository);
+    final tomorrow = DateTime.now().add(const Duration(days: 1));
+    final futureMonthKey =
+        '${tomorrow.year.toString().padLeft(4, '0')}-${tomorrow.month.toString().padLeft(2, '0')}';
+
+    await expectLater(
+      operations.saveDefault(
+        service: service,
+        monthKey: futureMonthKey,
+        day: tomorrow.day,
+      ),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          'Entries can only be logged on or after the service date.',
+        ),
+      ),
     );
   });
 

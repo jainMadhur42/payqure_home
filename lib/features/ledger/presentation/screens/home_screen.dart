@@ -8,16 +8,18 @@ import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../domain/entities/home_summary.dart';
+import '../../domain/entities/household_service.dart';
 import '../../domain/entities/ledger_month.dart';
 import '../../domain/entities/app_route.dart';
 import '../../domain/entities/service_entry.dart';
 import '../../domain/entities/service_template.dart';
+import '../../domain/services/calendar_entry_status_resolver.dart';
+import '../../domain/services/service_start_date_resolver.dart';
 import '../controllers/ledger_controller.dart';
-import '../widgets/ledger_screen_shared.dart';
 import '../widgets/loading_skeleton.dart';
 import '../widgets/month_selector.dart';
-import '../widgets/service_identity_header.dart';
 import '../widgets/service_contribution_stats.dart';
+import '../widgets/service_icon.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({required this.controller, super.key});
@@ -57,8 +59,9 @@ class _HomeScreenState extends State<HomeScreen> {
       child: FutureBuilder<List<HomeServiceSummary>>(
         future: controller.loadHomeServiceSummaries(),
         builder: (context, snapshot) {
-          final serviceSummaries =
-              snapshot.data ?? const <HomeServiceSummary>[];
+          final serviceSummaries = _sortByTodayStatus(
+            snapshot.data ?? const <HomeServiceSummary>[],
+          );
           final monthlySummary = controller.buildHomeMonthlySummary(
             serviceSummaries,
           );
@@ -104,18 +107,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
                 const SizedBox(height: AppSpacing.lg),
-                HomeHeroSummaryCard(summary: monthlySummary),
+                HomeHeroSummaryCard(
+                  summary: monthlySummary,
+                  onQuickLog: overview.services.isNotEmpty
+                      ? () {
+                          HapticFeedback.selectionClick();
+                          controller.openQuickLog(date: DateTime.now());
+                        }
+                      : null,
+                ),
                 const SizedBox(height: AppSpacing.lg),
-                if (overview.services.length > 1) ...[
-                  QuickLogHomeAction(
-                    serviceCount: overview.services.length,
-                    onTap: () {
-                      HapticFeedback.selectionClick();
-                      controller.openQuickLog(date: DateTime.now());
-                    },
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                ],
                 if (serviceSummaries.isNotEmpty) ...[
                   Row(
                     children: [
@@ -182,7 +183,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       padding: const EdgeInsets.only(bottom: AppSpacing.md),
                       child: HomeServiceCard(
                         summary: summary,
-                        monthLabel: overview.monthLabel,
                         onTap: () => controller.selectService(summary.service),
                         onQuickMark: (status) =>
                             controller.saveQuickEntryForService(
@@ -213,6 +213,22 @@ class _HomeScreenState extends State<HomeScreen> {
       return now.day;
     }
     return month.daysInMonth;
+  }
+
+  List<HomeServiceSummary> _sortByTodayStatus(
+    List<HomeServiceSummary> summaries,
+  ) {
+    final indexed = summaries.indexed.toList();
+    indexed.sort((left, right) {
+      final leftRank = _todayEntryStatus(left.$2.service).sortRank;
+      final rightRank = _todayEntryStatus(right.$2.service).sortRank;
+      final rankComparison = leftRank.compareTo(rightRank);
+      if (rankComparison != 0) {
+        return rankComparison;
+      }
+      return left.$1.compareTo(right.$1);
+    });
+    return indexed.map((item) => item.$2).toList();
   }
 }
 
@@ -251,80 +267,15 @@ class _HomeProfileButton extends StatelessWidget {
   }
 }
 
-class QuickLogHomeAction extends StatelessWidget {
-  const QuickLogHomeAction({
-    required this.serviceCount,
-    required this.onTap,
+class HomeHeroSummaryCard extends StatelessWidget {
+  const HomeHeroSummaryCard({
+    required this.summary,
+    this.onQuickLog,
     super.key,
   });
 
-  final int serviceCount;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      padding: EdgeInsets.zero,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: AppColors.primarySoft,
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                ),
-                child: const Icon(
-                  Icons.event_available_outlined,
-                  color: AppColors.primary,
-                  size: 24,
-                ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Quick Log Today',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      'Update $serviceCount services in one place',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.muted,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              const Icon(Icons.chevron_right, color: AppColors.muted),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class HomeHeroSummaryCard extends StatelessWidget {
-  const HomeHeroSummaryCard({required this.summary, super.key});
-
   final HomeMonthlySummary summary;
+  final VoidCallback? onQuickLog;
 
   @override
   Widget build(BuildContext context) {
@@ -375,7 +326,10 @@ class HomeHeroSummaryCard extends StatelessWidget {
               ),
               Padding(
                 padding: const EdgeInsets.all(AppSpacing.lg),
-                child: _HeroSummaryContent(summary: summary),
+                child: _HeroSummaryContent(
+                  summary: summary,
+                  onQuickLog: onQuickLog,
+                ),
               ),
             ],
           ),
@@ -478,9 +432,10 @@ class FloatingHeroIcon extends StatelessWidget {
 }
 
 class _HeroSummaryContent extends StatelessWidget {
-  const _HeroSummaryContent({required this.summary});
+  const _HeroSummaryContent({required this.summary, this.onQuickLog});
 
   final HomeMonthlySummary summary;
+  final VoidCallback? onQuickLog;
 
   @override
   Widget build(BuildContext context) {
@@ -539,47 +494,75 @@ class _HeroSummaryContent extends StatelessWidget {
           ],
         ),
         const SizedBox(height: AppSpacing.lg),
-        Container(
-          height: 54,
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.10),
+        Material(
+          color: Colors.white.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(24),
+          child: InkWell(
+            onTap: onQuickLog,
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withValues(alpha: 0.12),
-                ),
-                child: const Icon(
-                  Icons.home_repair_service_outlined,
-                  color: Colors.white,
-                  size: 19,
-                ),
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: AppSpacing.sm,
               ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Text(
-                  '${summary.serviceCount} Active Services',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white.withValues(alpha: 0.12),
+                    ),
+                    child: const Icon(
+                      Icons.home_repair_service_outlined,
+                      color: Colors.white,
+                      size: 19,
+                    ),
                   ),
-                ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${summary.serviceCount} Active Services',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.labelLarge
+                              ?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                              ),
+                        ),
+                        if (onQuickLog != null)
+                          Text(
+                            'Quick log',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: Colors.white.withValues(alpha: 0.72),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  if (onQuickLog != null)
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      color: Colors.white.withValues(alpha: 0.78),
+                      size: 22,
+                    ),
+                ],
               ),
-              Icon(
-                Icons.chevron_right_rounded,
-                color: Colors.white.withValues(alpha: 0.78),
-                size: 22,
-              ),
-            ],
+            ),
           ),
         ),
       ],
@@ -625,7 +608,6 @@ class _HeroMetricItem extends StatelessWidget {
 class HomeServiceCard extends StatefulWidget {
   const HomeServiceCard({
     required this.summary,
-    required this.monthLabel,
     required this.onTap,
     required this.onQuickMark,
     required this.onCustomize,
@@ -633,7 +615,6 @@ class HomeServiceCard extends StatefulWidget {
   });
 
   final HomeServiceSummary summary;
-  final String monthLabel;
   final VoidCallback onTap;
   final ValueChanged<ServiceEntryStatus> onQuickMark;
   final VoidCallback onCustomize;
@@ -736,6 +717,8 @@ class _HomeServiceCardState extends State<HomeServiceCard> {
   Widget build(BuildContext context) {
     final summary = widget.summary;
     final service = summary.service;
+    final todayStatus = _todayEntryStatus(service);
+    final todayBorderColor = _todayBorderColor(service);
     final primaryColor = summary.advanceCents > 0
         ? AppColors.info
         : summary.remainingCents > 0
@@ -784,57 +767,54 @@ class _HomeServiceCardState extends State<HomeServiceCard> {
               behavior: HitTestBehavior.opaque,
               onHorizontalDragUpdate: _handleDragUpdate,
               onHorizontalDragEnd: _handleDragEnd,
-              child: AppCard(
-                padding: EdgeInsets.zero,
-                child: InkWell(
-                  onTap: _revealOffset != 0
-                      ? () => setState(() => _revealOffset = 0)
-                      : widget.onTap,
-                  borderRadius: BorderRadius.circular(AppRadius.lg),
-                  child: Padding(
-                    padding: const EdgeInsets.all(AppSpacing.md),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        ServiceIdentityHeader(
-                          icon: service.icon,
-                          accentColor: service.templateType.color,
-                          serviceName: service.name,
-                          providerName: providerName(service),
-                          templateType: service.templateType,
-                          contextLabel: widget.monthLabel,
-                          trailing: Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
+              child: Semantics(
+                label: '${service.name}. ${todayStatus.semanticLabel}',
+                button: true,
+                child: AppCard(
+                  padding: EdgeInsets.zero,
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 250),
+                            curve: Curves.easeInOut,
+                            width: 5,
+                            decoration: BoxDecoration(
+                              color: todayBorderColor,
+                              borderRadius: const BorderRadius.only(
+                                topLeft: Radius.circular(AppRadius.lg),
+                                bottomLeft: Radius.circular(AppRadius.lg),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      InkWell(
+                        onTap: _revealOffset != 0
+                            ? () => setState(() => _revealOffset = 0)
+                            : widget.onTap,
+                        borderRadius: BorderRadius.circular(AppRadius.lg),
+                        child: Padding(
+                          padding: const EdgeInsets.all(AppSpacing.md),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                summary.primaryLabel,
-                                style: Theme.of(context).textTheme.bodySmall
-                                    ?.copyWith(
-                                      color: AppColors.muted,
-                                      fontWeight: FontWeight.w700,
-                                    ),
+                              _HomeServiceCardHeader(
+                                service: service,
+                                summary: summary,
+                                primaryColor: primaryColor,
                               ),
-                              Text(
-                                CurrencyFormatter.rupees(
-                                  summary.primaryAmountCents / 100,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.titleMedium
-                                    ?.copyWith(
-                                      color: primaryColor,
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                              ),
+                              const SizedBox(height: AppSpacing.md),
+                              ServiceMetricLine(text: summary.metricLabel),
+                              const SizedBox(height: AppSpacing.sm),
+                              ServiceStatusChip(label: summary.statusLabel),
                             ],
                           ),
                         ),
-                        const SizedBox(height: AppSpacing.md),
-                        ServiceMetricLine(text: summary.metricLabel),
-                        const SizedBox(height: AppSpacing.sm),
-                        ServiceStatusChip(label: summary.statusLabel),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -844,6 +824,235 @@ class _HomeServiceCardState extends State<HomeServiceCard> {
       ),
     );
   }
+}
+
+class _HomeServiceCardHeader extends StatelessWidget {
+  const _HomeServiceCardHeader({
+    required this.service,
+    required this.summary,
+    required this.primaryColor,
+  });
+
+  final HouseholdService service;
+  final HomeServiceSummary summary;
+  final Color primaryColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ServiceIcon(
+          icon: service.icon,
+          color: service.templateType.color,
+          serviceName: service.name,
+          templateType: service.templateType,
+        ),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                service.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              _TodayEntrySummary(value: _todayEntryLabel(summary)),
+            ],
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              summary.primaryLabel,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppColors.muted,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            Text(
+              CurrencyFormatter.rupees(summary.primaryAmountCents / 100),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: primaryColor,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _TodayEntrySummary extends StatelessWidget {
+  const _TodayEntrySummary({required this.value});
+
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "Today's Entry",
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.bodyLarge?.copyWith(
+            color: theme.colorScheme.onSurface,
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+enum _TodayEntryStatus {
+  pending(AppColors.warning, 'Today entry pending.', 0),
+  logged(AppColors.success, 'Today entry logged.', 1),
+  inactive(AppColors.muted, 'Today entry not applicable.', 2);
+
+  const _TodayEntryStatus(this.color, this.semanticLabel, this.sortRank);
+
+  final Color color;
+  final String semanticLabel;
+  final int sortRank;
+}
+
+_TodayEntryStatus _todayEntryStatus(HouseholdService service) {
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final startDate = const ServiceStartDateResolver().resolve(service);
+  if (startDate != null) {
+    final start = DateTime(startDate.year, startDate.month, startDate.day);
+    if (start.isAfter(today)) {
+      return _TodayEntryStatus.inactive;
+    }
+  }
+  final todayMonth = LedgerMonth.fromDate(today).key;
+  if (service.monthKey != todayMonth) {
+    return _TodayEntryStatus.inactive;
+  }
+  final hasTodayEntry = service.entries.any((entry) => entry.day == today.day);
+  return hasTodayEntry ? _TodayEntryStatus.logged : _TodayEntryStatus.pending;
+}
+
+String _todayEntryLabel(HomeServiceSummary summary) {
+  final service = summary.service;
+  if (service.templateType == ServiceTemplateType.fixedMonthly) {
+    return summary.usageCents > 0 || summary.payableCents > 0
+        ? 'Billed This Month'
+        : 'Not Billed';
+  }
+
+  final entry = _todayEntry(service);
+  if (entry == null || entry.status == ServiceEntryStatus.noEntry) {
+    return 'Not Logged';
+  }
+
+  if (service.templateType == ServiceTemplateType.attendance) {
+    return switch (entry.status) {
+      ServiceEntryStatus.delivered => 'Present',
+      ServiceEntryStatus.notDelivered => 'Absent',
+      ServiceEntryStatus.halfDay => 'Half Day',
+      _ => 'Not Logged',
+    };
+  }
+
+  return switch (entry.status) {
+    ServiceEntryStatus.delivered ||
+    ServiceEntryStatus.rateChanged => _quantityEntryLabel(entry, service),
+    ServiceEntryStatus.notDelivered => 'Not Delivered',
+    _ => 'Not Logged',
+  };
+}
+
+ServiceEntry? _todayEntry(HouseholdService service) {
+  final now = DateTime.now();
+  final todayMonth = LedgerMonth.fromDate(now).key;
+  if (service.monthKey != todayMonth) {
+    return null;
+  }
+  for (final entry in service.entries) {
+    if (entry.day == now.day) {
+      return entry;
+    }
+  }
+  return null;
+}
+
+String _quantityEntryLabel(ServiceEntry entry, HouseholdService service) {
+  final unit = entry.unit.trim().isNotEmpty
+      ? entry.unit.trim()
+      : service.unit.trim();
+  final quantity = _formatQuantity(entry.quantity);
+  return unit.isEmpty ? quantity : '$quantity $unit';
+}
+
+String _formatQuantity(double value) {
+  if (value.truncateToDouble() == value) {
+    return value.toStringAsFixed(0);
+  }
+  return value
+      .toStringAsFixed(2)
+      .replaceFirst(RegExp(r'0+$'), '')
+      .replaceFirst(RegExp(r'\.$'), '');
+}
+
+/// Side-border accent for today's entry, using the same status → colour logic
+/// as the service detail calendar (delivered = green, missed = red,
+/// quantity change = amber, no entry = grey).
+Color _todayBorderColor(HouseholdService service) {
+  if (_todayEntryStatus(service) == _TodayEntryStatus.inactive) {
+    return _visualStatusColor(CalendarEntryVisualStatus.noEntry);
+  }
+  final now = DateTime.now();
+  final todayDay = now.day;
+  ServiceEntry? todayEntry;
+  for (final entry in service.entries) {
+    if (entry.day == todayDay) {
+      todayEntry = entry;
+      break;
+    }
+  }
+  final visual = CalendarEntryStatusResolver.resolve(
+    entry: todayEntry,
+    configuredQuantity: service.templateType == ServiceTemplateType.quantity
+        ? service.defaultQuantity
+        : null,
+  );
+  return _visualStatusColor(visual);
+}
+
+Color _visualStatusColor(CalendarEntryVisualStatus status) {
+  return switch (status) {
+    CalendarEntryVisualStatus.delivered => AppColors.success,
+    CalendarEntryVisualStatus.notDelivered => AppColors.danger,
+    CalendarEntryVisualStatus.quantityChanged => AppColors.warning,
+    CalendarEntryVisualStatus.noEntry => AppColors.muted,
+  };
 }
 
 class _SwipeAction {

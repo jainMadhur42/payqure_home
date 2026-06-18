@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:payqure_home/common/widgets/app_logo_mark.dart';
+import 'package:payqure_home/core/theme/app_colors.dart';
 import 'package:payqure_home/features/ledger/data/database/ledger_database.dart';
 import 'package:payqure_home/features/ledger/data/repositories/drift_ledger_repository.dart';
 import 'package:payqure_home/features/ledger/data/repositories/supabase_auth_repository.dart';
@@ -13,6 +14,19 @@ import 'package:payqure_home/features/ledger/presentation/controllers/ledger_con
 import 'package:payqure_home/features/onboarding/presentation/onboarding_screen.dart';
 
 void main() {
+  testWidgets('first page title uses the onboarding theme color', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(home: OnboardingScreen(onComplete: () async {})),
+    );
+
+    final title = tester.widget<Text>(
+      find.text('Track Household\nServices Easily'),
+    );
+    expect(title.style?.color, AppColors.primary);
+  });
+
   testWidgets('onboarding moves through all four pages', (tester) async {
     await tester.binding.setSurfaceSize(const Size(430, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));

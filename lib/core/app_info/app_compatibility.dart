@@ -1,7 +1,7 @@
 import 'package:pub_semver/pub_semver.dart';
 
 abstract final class AppCompatibilityContract {
-  static const clientSchemaVersion = 6;
+  static const clientSchemaVersion = 8;
 }
 
 enum AppCompatibilityStatus {
