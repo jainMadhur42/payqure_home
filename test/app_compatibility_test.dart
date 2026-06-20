@@ -15,7 +15,7 @@ import 'package:payqure_home/features/ledger/presentation/controllers/ledger_con
 import 'package:payqure_home/features/ledger/presentation/screens/app_update_required_screen.dart';
 
 const _minimumSupportedAppVersion = '1.2.0';
-const _latestAppVersion = '1.5.0';
+const _latestAppVersion = '1.6.0';
 const _supportedOlderAppVersion = '1.3.0';
 const _unsupportedAppVersion = '1.1.0';
 const _compatibilityFixture = AppCompatibilityConfig(
