@@ -49,6 +49,8 @@ class LocalNotificationService implements ServiceReminderScheduler {
 
   static const _channelId = 'service_reminders';
   static const _payloadPrefix = 'service-reminder:';
+  @visibleForTesting
+  static const androidSmallIcon = 'ic_notification';
 
   final FlutterLocalNotificationsPlugin _plugin;
   final ServiceReminderPlanner _planner;
@@ -73,7 +75,7 @@ class LocalNotificationService implements ServiceReminderScheduler {
       // The timezone package defaults to UTC if the platform cannot resolve it.
     }
     const settings = InitializationSettings(
-      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+      android: AndroidInitializationSettings(androidSmallIcon),
       iOS: DarwinInitializationSettings(
         requestAlertPermission: false,
         requestBadgePermission: false,
@@ -162,6 +164,7 @@ class LocalNotificationService implements ServiceReminderScheduler {
             _channelId,
             'Service reminders',
             channelDescription: 'Reminders before household service times',
+            icon: androidSmallIcon,
             importance: Importance.high,
             priority: Priority.high,
           ),
