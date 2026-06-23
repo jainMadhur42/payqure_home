@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../common/widgets/app_card.dart';
+import '../../../../common/widgets/app_snack_bar.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../domain/entities/app_route.dart';
@@ -175,13 +176,11 @@ class ManageServiceScreen extends StatelessWidget {
       if (!context.mounted) {
         return;
       }
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(
-            content: Text('Could not generate PDF. Please try again.'),
-          ),
-        );
+      AppSnackBar.show(
+        context,
+        message: 'Could not generate PDF. Please try again.',
+        tone: AppSnackBarTone.error,
+      );
     }
   }
 

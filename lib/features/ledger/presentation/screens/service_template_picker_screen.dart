@@ -53,6 +53,15 @@ class ServiceTemplatePickerScreen extends StatelessWidget {
               fontWeight: FontWeight.w900,
             ),
           ),
+          if (category == ServiceTemplateCategory.custom) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              'Create your own service using the option that fits it best.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
           const SizedBox(height: AppSpacing.sm),
           AppCard(
             padding: EdgeInsets.zero,
@@ -147,12 +156,6 @@ class _TemplateTile extends StatelessWidget {
                 fontWeight: FontWeight.w800,
               ),
             ),
-            subtitle: template.isCustom
-                ? Text(
-                    'Create your own service',
-                    style: TextStyle(color: colorScheme.onSurfaceVariant),
-                  )
-                : null,
             trailing: AnimatedSwitcher(
               duration: const Duration(milliseconds: 180),
               child: isSelected

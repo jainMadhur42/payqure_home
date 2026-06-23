@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../../common/widgets/app_snack_bar.dart';
 import '../../../../common/widgets/selection_card.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
@@ -44,15 +45,10 @@ class CurrencyScreen extends StatelessWidget {
               if (!context.mounted) {
                 return;
               }
-              ScaffoldMessenger.of(context)
-                ..hideCurrentSnackBar()
-                ..showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      '${controller.currencies[index].name} selected.',
-                    ),
-                  ),
-                );
+              AppSnackBar.show(
+                context,
+                message: '${controller.currencies[index].name} selected.',
+              );
             },
           ),
           if (index != controller.currencies.length - 1)

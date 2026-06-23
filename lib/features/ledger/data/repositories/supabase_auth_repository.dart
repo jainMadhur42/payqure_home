@@ -323,6 +323,16 @@ class SupabaseAuthRepository
       phone: pending?.phone,
       privacyPolicyAccepted: pending?.privacyPolicyAccepted,
     );
+    await _upsertProfile(
+      user: user,
+      name: profile.name,
+      email: profile.email,
+      phone: profile.phone,
+      privacyPolicyAccepted: profile.privacyPolicyAccepted,
+      privacyPolicyAcceptedAt: profile.privacyPolicyAcceptedAt,
+      privacyPolicyVersion: profile.privacyPolicyVersion,
+      preferredCurrencyCode: profile.preferredCurrencyCode,
+    );
     _pendingRegistrationProfiles.remove(email.trim().toLowerCase());
     _setProfile(profile);
     return profile;
@@ -641,17 +651,20 @@ class SupabaseAuthRepository
     final profileRow = await _profileRow(user.id);
     final metadata = user.userMetadata ?? {};
     final resolvedName =
-        name ?? profileRow?['name']?.toString() ?? metadata['name']?.toString();
+        _nonEmptyText(name) ??
+        _nonEmptyText(profileRow?['name']) ??
+        _nonEmptyText(metadata['name']);
     final resolvedEmail =
-        profileRow?['email']?.toString() ??
-        user.email ??
-        metadata['email']?.toString() ??
+        _nonEmptyText(profileRow?['email']) ??
+        _nonEmptyText(user.email) ??
+        _nonEmptyText(metadata['email']) ??
         '';
     final resolvedPhone =
-        phone ??
-        profileRow?['phone']?.toString() ??
-        user.phone ??
-        metadata['phone']?.toString() ??
+        _nonEmptyText(phone) ??
+        _nonEmptyText(profileRow?['phone']) ??
+        _nonEmptyText(user.phone) ??
+        _nonEmptyText(metadata['phone']) ??
+        _nonEmptyText(metadata['phone_number']) ??
         '';
     final emailVerified = user.emailConfirmedAt != null;
     final accepted =
@@ -791,6 +804,11 @@ class SupabaseAuthRepository
       String text when text.toLowerCase() == 'false' => false,
       _ => null,
     };
+  }
+
+  String? _nonEmptyText(Object? value) {
+    final text = value?.toString().trim();
+    return text == null || text.isEmpty ? null : text;
   }
 
   DateTime? _dateValue(dynamic value) {

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../../../common/widgets/app_snack_bar.dart';
 import '../../domain/entities/app_route.dart';
 import '../../../legal/presentation/legal_screens.dart';
 import '../../../onboarding/presentation/onboarding_screen.dart';
 import '../controllers/ledger_controller.dart';
+import '../models/app_toast_event.dart';
 import 'app_update_required_screen.dart';
 import 'ledger_flow_screen.dart';
 import 'login_screen.dart';
@@ -56,9 +58,16 @@ class _LedgerHomeScreenState extends State<LedgerHomeScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text(event.message)));
+      AppSnackBar.show(
+        context,
+        message: event.message,
+        tone: switch (event.tone) {
+          AppToastTone.success => AppSnackBarTone.success,
+          AppToastTone.error => AppSnackBarTone.error,
+          AppToastTone.info => AppSnackBarTone.info,
+          AppToastTone.warning => AppSnackBarTone.warning,
+        },
+      );
     });
   }
 

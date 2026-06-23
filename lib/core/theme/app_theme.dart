@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
 import 'app_radius.dart';
+import 'app_spacing.dart';
 
 abstract final class AppTheme {
   static ThemeData get light {
@@ -107,6 +108,21 @@ abstract final class AppTheme {
         modalBackgroundColor: AppColors.surface,
         modalBarrierColor: Color(0x66000000),
       ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: AppColors.ink,
+        elevation: 10,
+        insetPadding: const EdgeInsets.all(AppSpacing.lg),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+        ),
+        contentTextStyle: const TextStyle(
+          color: Colors.white,
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+        ),
+        actionTextColor: const Color(0xFFCFC7FF),
+      ),
     );
   }
 
@@ -192,6 +208,22 @@ abstract final class AppTheme {
         modalBackgroundColor: Color(0xFF191A23),
         modalBarrierColor: Color(0x99000000),
         dragHandleColor: Color(0xFF8E90A0),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: const Color(0xFF252632),
+        elevation: 10,
+        insetPadding: const EdgeInsets.all(AppSpacing.lg),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          side: const BorderSide(color: Color(0xFF4A3CC2)),
+        ),
+        contentTextStyle: const TextStyle(
+          color: Colors.white,
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+        ),
+        actionTextColor: const Color(0xFFB8ACFF),
       ),
     );
   }

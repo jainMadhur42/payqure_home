@@ -4,6 +4,7 @@ import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 
 import '../../../../common/widgets/app_card.dart';
+import '../../../../common/widgets/app_snack_bar.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
@@ -135,7 +136,11 @@ class LedgerFlowScreen extends StatelessWidget {
           selectedService == null
               ? const _EmptyLedgerView()
               : _PdfPreview(controller: controller, service: selectedService),
-        LedgerRoute.contacts => ContactsScreen(services: overview.services),
+        LedgerRoute.contacts => ContactsScreen(
+          services: overview.services,
+          onCall: controller.trackProviderCall,
+          onCopy: controller.trackProviderContactCopied,
+        ),
         LedgerRoute.more => _SettingsView(controller: controller),
         LedgerRoute.profile => _ProfileView(controller: controller),
         LedgerRoute.currency => CurrencyScreen(controller: controller),
@@ -149,6 +154,7 @@ class LedgerFlowScreen extends StatelessWidget {
           registeredIdentifier: controller.profile?.email.isNotEmpty == true
               ? controller.profile!.email
               : controller.profile?.phone ?? '',
+          onDeletionRequested: controller.trackDeleteAccountRequested,
         ),
         _ => const SizedBox.shrink(),
       },
@@ -727,6 +733,7 @@ class _PdfPreviewState extends State<_PdfPreview> {
         }
         return PdfPreview.builder(
           build: (_) async => bytes,
+          onShared: (_) => widget.controller.trackPdfShared(),
           canChangeOrientation: false,
           canChangePageFormat: false,
           initialPageFormat: PdfPageFormat.a4,
@@ -1496,9 +1503,11 @@ class _CreateServiceViewState extends State<_CreateServiceView> {
   void _save() {
     final template = _selectedTemplate;
     if (template == null) {
-      ScaffoldMessenger.of(
+      AppSnackBar.show(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Choose a service first.')));
+        message: 'Choose a service first.',
+        tone: AppSnackBarTone.warning,
+      );
       return;
     }
     if (_formKey.currentState?.validate() != true) {

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../common/widgets/app_empty_state.dart';
+import '../../../../common/widgets/app_snack_bar.dart';
 import '../../../../common/widgets/selection_card.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../domain/entities/household_service.dart';
@@ -11,9 +12,16 @@ import '../widgets/ledger_screen_shared.dart';
 import '../widgets/service_icon.dart';
 
 class ContactsScreen extends StatelessWidget {
-  const ContactsScreen({required this.services, super.key});
+  const ContactsScreen({
+    required this.services,
+    this.onCall,
+    this.onCopy,
+    super.key,
+  });
 
   final List<HouseholdService> services;
+  final ValueChanged<HouseholdService>? onCall;
+  final ValueChanged<HouseholdService>? onCopy;
 
   @override
   Widget build(BuildContext context) {
@@ -36,7 +44,11 @@ class ContactsScreen extends StatelessWidget {
       ),
       children: [
         for (var index = 0; index < contacts.length; index++) ...[
-          _ContactCard(contact: contacts[index]),
+          _ContactCard(
+            contact: contacts[index],
+            onCall: onCall,
+            onCopy: onCopy,
+          ),
           if (index != contacts.length - 1)
             const SizedBox(height: AppSpacing.lg),
         ],
@@ -78,9 +90,11 @@ class ContactsScreen extends StatelessWidget {
 }
 
 class _ContactCard extends StatelessWidget {
-  const _ContactCard({required this.contact});
+  const _ContactCard({required this.contact, this.onCall, this.onCopy});
 
   final _ServiceContact contact;
+  final ValueChanged<HouseholdService>? onCall;
+  final ValueChanged<HouseholdService>? onCopy;
 
   @override
   Widget build(BuildContext context) {
@@ -156,23 +170,23 @@ class _ContactCard extends StatelessWidget {
   }
 
   Future<void> _call(BuildContext context) async {
+    onCall?.call(contact.services.first);
     final phone = contact.phoneNumber.replaceAll(RegExp(r'[^0-9+]'), '');
     final launched = await launchUrl(Uri(scheme: 'tel', path: phone));
     if (!launched && context.mounted) {
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(content: Text('Could not open the phone app.')),
-        );
+      AppSnackBar.show(
+        context,
+        message: 'Could not open the phone app.',
+        tone: AppSnackBarTone.error,
+      );
     }
   }
 
   void _copy(BuildContext context) {
+    onCopy?.call(contact.services.first);
     Clipboard.setData(ClipboardData(text: contact.phoneNumber));
     HapticFeedback.selectionClick();
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(const SnackBar(content: Text('Phone number copied.')));
+    AppSnackBar.show(context, message: 'Phone number copied.');
   }
 }
 

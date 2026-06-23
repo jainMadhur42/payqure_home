@@ -57,6 +57,17 @@ void main() {
     await tester.pump();
 
     expect(selected?.id, 'milkman');
+
+    await tester.scrollUntilVisible(
+      find.text('Custom Services'),
+      500,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(
+      find.text('Create your own service using the option that fits it best.'),
+      findsOneWidget,
+    );
+    expect(find.text('Create your own service'), findsNothing);
   });
 
   testWidgets('service and unit pickers use readable dark theme text', (
