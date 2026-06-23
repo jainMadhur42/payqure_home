@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../common/widgets/app_card.dart';
+import '../../../../common/widgets/app_snack_bar.dart';
 import '../../../../common/widgets/app_switch.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
@@ -195,6 +196,7 @@ class ServiceDetailScreen extends StatelessWidget {
     DateTime? serviceStartDate,
   ) {
     if (_isFutureDate(date)) {
+      controller.trackFutureEntryBlocked(service: service, day: date.day);
       _showSnackBar(
         context,
         'Entries can only be logged on or after the service date.',
@@ -212,6 +214,10 @@ class ServiceDetailScreen extends StatelessWidget {
       controller.selectedDay,
     );
     if (_isFutureDate(selectedDate)) {
+      controller.trackFutureEntryBlocked(
+        service: service,
+        day: selectedDate.day,
+      );
       _showSnackBar(
         context,
         'Entries can only be logged on or after the service date.',
@@ -239,9 +245,7 @@ class ServiceDetailScreen extends StatelessWidget {
   }
 
   void _showSnackBar(BuildContext context, String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    AppSnackBar.show(context, message: message, tone: AppSnackBarTone.warning);
   }
 
   Future<void> _saveQuickAction({

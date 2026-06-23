@@ -110,6 +110,72 @@ void main() {
     await controller.completeSplash();
 
     expect(controller.route, LedgerRoute.privacyPolicyAcceptance);
+
+    controller.goTo(LedgerRoute.dashboard);
+
+    expect(controller.route, LedgerRoute.privacyPolicyAcceptance);
+  });
+
+  test('missing privacy acceptance blocks ledger routes', () async {
+    final database = LedgerDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final authRepository = _RestoringAuthRepository(
+      const UserProfile(
+        id: 'remote-user',
+        name: 'Test User',
+        email: 'test@example.com',
+        phone: '+919999999999',
+        emailVerified: true,
+        privacyPolicyAccepted: false,
+        privacyPolicyVersion: '',
+      ),
+    );
+    final controller = _controller(
+      database: database,
+      authRepository: authRepository,
+    );
+    addTearDown(controller.dispose);
+
+    await controller.completeOnboarding();
+    await controller.completeSplash();
+
+    expect(controller.route, LedgerRoute.privacyPolicyAcceptance);
+
+    controller.goTo(LedgerRoute.more);
+
+    expect(controller.route, LedgerRoute.privacyPolicyAcceptance);
+  });
+
+  test('accepting the latest privacy policy unlocks the ledger', () async {
+    final database = LedgerDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final authRepository = _RestoringAuthRepository(
+      const UserProfile(
+        id: 'remote-user',
+        name: 'Test User',
+        email: 'test@example.com',
+        phone: '+919999999999',
+        emailVerified: true,
+        privacyPolicyAccepted: true,
+        privacyPolicyVersion: '2025-01',
+      ),
+    );
+    final controller = _controller(
+      database: database,
+      authRepository: authRepository,
+    );
+    addTearDown(controller.dispose);
+
+    await controller.completeOnboarding();
+    await controller.completeSplash();
+    await controller.acceptPrivacyPolicy();
+
+    expect(authRepository.currentProfile?.privacyPolicyAccepted, isTrue);
+    expect(
+      authRepository.currentProfile?.privacyPolicyVersion,
+      LegalContent.policyVersion,
+    );
+    expect(controller.route, LedgerRoute.dashboard);
   });
 
   test(

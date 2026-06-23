@@ -18,6 +18,27 @@ void main() {
     expect(sql, contains('insert into public.profiles'));
   });
 
+  test(
+    'registration phone repair reinstalls trigger and backfills profiles',
+    () {
+      final sql = File(
+        'supabase/migrations/'
+        '202606210001_repair_registration_phone_sync.sql',
+      ).readAsStringSync();
+
+      expect(
+        sql,
+        contains('create or replace function public.handle_new_auth_user()'),
+      );
+      expect(sql, contains("metadata ->> 'phone'"));
+      expect(sql, contains("metadata ->> 'phone_number'"));
+      expect(sql, contains('drop trigger if exists on_auth_user_created'));
+      expect(sql, contains('after insert on auth.users'));
+      expect(sql, contains('from auth.users as users'));
+      expect(sql, contains('on conflict (id) do update'));
+    },
+  );
+
   test('OTP request limit resets automatically after 60 minutes', () {
     final sql = File(
       'supabase/migrations/'
@@ -80,7 +101,7 @@ void main() {
 
     expect(
       compatibilityMigration,
-      contains("values ('mobile', 3, '1.2.0', '1.6.0')"),
+      contains("values ('mobile', 3, '1.2.0', '1.7.0')"),
     );
     expect(otpMigration, contains('public.claim_auth_otp_request(text, text)'));
     expect(

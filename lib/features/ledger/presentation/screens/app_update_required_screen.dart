@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../common/widgets/app_logo_mark.dart';
+import '../../../../common/widgets/app_snack_bar.dart';
 import '../../../../core/app_info/app_compatibility.dart';
 import '../../../../core/theme/app_spacing.dart';
 
@@ -102,10 +103,10 @@ class AppUpdateRequiredScreen extends StatelessWidget {
       return;
     }
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not open the app store. Please try again.'),
-        ),
+      AppSnackBar.show(
+        context,
+        message: 'Could not open the app store. Please try again.',
+        tone: AppSnackBarTone.error,
       );
     }
   }

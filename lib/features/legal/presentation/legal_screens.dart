@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../common/widgets/app_card.dart';
+import '../../../common/widgets/app_snack_bar.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../ledger/presentation/controllers/ledger_controller.dart';
@@ -96,9 +97,14 @@ class LegalDocumentView extends StatelessWidget {
 }
 
 class DeleteMyDataView extends StatelessWidget {
-  const DeleteMyDataView({this.registeredIdentifier = '', super.key});
+  const DeleteMyDataView({
+    this.registeredIdentifier = '',
+    this.onDeletionRequested,
+    super.key,
+  });
 
   final String registeredIdentifier;
+  final VoidCallback? onDeletionRequested;
 
   @override
   Widget build(BuildContext context) {
@@ -166,6 +172,7 @@ class DeleteMyDataView extends StatelessWidget {
   }
 
   Future<void> _requestDeletion(BuildContext context) async {
+    onDeletionRequested?.call();
     final body = [
       'Hello,',
       'I would like to request deletion of my Daily Wages account and associated data.',
@@ -187,13 +194,11 @@ class DeleteMyDataView extends StatelessWidget {
     }
     if (context.mounted) {
       _copySupportEmail(context);
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(
-            content: Text('Email app is unavailable. Support email copied.'),
-          ),
-        );
+      AppSnackBar.show(
+        context,
+        message: 'Email app is unavailable. Support email copied.',
+        tone: AppSnackBarTone.warning,
+      );
     }
   }
 
@@ -215,9 +220,7 @@ class DeleteMyDataView extends StatelessWidget {
   void _copySupportEmail(BuildContext context) {
     Clipboard.setData(const ClipboardData(text: LegalContent.supportEmail));
     HapticFeedback.selectionClick();
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(const SnackBar(content: Text('Support email copied.')));
+    AppSnackBar.show(context, message: 'Support email copied.');
   }
 }
 

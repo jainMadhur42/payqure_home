@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../common/widgets/app_logo_mark.dart';
+import '../../../../common/widgets/app_snack_bar.dart';
 import '../../../../core/auth/auth_validators.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
@@ -613,9 +614,7 @@ class _AuthSupportFooter extends StatelessWidget {
     if (!context.mounted) {
       return;
     }
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Support email copied.')));
+    AppSnackBar.show(context, message: 'Support email copied.');
   }
 }
 

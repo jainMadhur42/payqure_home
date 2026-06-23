@@ -60,6 +60,7 @@ Important entry points:
 | Entry validation and persistence | `lib/features/ledger/presentation/controllers/entry_operations_controller.dart` |
 | Payment and advance operations | `lib/features/ledger/presentation/controllers/payment_operations_controller.dart` |
 | Ledger analytics event mapping | `lib/features/ledger/presentation/analytics/ledger_analytics_mapper.dart` |
+| Firebase Analytics event catalog | `docs/firebase_analytics_event_catalog.md` |
 | Reminder permission and schedule reconciliation | `lib/features/ledger/presentation/controllers/service_reminder_coordinator.dart` |
 | Reminder list and per-service controls | `lib/features/ledger/presentation/screens/notifications_screen.dart` |
 | Shared reminder schedule editor | `lib/features/ledger/presentation/widgets/service_reminder_editor.dart` |
@@ -349,6 +350,7 @@ Later auth/profile contract migrations are:
 ```text
 supabase/migrations/202606150003_add_otp_request_window_status.sql
 supabase/migrations/202606150004_add_profile_preferred_currency.sql
+supabase/migrations/202606210001_repair_registration_phone_sync.sql
 ```
 
 The current remote ledger schema version is stored only in

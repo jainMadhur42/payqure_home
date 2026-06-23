@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/analytics/app_analytics.dart';
@@ -276,9 +276,24 @@ class LedgerController extends ChangeNotifier {
   Future<void> _loadAppVersion() async {
     try {
       _appVersionInfo = await _appVersionProvider.load();
+      _analytics.logEvent(
+        AnalyticsEvents.appOpened,
+        parameters: {
+          AnalyticsParams.appVersion:
+              '${_appVersionInfo.version}+${_appVersionInfo.buildNumber}',
+          AnalyticsParams.platform: defaultTargetPlatform.name,
+        },
+      );
       notifyListeners();
     } catch (_) {
       // Keep the fallback label if platform package metadata is unavailable.
+      _analytics.logEvent(
+        AnalyticsEvents.appOpened,
+        parameters: {
+          AnalyticsParams.appVersion: _appVersionInfo.version,
+          AnalyticsParams.platform: defaultTargetPlatform.name,
+        },
+      );
     }
   }
 
@@ -383,8 +398,12 @@ class LedgerController extends ChangeNotifier {
     });
   }
 
-  void _showToast(String message) {
-    toastEvent = AppToastEvent(id: ++_toastEventId, message: message);
+  void _showToast(String message, {AppToastTone tone = AppToastTone.success}) {
+    toastEvent = AppToastEvent(
+      id: ++_toastEventId,
+      message: message,
+      tone: tone,
+    );
   }
 
   void goTo(LedgerRoute nextRoute) {
@@ -409,7 +428,10 @@ class LedgerController extends ChangeNotifier {
       parameters: {
         AnalyticsParams.serviceType: _analyticsLabel(draft.serviceIcon),
         AnalyticsParams.templateType: draft.templateType.name,
-        AnalyticsParams.unitType: draft.unit,
+        AnalyticsParams.serviceNature: _analyticsMapper.serviceNature(
+          draft.templateType,
+        ),
+        AnalyticsParams.unitType: _analyticsLabel(draft.unit),
         AnalyticsParams.currencyCode: selectedCurrency.code,
       },
     );
@@ -422,7 +444,10 @@ class LedgerController extends ChangeNotifier {
   void startCreateService() {
     editingService = null;
     addServiceDraft = null;
-    _analytics.logEvent(AnalyticsEvents.addServiceStarted);
+    _analytics.logEvent(
+      AnalyticsEvents.addServiceStarted,
+      parameters: const {AnalyticsParams.source: 'home_plus_button'},
+    );
     _setRoute(LedgerRoute.createServiceTemplate);
     notifyListeners();
   }
@@ -435,7 +460,10 @@ class LedgerController extends ChangeNotifier {
       parameters: {
         AnalyticsParams.serviceType: _analyticsLabel(template.iconIdentifier),
         AnalyticsParams.templateType: template.templateType.name,
-        AnalyticsParams.unitType: template.defaultUnit,
+        AnalyticsParams.serviceNature: _analyticsMapper.serviceNature(
+          template.templateType,
+        ),
+        AnalyticsParams.unitType: _analyticsLabel(template.defaultUnit),
         AnalyticsParams.currencyCode: selectedCurrency.code,
       },
     );
@@ -509,6 +537,13 @@ class LedgerController extends ChangeNotifier {
     required String identifier,
     required String password,
   }) async {
+    _analytics.logEvent(
+      AnalyticsEvents.loginStarted,
+      parameters: const {
+        AnalyticsParams.method: 'email',
+        AnalyticsParams.source: 'login',
+      },
+    );
     await _run(() async {
       profile = await _sessionController.signIn(
         identifier: identifier,
@@ -516,7 +551,10 @@ class LedgerController extends ChangeNotifier {
       );
       _analytics.logEvent(
         AnalyticsEvents.loginCompleted,
-        parameters: const {AnalyticsParams.method: 'email_password'},
+        parameters: const {
+          AnalyticsParams.method: 'email',
+          AnalyticsParams.source: 'login',
+        },
       );
       if (!profile!.emailVerified &&
           !_sessionController.isLocalDevelopmentProfile(profile!)) {
@@ -554,7 +592,10 @@ class LedgerController extends ChangeNotifier {
     await _run(() async {
       _analytics.logEvent(
         AnalyticsEvents.signUpStarted,
-        parameters: const {AnalyticsParams.method: 'email_password'},
+        parameters: const {
+          AnalyticsParams.method: 'email',
+          AnalyticsParams.source: 'signup',
+        },
       );
       profile = await _sessionController.register(
         name: name,
@@ -565,7 +606,10 @@ class LedgerController extends ChangeNotifier {
       );
       _analytics.logEvent(
         AnalyticsEvents.signUpCompleted,
-        parameters: const {AnalyticsParams.method: 'email_password'},
+        parameters: const {
+          AnalyticsParams.method: 'email',
+          AnalyticsParams.source: 'signup',
+        },
       );
       pendingVerificationEmail = profile!.email;
       emailVerificationOtpStatus = _otpStatusAfterRequest(
@@ -661,7 +705,10 @@ class LedgerController extends ChangeNotifier {
     await _run(() async {
       _analytics.logEvent(
         AnalyticsEvents.forgotPasswordStarted,
-        parameters: const {AnalyticsParams.method: 'email_password'},
+        parameters: const {
+          AnalyticsParams.method: 'email',
+          AnalyticsParams.source: 'login',
+        },
       );
       // A phone identifier is resolved to its account email, where the recovery
       // OTP is sent and against which it must be verified.
@@ -732,7 +779,10 @@ class LedgerController extends ChangeNotifier {
       );
       _analytics.logEvent(
         AnalyticsEvents.forgotPasswordCompleted,
-        parameters: const {AnalyticsParams.method: 'email_password'},
+        parameters: const {
+          AnalyticsParams.method: 'email',
+          AnalyticsParams.source: 'password_reset',
+        },
       );
       pendingPasswordResetEmail = '';
       passwordResetResendAvailableAt = null;
@@ -781,6 +831,20 @@ class LedgerController extends ChangeNotifier {
   void selectDayForEdit(int day, {EntrySource source = EntrySource.calendar}) {
     selectedDay = day;
     entrySource = source;
+    final service = selectedService;
+    if (service != null) {
+      _analytics.logEvent(
+        AnalyticsEvents.dailyEntryStarted,
+        parameters: {
+          ..._serviceAnalyticsParameters(service),
+          AnalyticsParams.source: source.name,
+          AnalyticsParams.dateRelation: _analyticsMapper.dateRelation(
+            monthKey: monthKey,
+            day: day,
+          ),
+        },
+      );
+    }
     _setRoute(LedgerRoute.entry);
     notifyListeners();
   }
@@ -793,6 +857,17 @@ class LedgerController extends ChangeNotifier {
     selectedService = service;
     selectedDay = _validEntryDayForService(service, day);
     entrySource = source;
+    _analytics.logEvent(
+      AnalyticsEvents.dailyEntryStarted,
+      parameters: {
+        ..._serviceAnalyticsParameters(service),
+        AnalyticsParams.source: source.name,
+        AnalyticsParams.dateRelation: _analyticsMapper.dateRelation(
+          monthKey: monthKey,
+          day: day,
+        ),
+      },
+    );
     _setRoute(LedgerRoute.entry);
     notifyListeners();
   }
@@ -806,6 +881,11 @@ class LedgerController extends ChangeNotifier {
         parameters: {
           ..._serviceAnalyticsParameters(service),
           AnalyticsParams.isPastDate: _isPastDay(day),
+          AnalyticsParams.dateRelation: _analyticsMapper.dateRelation(
+            monthKey: monthKey,
+            day: day,
+          ),
+          AnalyticsParams.monthOffset: _analyticsMapper.monthOffset(monthKey),
         },
       );
     }
@@ -830,6 +910,13 @@ class LedgerController extends ChangeNotifier {
   }) {
     selectedService = service;
     serviceActionReturnRoute = returnRoute;
+    _analytics.logEvent(
+      AnalyticsEvents.billingSummaryOpened,
+      parameters: {
+        ..._serviceAnalyticsParameters(service),
+        AnalyticsParams.source: returnRoute.name,
+      },
+    );
     _setRoute(LedgerRoute.settlementDetail);
     notifyListeners();
   }
@@ -840,10 +927,6 @@ class LedgerController extends ChangeNotifier {
   }) {
     selectedService = service;
     serviceActionReturnRoute = returnRoute;
-    _analytics.logEvent(
-      AnalyticsEvents.paymentHistoryViewed,
-      parameters: _serviceAnalyticsParameters(service),
-    );
     _setRoute(LedgerRoute.paymentHistory);
     notifyListeners();
   }
@@ -863,7 +946,7 @@ class LedgerController extends ChangeNotifier {
     String source = 'service_detail',
   }) {
     _analytics.logEvent(
-      AnalyticsEvents.recordPaymentStarted,
+      AnalyticsEvents.paymentScreenOpened,
       parameters: {
         ..._serviceAnalyticsParameters(service),
         AnalyticsParams.source: source,
@@ -878,8 +961,13 @@ class LedgerController extends ChangeNotifier {
     _analytics.logEvent(
       AnalyticsEvents.quickLogOpened,
       parameters: {
-        AnalyticsParams.entrySource: date == null ? 'quick_log' : 'past_date',
+        AnalyticsParams.source: date == null ? 'quick_log' : 'past_date',
         AnalyticsParams.isPastDate: _isPastDate(quickLogDate),
+        AnalyticsParams.dateRelation: _analyticsMapper.dateRelation(
+          monthKey: _monthKeyForDate(quickLogDate),
+          day: quickLogDate.day,
+        ),
+        AnalyticsParams.totalServices: overview?.services.length ?? 0,
       },
     );
     selectedDay = quickLogDate.day;
@@ -943,6 +1031,15 @@ class LedgerController extends ChangeNotifier {
       if (!loaded) {
         return;
       }
+      _analytics.logEvent(
+        AnalyticsEvents.calendarMonthChanged,
+        parameters: {
+          AnalyticsParams.monthOffset: _analyticsMapper.monthOffset(
+            nextMonthKey,
+          ),
+          AnalyticsParams.source: 'home',
+        },
+      );
       _setRoute(LedgerRoute.dashboard);
     });
   }
@@ -996,22 +1093,45 @@ class LedgerController extends ChangeNotifier {
   }) async {
     final userId = profile?.id ?? 'local-user';
     await _run(() async {
-      selectedService = await _ledgerRepository.createService(
-        userId: userId,
-        monthKey: startMonthKey ?? monthKey,
-        name: name,
-        description: description,
-        icon: icon,
-        templateType: templateType.name,
-        unit: unit,
-        defaultQuantity: defaultQuantity,
-        rateCents: rateCents,
-        monthlyAmountCents: monthlyAmountCents,
-      );
+      try {
+        selectedService = await _ledgerRepository.createService(
+          userId: userId,
+          monthKey: startMonthKey ?? monthKey,
+          name: name,
+          description: description,
+          icon: icon,
+          templateType: templateType.name,
+          unit: unit,
+          defaultQuantity: defaultQuantity,
+          rateCents: rateCents,
+          monthlyAmountCents: monthlyAmountCents,
+        );
+      } catch (error) {
+        _analytics.logEvent(
+          AnalyticsEvents.serviceCreationFailed,
+          parameters: {
+            AnalyticsParams.serviceType: _analyticsLabel(icon),
+            AnalyticsParams.serviceNature: templateType.name,
+            AnalyticsParams.unitType: unit,
+            AnalyticsParams.source: 'add_service',
+            AnalyticsParams.errorType: _sanitizedErrorType(error),
+          },
+        );
+        rethrow;
+      }
+      final metadata = ServiceMetadata.parse(description);
       _analytics.logEvent(
         AnalyticsEvents.serviceCreated,
-        parameters: _serviceAnalyticsParameters(selectedService!),
+        parameters: {
+          ..._serviceAnalyticsParameters(selectedService!),
+          AnalyticsParams.hasReminder: metadata.remindBeforeMinutes > 0,
+          AnalyticsParams.hasContactNumber: metadata.contactNumber
+              .trim()
+              .isNotEmpty,
+          AnalyticsParams.source: 'home_plus_button',
+        },
       );
+      _analytics.setUserProperty(AnalyticsParams.hasCreatedService, 'true');
       _setAnalyticsUserProperties();
       _showToast('$name service added successfully.');
       _setRoute(routeAfterSave);
@@ -1128,17 +1248,27 @@ class LedgerController extends ChangeNotifier {
     }
     ServiceEntry? savedEntry;
     await _run(() async {
-      final entry = await _entryOperations.save(
-        service: service,
-        monthKey: monthKey,
-        day: selectedDay,
-        status: status,
-        quantity: quantity,
-        unit: unit,
-        rateCents: rateCents,
-        note: note,
-        onPrepared: (entry) => _applyOptimisticEntry(service.id, entry),
-      );
+      late final ServiceEntry entry;
+      try {
+        entry = await _entryOperations.save(
+          service: service,
+          monthKey: monthKey,
+          day: selectedDay,
+          status: status,
+          quantity: quantity,
+          unit: unit,
+          rateCents: rateCents,
+          note: note,
+          onPrepared: (entry) => _applyOptimisticEntry(service.id, entry),
+        );
+      } catch (error) {
+        _logEntryFailure(
+          service: service,
+          source: entrySource.name,
+          error: error,
+        );
+        rethrow;
+      }
       savedEntry = entry;
       _logEntrySaved(entry, service: service, source: entrySource.name);
       await _refreshLedgerState(resetSelection: false);
@@ -1160,14 +1290,31 @@ class LedgerController extends ChangeNotifier {
     required int day,
     ServiceEntryStatus? status,
   }) async {
+    _analytics.logEvent(
+      AnalyticsEvents.dailyEntryStarted,
+      parameters: {
+        ..._serviceAnalyticsParameters(service),
+        AnalyticsParams.source: 'calendar',
+        AnalyticsParams.dateRelation: _analyticsMapper.dateRelation(
+          monthKey: monthKey,
+          day: day,
+        ),
+      },
+    );
     await _run(() async {
-      final entry = await _entryOperations.saveDefault(
-        service: service,
-        monthKey: monthKey,
-        day: day,
-        status: status,
-        onPrepared: (entry) => _applyOptimisticEntry(service.id, entry),
-      );
+      late final ServiceEntry entry;
+      try {
+        entry = await _entryOperations.saveDefault(
+          service: service,
+          monthKey: monthKey,
+          day: day,
+          status: status,
+          onPrepared: (entry) => _applyOptimisticEntry(service.id, entry),
+        );
+      } catch (error) {
+        _logEntryFailure(service: service, source: 'calendar', error: error);
+        rethrow;
+      }
       _logEntrySaved(entry, service: service, source: 'calendar');
       await _refreshLedgerState(resetSelection: false);
       _showToast(
@@ -1187,6 +1334,17 @@ class LedgerController extends ChangeNotifier {
     required ServiceEntryStatus status,
   }) async {
     errorMessage = null;
+    _analytics.logEvent(
+      AnalyticsEvents.dailyEntryStarted,
+      parameters: {
+        ..._serviceAnalyticsParameters(service),
+        AnalyticsParams.source: 'quick_log',
+        AnalyticsParams.dateRelation: _analyticsMapper.dateRelation(
+          monthKey: monthKey,
+          day: day,
+        ),
+      },
+    );
     try {
       final entry = await _entryOperations.saveDefault(
         service: service,
@@ -1208,8 +1366,9 @@ class LedgerController extends ChangeNotifier {
       notifyListeners();
       return entry;
     } catch (error) {
+      _logEntryFailure(service: service, source: 'quick_log', error: error);
       errorMessage = ErrorMessageMapper.userFacing(error);
-      _showToast(errorMessage!);
+      _showToast(errorMessage!, tone: AppToastTone.error);
       notifyListeners();
       return null;
     }
@@ -1278,13 +1437,20 @@ class LedgerController extends ChangeNotifier {
           status: ServiceEntryStatus.delivered,
           onPrepared: (entry) => _applyOptimisticEntry(service.id, entry),
         );
-        _logEntrySaved(entry, service: service, source: 'quick_log');
+        _logEntrySaved(
+          entry,
+          service: service,
+          source: 'quick_log',
+          trackQuickCompletion: false,
+        );
       }
       _analytics.logEvent(
         AnalyticsEvents.quickLogCompleted,
         parameters: {
-          AnalyticsParams.serviceCount: services.length,
-          AnalyticsParams.entrySource: 'quick_log',
+          AnalyticsParams.totalServices: services.length,
+          AnalyticsParams.loggedCount: services.length,
+          AnalyticsParams.pendingCount: 0,
+          AnalyticsParams.source: 'quick_log',
         },
       );
       await _refreshLedgerState(resetSelection: false);
@@ -1343,6 +1509,8 @@ class LedgerController extends ChangeNotifier {
           AnalyticsParams.amountBucket: AmountAnalyticsHelper.centsBucket(
             amountCents,
           ),
+          AnalyticsParams.paymentType: 'advance',
+          AnalyticsParams.source: 'manage_service',
           AnalyticsParams.currencyCode: selectedCurrency.code,
         },
       );
@@ -1390,16 +1558,37 @@ class LedgerController extends ChangeNotifier {
     if (service == null) {
       return;
     }
+    _analytics.logEvent(
+      AnalyticsEvents.paymentRecordStarted,
+      parameters: {
+        ..._serviceAnalyticsParameters(service),
+        AnalyticsParams.source: source,
+        AnalyticsParams.paymentType: 'payment',
+      },
+    );
     await _run(() async {
-      await _paymentOperations.savePayment(
-        userId: userId,
-        service: service,
-        monthKey: monthKey,
-        amountCents: amountCents,
-        paymentDate: paymentDate,
-        mode: mode,
-        note: note,
-      );
+      try {
+        await _paymentOperations.savePayment(
+          userId: userId,
+          service: service,
+          monthKey: monthKey,
+          amountCents: amountCents,
+          paymentDate: paymentDate,
+          mode: mode,
+          note: note,
+        );
+      } catch (error) {
+        _analytics.logEvent(
+          AnalyticsEvents.paymentRecordFailed,
+          parameters: {
+            ..._serviceAnalyticsParameters(service),
+            AnalyticsParams.source: source,
+            AnalyticsParams.operation: 'record_payment',
+            AnalyticsParams.errorType: _sanitizedErrorType(error),
+          },
+        );
+        rethrow;
+      }
       _analytics.logEvent(
         AnalyticsEvents.paymentRecorded,
         parameters: _paymentAnalyticsParameters(
@@ -1409,6 +1598,7 @@ class LedgerController extends ChangeNotifier {
           source: source,
         ),
       );
+      _analytics.setUserProperty(AnalyticsParams.hasRecordedPayment, 'true');
       _invalidateHomeSummaries();
       successMessage = 'Payment recorded.';
       _showToast('Payment recorded successfully.');
@@ -1659,6 +1849,10 @@ class LedgerController extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
+    _analytics.logEvent(
+      AnalyticsEvents.logoutClicked,
+      parameters: const {AnalyticsParams.source: 'profile'},
+    );
     await _run(() async {
       final currentProfile = profile;
       if (currentProfile != null &&
@@ -1715,6 +1909,13 @@ class LedgerController extends ChangeNotifier {
           route != LedgerRoute.register) {
         _setRoute(LedgerRoute.login);
       }
+      notifyListeners();
+      return;
+    }
+
+    if (nextProfile.emailVerified &&
+        _sessionController.requiresPrivacyAcceptance(nextProfile)) {
+      _setRoute(LedgerRoute.privacyPolicyAcceptance);
       notifyListeners();
       return;
     }
@@ -2026,9 +2227,71 @@ class LedgerController extends ChangeNotifier {
   }
 
   void _setRoute(LedgerRoute nextRoute) {
-    isBackwardNavigation = _routeDepth(nextRoute) < _routeDepth(route);
-    route = nextRoute;
-    _analytics.logScreenView(_screenNameForRoute(nextRoute));
+    final guardedRoute = _privacyGuardedRoute(nextRoute);
+    isBackwardNavigation = _routeDepth(guardedRoute) < _routeDepth(route);
+    route = guardedRoute;
+    _analytics.logScreenView(_screenNameForRoute(guardedRoute));
+    _logRouteAnalytics(guardedRoute);
+  }
+
+  void _logRouteAnalytics(LedgerRoute route) {
+    final service = selectedService;
+    switch (route) {
+      case LedgerRoute.calendar when service != null:
+        _analytics.logEvent(
+          AnalyticsEvents.calendarOpened,
+          parameters: _serviceAnalyticsParameters(service),
+        );
+      case LedgerRoute.paymentHistory:
+      case LedgerRoute.globalPaymentHistory:
+        _analytics.logEvent(
+          AnalyticsEvents.paymentHistoryOpened,
+          parameters: {
+            if (service != null) ..._serviceAnalyticsParameters(service),
+            AnalyticsParams.source: service == null ? 'more' : 'service_detail',
+          },
+        );
+      case LedgerRoute.contacts:
+        _analytics.logEvent(AnalyticsEvents.contactsOpened);
+      case LedgerRoute.more:
+        _analytics.logEvent(AnalyticsEvents.moreTabOpened);
+      case LedgerRoute.profile:
+        _analytics.logEvent(AnalyticsEvents.profileOpened);
+      case LedgerRoute.privacyPolicy:
+        _analytics.logEvent(AnalyticsEvents.privacyPolicyOpened);
+      case LedgerRoute.termsDisclaimer:
+        _analytics.logEvent(AnalyticsEvents.termsOpened);
+      case LedgerRoute.deleteMyData:
+        _analytics.logEvent(AnalyticsEvents.deleteAccountOpened);
+      default:
+        break;
+    }
+  }
+
+  LedgerRoute _privacyGuardedRoute(LedgerRoute requestedRoute) {
+    final currentProfile = profile;
+    if (currentProfile == null ||
+        !_sessionController.requiresPrivacyAcceptance(currentProfile) ||
+        _canOpenWithoutCurrentPrivacyPolicy(requestedRoute)) {
+      return requestedRoute;
+    }
+    return LedgerRoute.privacyPolicyAcceptance;
+  }
+
+  bool _canOpenWithoutCurrentPrivacyPolicy(LedgerRoute route) {
+    return switch (route) {
+      LedgerRoute.splash ||
+      LedgerRoute.appUpdateRequired ||
+      LedgerRoute.onboarding ||
+      LedgerRoute.login ||
+      LedgerRoute.register ||
+      LedgerRoute.emailVerificationPending ||
+      LedgerRoute.forgotPassword ||
+      LedgerRoute.resetPasswordOtp ||
+      LedgerRoute.privacyPolicy ||
+      LedgerRoute.privacyPolicyAcceptance => true,
+      _ => false,
+    };
   }
 
   int _routeDepth(LedgerRoute route) {
@@ -2158,6 +2421,7 @@ class LedgerController extends ChangeNotifier {
     ServiceEntry entry, {
     required HouseholdService service,
     required String source,
+    bool trackQuickCompletion = true,
   }) {
     final existing = service.entries.any(
       (candidate) =>
@@ -2171,6 +2435,129 @@ class LedgerController extends ChangeNotifier {
         source: source,
       ),
     );
+    _analytics.setUserProperty(AnalyticsParams.hasLoggedEntry, 'true');
+    if (source == 'quick_log') {
+      final services = overview?.services ?? const <HouseholdService>[];
+      final loggedCount = services.where((candidate) {
+        return candidate.entries.any(
+          (saved) => saved.monthKey == monthKey && saved.day == entry.day,
+        );
+      }).length;
+      _analytics.logEvent(
+        AnalyticsEvents.quickLogEntryLogged,
+        parameters: _quickLogProgressParameters(
+          entry: entry,
+          service: service,
+          services: services,
+          loggedCount: loggedCount,
+        ),
+      );
+      if (trackQuickCompletion) {
+        _analytics.logEvent(
+          AnalyticsEvents.quickLogCompleted,
+          parameters: _quickLogProgressParameters(
+            entry: entry,
+            service: service,
+            services: services,
+            loggedCount: loggedCount,
+          ),
+        );
+      }
+    }
+  }
+
+  Map<String, Object?> _quickLogProgressParameters({
+    required ServiceEntry entry,
+    required HouseholdService service,
+    required List<HouseholdService> services,
+    required int loggedCount,
+  }) {
+    return {
+      ..._entryAnalyticsParameters(
+        entry,
+        service: service,
+        source: 'quick_log',
+      ),
+      AnalyticsParams.totalServices: services.length,
+      AnalyticsParams.loggedCount: loggedCount,
+      AnalyticsParams.pendingCount: services.length - loggedCount,
+    };
+  }
+
+  void _logEntryFailure({
+    required HouseholdService service,
+    required String source,
+    required Object error,
+  }) {
+    _analytics.logEvent(
+      AnalyticsEvents.dailyEntryFailed,
+      parameters: {
+        ..._serviceAnalyticsParameters(service),
+        AnalyticsParams.source: source,
+        AnalyticsParams.operation: 'log_entry',
+        AnalyticsParams.errorType: _sanitizedErrorType(error),
+      },
+    );
+  }
+
+  void trackFutureEntryBlocked({
+    required HouseholdService service,
+    required int day,
+    String source = 'calendar',
+  }) {
+    _analytics.logEvent(
+      AnalyticsEvents.futureEntryBlocked,
+      parameters: {
+        ..._serviceAnalyticsParameters(service),
+        AnalyticsParams.source: source,
+        AnalyticsParams.dateRelation: 'future',
+        AnalyticsParams.monthOffset: _analyticsMapper.monthOffset(monthKey),
+      },
+    );
+  }
+
+  void trackPdfShared() {
+    final service = selectedService;
+    if (service == null) return;
+    _analytics.logEvent(
+      AnalyticsEvents.pdfShared,
+      parameters: {
+        ..._pdfAnalyticsParameters(service),
+        AnalyticsParams.source: pdfSource.name,
+      },
+    );
+  }
+
+  void trackProviderCall(HouseholdService service) {
+    _analytics.logEvent(
+      AnalyticsEvents.providerCallClicked,
+      parameters: {
+        ..._serviceAnalyticsParameters(service),
+        AnalyticsParams.source: 'contacts',
+      },
+    );
+  }
+
+  void trackProviderContactCopied(HouseholdService service) {
+    _analytics.logEvent(
+      AnalyticsEvents.providerContactCopied,
+      parameters: {
+        ..._serviceAnalyticsParameters(service),
+        AnalyticsParams.source: 'contacts',
+      },
+    );
+  }
+
+  void trackDeleteAccountRequested() {
+    _analytics.logEvent(
+      AnalyticsEvents.deleteAccountRequested,
+      parameters: const {AnalyticsParams.source: 'profile'},
+    );
+  }
+
+  String _sanitizedErrorType(Object error) {
+    final type = error.runtimeType.toString();
+    return _analyticsLabel(type.isEmpty ? 'unknown_error' : type);
   }
 
   Map<String, Object?> _serviceAnalyticsParameters(HouseholdService service) {
@@ -2215,15 +2602,21 @@ class LedgerController extends ChangeNotifier {
   }
 
   Map<String, Object?> _pdfAnalyticsParameters(HouseholdService service) {
-    return _analyticsMapper.pdfParameters(
-      service: service,
-      monthKey: monthKey,
-      currency: selectedCurrency,
-    );
+    return {
+      ..._analyticsMapper.pdfParameters(
+        service: service,
+        monthKey: monthKey,
+        currency: selectedCurrency,
+      ),
+      AnalyticsParams.source: pdfSource.name,
+    };
   }
 
   void _setAnalyticsUserProperties() {
-    final services = overview?.services ?? const <HouseholdService>[];
+    final overviewServices = overview?.services ?? const <HouseholdService>[];
+    final services = overviewServices.isEmpty && selectedService != null
+        ? <HouseholdService>[selectedService!]
+        : overviewServices;
     _analytics.setUserProperties(
       _analyticsMapper.userProperties(
         services: services,

@@ -17,7 +17,8 @@ class LedgerAnalyticsMapper {
     final base = <String, Object?>{
       AnalyticsParams.serviceType: safeServiceType(service),
       AnalyticsParams.templateType: service.templateType.name,
-      AnalyticsParams.unitType: service.unit,
+      AnalyticsParams.serviceNature: serviceNature(service.templateType),
+      AnalyticsParams.unitType: analyticsLabel(service.unit),
       AnalyticsParams.currencyCode: currency.code,
       AnalyticsParams.autoMarkEnabled: false,
       AnalyticsParams.defaultQuantity: service.defaultQuantity,
@@ -25,15 +26,12 @@ class LedgerAnalyticsMapper {
     return switch (service.templateType) {
       ServiceTemplateType.quantity => {
         ...base,
-        AnalyticsParams.unitPrice: service.rateCents / 100,
         AnalyticsParams.unitPriceBucket: AmountAnalyticsHelper.centsBucket(
           service.rateCents,
         ),
       },
       ServiceTemplateType.attendance => {
         ...base,
-        AnalyticsParams.monthlyAmount:
-            _attendanceMonthlyAmountCents(service) / 100,
         AnalyticsParams.monthlyAmountBucket: AmountAnalyticsHelper.centsBucket(
           _attendanceMonthlyAmountCents(service),
         ),
@@ -41,7 +39,6 @@ class LedgerAnalyticsMapper {
       },
       ServiceTemplateType.fixedMonthly => {
         ...base,
-        AnalyticsParams.monthlyAmount: service.monthlyAmountCents / 100,
         AnalyticsParams.monthlyAmountBucket: AmountAnalyticsHelper.centsBucket(
           service.monthlyAmountCents,
         ),
@@ -59,12 +56,23 @@ class LedgerAnalyticsMapper {
   }) {
     final base = <String, Object?>{
       ...serviceParameters(service: service, currency: currency),
-      AnalyticsParams.entryStatus: entry.status.name,
+      AnalyticsParams.entryStatus: entryStatusLabel(
+        entry.status,
+        service.templateType,
+      ),
       AnalyticsParams.entrySource: source,
       AnalyticsParams.isPastDate: isPastDay(
         monthKey: monthKey,
         day: entry.day,
         today: today,
+      ),
+      AnalyticsParams.dateRelation: dateRelation(
+        monthKey: monthKey,
+        day: entry.day,
+        today: today,
+      ),
+      AnalyticsParams.quantityBucket: AmountAnalyticsHelper.getQuantityBucket(
+        entry.quantity,
       ),
       AnalyticsParams.quantityChanged:
           entry.quantity != service.defaultQuantity &&
@@ -80,8 +88,6 @@ class LedgerAnalyticsMapper {
     if (service.templateType == ServiceTemplateType.quantity) {
       return {
         ...base,
-        AnalyticsParams.quantity: entry.quantity,
-        AnalyticsParams.unitPrice: entry.rateCents / 100,
         AnalyticsParams.unitPriceBucket: AmountAnalyticsHelper.centsBucket(
           entry.rateCents,
         ),
@@ -90,8 +96,6 @@ class LedgerAnalyticsMapper {
     if (service.templateType == ServiceTemplateType.attendance) {
       return {
         ...base,
-        AnalyticsParams.monthlyAmount:
-            _attendanceMonthlyAmountCents(service) / 100,
         AnalyticsParams.monthlyAmountBucket: AmountAnalyticsHelper.centsBucket(
           _attendanceMonthlyAmountCents(service),
         ),
@@ -119,6 +123,7 @@ class LedgerAnalyticsMapper {
       AnalyticsParams.amountBucket: AmountAnalyticsHelper.centsBucket(
         amountCents,
       ),
+      AnalyticsParams.paymentType: 'payment',
       AnalyticsParams.currencyCode: currency.code,
     };
   }
@@ -132,6 +137,7 @@ class LedgerAnalyticsMapper {
     return {
       ...serviceParameters(service: service, currency: currency),
       AnalyticsParams.monthType: monthType(monthKey, today: today),
+      AnalyticsParams.monthOffset: monthOffset(monthKey, today: today),
       AnalyticsParams.currencyCode: currency.code,
     };
   }
@@ -143,6 +149,14 @@ class LedgerAnalyticsMapper {
   }) {
     return {
       AnalyticsParams.serviceCount: services.length,
+      AnalyticsParams.serviceCountBucket: AmountAnalyticsHelper.getCountBucket(
+        services.length,
+      ),
+      AnalyticsParams.hasCreatedService: services.isNotEmpty,
+      AnalyticsParams.hasLoggedEntry: services.any(
+        (service) => service.entries.isNotEmpty,
+      ),
+      AnalyticsParams.preferredServiceType: preferredServiceType(services),
       AnalyticsParams.hasQuantityService: services.any(
         (service) => service.templateType == ServiceTemplateType.quantity,
       ),
@@ -172,6 +186,25 @@ class LedgerAnalyticsMapper {
     return DateTime(month.year, month.month, day).isBefore(currentDay);
   }
 
+  String dateRelation({
+    required String monthKey,
+    required int day,
+    DateTime? today,
+  }) {
+    final month = LedgerMonth.parse(monthKey);
+    final current = today ?? DateTime.now();
+    final selected = DateTime(month.year, month.month, day);
+    final currentDay = DateTime(current.year, current.month, current.day);
+    if (selected == currentDay) return 'today';
+    return selected.isBefore(currentDay) ? 'past' : 'future';
+  }
+
+  int monthOffset(String monthKey, {DateTime? today}) {
+    final month = LedgerMonth.parse(monthKey);
+    final current = today ?? DateTime.now();
+    return (month.year - current.year) * 12 + month.month - current.month;
+  }
+
   String monthType(String monthKey, {DateTime? today}) {
     final month = LedgerMonth.parse(monthKey);
     final current = today ?? DateTime.now();
@@ -188,6 +221,31 @@ class LedgerAnalyticsMapper {
       return 'paid';
     }
     return amountCents < dueCents ? 'partial' : 'overpaid';
+  }
+
+  String serviceNature(ServiceTemplateType type) {
+    return switch (type) {
+      ServiceTemplateType.quantity => 'quantity_based',
+      ServiceTemplateType.attendance => 'attendance_based',
+      ServiceTemplateType.fixedMonthly => 'fixed_monthly',
+    };
+  }
+
+  String entryStatusLabel(
+    ServiceEntryStatus status,
+    ServiceTemplateType templateType,
+  ) {
+    return switch ((templateType, status)) {
+      (_, ServiceEntryStatus.noEntry) => 'not_logged',
+      (ServiceTemplateType.attendance, ServiceEntryStatus.delivered) =>
+        'present',
+      (ServiceTemplateType.attendance, ServiceEntryStatus.notDelivered) =>
+        'absent',
+      (ServiceTemplateType.attendance, ServiceEntryStatus.halfDay) =>
+        'half_day',
+      (_, ServiceEntryStatus.notDelivered) => 'missed',
+      _ => 'logged',
+    };
   }
 
   String safeServiceType(HouseholdService service) {
@@ -218,33 +276,43 @@ class LedgerAnalyticsMapper {
     };
   }
 
+  String preferredServiceType(List<HouseholdService> services) {
+    if (services.isEmpty) return 'none';
+    final counts = <String, int>{};
+    for (final service in services) {
+      final type = safeServiceType(service);
+      counts[type] = (counts[type] ?? 0) + 1;
+    }
+    return counts.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
+  }
+
   String screenName(LedgerRoute route) {
     return switch (route) {
       LedgerRoute.splash => 'splash',
-      LedgerRoute.onboarding => 'onboarding',
-      LedgerRoute.login => 'login',
-      LedgerRoute.register => 'register',
+      LedgerRoute.onboarding => 'onboarding_screen',
+      LedgerRoute.login => 'login_screen',
+      LedgerRoute.register => 'signup_screen',
       LedgerRoute.emailVerificationPending => 'email_verification_pending',
       LedgerRoute.forgotPassword => 'forgot_password',
       LedgerRoute.resetPasswordOtp => 'reset_password_otp',
-      LedgerRoute.dashboard => 'home',
+      LedgerRoute.dashboard => 'home_screen',
       LedgerRoute.contributionStats => 'spending_stats',
-      LedgerRoute.quickLog => 'quick_log',
+      LedgerRoute.quickLog => 'quick_log_screen',
       LedgerRoute.createServiceTemplate => 'service_template_picker',
       LedgerRoute.createService ||
-      LedgerRoute.createServiceReview => 'add_service',
-      LedgerRoute.calendar => 'service_detail',
+      LedgerRoute.createServiceReview => 'add_service_screen',
+      LedgerRoute.calendar => 'service_detail_screen',
       LedgerRoute.manageService => 'manage_service',
-      LedgerRoute.entry => 'add_entry',
-      LedgerRoute.settlementDetail => 'settlement_detail',
+      LedgerRoute.entry => 'add_entry_screen',
+      LedgerRoute.settlementDetail => 'billing_summary_screen',
       LedgerRoute.paymentHistory ||
-      LedgerRoute.globalPaymentHistory => 'payment_history',
+      LedgerRoute.globalPaymentHistory => 'payment_history_screen',
       LedgerRoute.advanceHistory => 'advance_history',
       LedgerRoute.serviceAdvanceHistory => 'service_advance_history',
-      LedgerRoute.pdfPreview => 'pdf_preview',
-      LedgerRoute.contacts => 'contacts',
-      LedgerRoute.more => 'more',
-      LedgerRoute.profile => 'profile',
+      LedgerRoute.pdfPreview => 'pdf_preview_screen',
+      LedgerRoute.contacts => 'contacts_screen',
+      LedgerRoute.more => 'more_screen',
+      LedgerRoute.profile => 'profile_screen',
       LedgerRoute.currency => 'currency_picker',
       LedgerRoute.theme => 'theme_picker',
       LedgerRoute.notifications => 'notifications',
