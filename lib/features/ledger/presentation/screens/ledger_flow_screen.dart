@@ -5,6 +5,7 @@ import 'package:printing/printing.dart';
 
 import '../../../../common/widgets/app_card.dart';
 import '../../../../common/widgets/app_snack_bar.dart';
+import '../../../../core/theme/accent_color.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
@@ -27,6 +28,7 @@ import '../widgets/service_identity_header.dart';
 import '../widgets/service_reminder_editor.dart';
 import '../widgets/zoomable_pdf_pages.dart';
 
+import 'accent_color_screen.dart';
 import 'currency_screen.dart';
 import 'contacts_screen.dart';
 import 'global_history_screen.dart';
@@ -145,6 +147,7 @@ class LedgerFlowScreen extends StatelessWidget {
         LedgerRoute.profile => _ProfileView(controller: controller),
         LedgerRoute.currency => CurrencyScreen(controller: controller),
         LedgerRoute.theme => ThemeScreen(controller: controller),
+        LedgerRoute.accentColor => AccentColorScreen(controller: controller),
         LedgerRoute.notifications => NotificationsScreen(
           controller: controller,
         ),
@@ -273,6 +276,8 @@ class LedgerFlowScreen extends StatelessWidget {
             ? 'Currency'
             : controller.route == LedgerRoute.theme
             ? 'Theme'
+            : controller.route == LedgerRoute.accentColor
+            ? 'Accent color'
             : controller.route == LedgerRoute.notifications
             ? 'Reminders'
             : controller.route == LedgerRoute.privacyPolicy
@@ -311,6 +316,7 @@ class LedgerFlowScreen extends StatelessWidget {
       LedgerRoute.globalPaymentHistory ||
       LedgerRoute.advanceHistory ||
       LedgerRoute.theme ||
+      LedgerRoute.accentColor ||
       LedgerRoute.notifications => LedgerRoute.more,
       LedgerRoute.contacts => LedgerRoute.more,
       LedgerRoute.privacyPolicy ||
@@ -382,9 +388,9 @@ class _QuickLogView extends StatelessWidget {
               AppCard(
                 child: Column(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.add_business_outlined,
-                      color: AppColors.primary,
+                      color: Theme.of(context).colorScheme.primary,
                       size: 40,
                     ),
                     const SizedBox(height: AppSpacing.md),
@@ -790,6 +796,11 @@ class _SettingsView extends StatelessWidget {
               onTap: () => controller.goTo(LedgerRoute.theme),
             ),
             _MoreTile(
+              icon: Icons.color_lens_outlined,
+              title: 'Accent Color (${controller.selectedAccentColor.label})',
+              onTap: () => controller.goTo(LedgerRoute.accentColor),
+            ),
+            _MoreTile(
               icon: Icons.notifications_none_rounded,
               title: 'Reminders',
               onTap: () => controller.goTo(LedgerRoute.notifications),
@@ -968,14 +979,14 @@ class _ProfileViewState extends State<_ProfileView> {
                 children: [
                   CircleAvatar(
                     radius: 26,
-                    backgroundColor: AppColors.primarySoft,
+                    backgroundColor: context.accent.soft,
                     child: Text(
                       (profile?.name.isNotEmpty == true
                               ? profile!.name[0]
                               : 'P')
                           .toUpperCase(),
-                      style: const TextStyle(
-                        color: AppColors.primary,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.primary,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
@@ -1294,9 +1305,9 @@ class _CreateServiceViewState extends State<_CreateServiceView> {
                     ),
                     child: Row(
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.straighten_rounded,
-                          color: AppColors.primary,
+                          color: Theme.of(context).colorScheme.primary,
                           size: 21,
                         ),
                         const SizedBox(width: AppSpacing.sm),

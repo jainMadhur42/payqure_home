@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../../../common/widgets/app_snack_bar.dart';
 import '../../../../common/widgets/selection_card.dart';
+import '../../../../core/theme/accent_color.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/utils/currency_formatter.dart';
@@ -90,7 +91,7 @@ class _CurrencyCard extends StatelessWidget {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: isSelected
-              ? AppColors.primarySoft
+              ? context.accent.soft
               : Theme.of(context).colorScheme.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(16),
         ),
@@ -106,14 +107,17 @@ class _CurrencyCard extends StatelessWidget {
             currency.symbol,
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
               color: isSelected
-                  ? AppColors.primary
+                  ? Theme.of(context).colorScheme.primary
                   : Theme.of(context).colorScheme.onSurface,
               fontWeight: FontWeight.w900,
             ),
           ),
           if (isSelected) ...[
             const SizedBox(width: AppSpacing.sm),
-            const Icon(Icons.check_circle, color: AppColors.primary),
+            Icon(
+              Icons.check_circle,
+              color: Theme.of(context).colorScheme.primary,
+            ),
           ],
         ],
       ),

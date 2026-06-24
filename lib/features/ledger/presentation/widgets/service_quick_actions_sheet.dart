@@ -67,7 +67,7 @@ class ServiceQuickActionsSheet extends StatelessWidget {
                 icon: Icons.account_balance_wallet_outlined,
                 title: 'Billing Summary',
                 subtitle: 'Usage, dues and balances',
-                tintColor: AppColors.primary,
+                tintColor: Theme.of(context).colorScheme.primary,
                 onTap: onBillingSummary,
               ),
               const SizedBox(height: AppSpacing.sm),

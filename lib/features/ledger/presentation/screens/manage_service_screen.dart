@@ -99,7 +99,7 @@ class ManageServiceScreen extends StatelessWidget {
               icon: Icons.picture_as_pdf_outlined,
               title: 'Generate PDF',
               subtitle: 'Export monthly statement',
-              tintColor: AppColors.primary,
+              tintColor: Theme.of(context).colorScheme.primary,
               onTap: () => _generatePdf(context),
             ),
           ],
@@ -112,7 +112,7 @@ class ManageServiceScreen extends StatelessWidget {
               icon: Icons.edit_outlined,
               title: 'Edit Service',
               subtitle: 'Change provider, rate or defaults',
-              tintColor: AppColors.primary,
+              tintColor: Theme.of(context).colorScheme.primary,
               onTap: () => controller.startEditService(
                 service,
                 returnRoute: LedgerRoute.manageService,

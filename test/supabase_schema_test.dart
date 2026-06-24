@@ -88,6 +88,19 @@ void main() {
     expect(migration, contains("values ('ledger', 8)"));
   });
 
+  test('profile OS column is added additively (nullable, no impact)', () {
+    final migration = File(
+      'supabase/migrations/202606240001_add_profile_os.sql',
+    ).readAsStringSync();
+
+    expect(
+      migration,
+      contains('add column if not exists os text'),
+    );
+    // Must stay nullable / additive so existing rows and clients are unaffected.
+    expect(migration, isNot(contains('os text not null')));
+  });
+
   test('new schema remains compatible with older schema 6 clients', () {
     final compatibilityMigration = File(
       'supabase/migrations/202606150002_add_app_compatibility_config.sql',
@@ -101,7 +114,7 @@ void main() {
 
     expect(
       compatibilityMigration,
-      contains("values ('mobile', 3, '1.2.0', '1.7.0')"),
+      contains("values ('mobile', 3, '1.2.0', '1.8.0')"),
     );
     expect(otpMigration, contains('public.claim_auth_otp_request(text, text)'));
     expect(

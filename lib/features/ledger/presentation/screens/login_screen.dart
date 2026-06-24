@@ -40,6 +40,7 @@ class _LoginScreenState extends State<LoginScreen> {
       title: 'Welcome Back!',
       subtitle: 'Login to your account',
       errorMessage: widget.controller.errorMessage,
+      versionLabel: widget.controller.appVersionLabel,
       children: [
         Form(
           key: _formKey,
@@ -135,6 +136,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       title: 'Create Account',
       subtitle: 'Use email and phone for secure access',
       errorMessage: widget.controller.errorMessage,
+      versionLabel: widget.controller.appVersionLabel,
       children: [
         Form(
           key: _formKey,
@@ -500,6 +502,7 @@ class _AuthScaffold extends StatelessWidget {
     this.errorMessage,
     this.statusMessage,
     this.onBack,
+    this.versionLabel,
   });
 
   final String title;
@@ -508,6 +511,7 @@ class _AuthScaffold extends StatelessWidget {
   final String? statusMessage;
   final VoidCallback? onBack;
   final List<Widget> children;
+  final String? versionLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -569,6 +573,16 @@ class _AuthScaffold extends StatelessWidget {
           ...children,
           const SizedBox(height: AppSpacing.xl),
           const _AuthSupportFooter(),
+          if (versionLabel != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              versionLabel!,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
         ],
       ),
     );

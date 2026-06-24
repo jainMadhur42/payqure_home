@@ -32,7 +32,7 @@ void main() {
   testWidgets('notification card shows schedule and toggle', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
-        theme: AppTheme.light,
+        theme: AppTheme.light(),
         home: Scaffold(
           body: ServiceNotificationCard(
             service: service,
@@ -52,7 +52,7 @@ void main() {
         matching: find.byType(Switch),
       ),
     );
-    expect(switchWidget.activeTrackColor, AppTheme.light.colorScheme.primary);
+    expect(switchWidget.activeTrackColor, AppTheme.light().colorScheme.primary);
     expect(find.text('Change time'), findsOneWidget);
   });
 
@@ -61,7 +61,7 @@ void main() {
   ) async {
     await tester.pumpWidget(
       MaterialApp(
-        theme: AppTheme.dark,
+        theme: AppTheme.dark(),
         home: Scaffold(
           body: ServiceReminderDetailCard(
             service: service,
@@ -81,7 +81,7 @@ void main() {
         matching: find.byType(Switch),
       ),
     );
-    expect(switchWidget.activeTrackColor, AppTheme.dark.colorScheme.primary);
+    expect(switchWidget.activeTrackColor, AppTheme.dark().colorScheme.primary);
     expect(find.text('Change time'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

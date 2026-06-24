@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../common/widgets/app_card.dart';
 import '../../../../common/widgets/app_empty_state.dart';
+import '../../../../core/theme/accent_color.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/utils/currency_formatter.dart';
@@ -150,7 +151,7 @@ class _AdvanceHistoryCardState extends State<_AdvanceHistoryCard> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   _AdvanceActionButton(
-                    color: AppColors.primary,
+                    color: Theme.of(context).colorScheme.primary,
                     icon: Icons.edit_outlined,
                     onTap: _edit,
                   ),
@@ -398,12 +399,12 @@ class _SecurePaymentsCard extends StatelessWidget {
             width: 38,
             height: 38,
             decoration: BoxDecoration(
-              color: AppColors.primarySoft,
+              color: context.accent.soft,
               borderRadius: BorderRadius.circular(14),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.lock_outline,
-              color: AppColors.primary,
+              color: Theme.of(context).colorScheme.primary,
               size: 20,
             ),
           ),
@@ -463,7 +464,7 @@ class ServiceHistoryCard extends StatelessWidget {
                       CurrencyFormatter.rupees(item.amountCents / 100),
                       maxLines: 1,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: AppColors.primary,
+                        color: Theme.of(context).colorScheme.primary,
                         fontWeight: FontWeight.w900,
                       ),
                     ),

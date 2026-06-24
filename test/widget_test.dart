@@ -40,8 +40,8 @@ void main() {
   testWidgets('Splash follows dark theme colors', (WidgetTester tester) async {
     await tester.pumpWidget(
       MaterialApp(
-        theme: AppTheme.light,
-        darkTheme: AppTheme.dark,
+        theme: AppTheme.light(),
+        darkTheme: AppTheme.dark(),
         themeMode: ThemeMode.dark,
         home: SplashScreen(onDone: () {}),
       ),
@@ -53,10 +53,10 @@ void main() {
     final decoration = container.decoration! as BoxDecoration;
     final gradient = decoration.gradient! as LinearGradient;
 
-    expect(gradient.colors.first, const Color(0xFF101117));
+    expect(gradient.colors.first, const Color(0xFF2E2257));
     expect(
       tester.widget<Text>(find.text('Payqure Home')).style?.color,
-      AppTheme.dark.colorScheme.onSurface,
+      AppTheme.dark().colorScheme.onSurface,
     );
   });
 

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
 abstract final class AppColors {
-  static const primary = Color(0xFF4325DB);
-  static const primaryDark = Color(0xFF2611A8);
-  static const primarySoft = Color(0xFFECE8FF);
+  // Brand purple — also the default user accent (#7C3AED). Used for brand
+  // surfaces (onboarding/splash-adjacent) and as the fallback accent.
+  static const primary = Color(0xFF7C3AED);
+  static const primaryDark = Color(0xFF5B21B6);
+  static const primarySoft = Color(0xFFEDE9FE);
   static const success = Color(0xFF0E9F52);
   static const successSoft = Color(0xFFE5F7EC);
   static const warning = Color(0xFFFF6B1A);

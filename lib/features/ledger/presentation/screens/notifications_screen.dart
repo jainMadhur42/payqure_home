@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../../../common/widgets/app_switch.dart';
 import '../../../../common/widgets/app_card.dart';
-import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../domain/entities/household_service.dart';
@@ -29,10 +28,10 @@ class NotificationsScreen extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(
+              Icon(
                 Icons.notifications_none_rounded,
                 size: 48,
-                color: AppColors.primary,
+                color: Theme.of(context).colorScheme.primary,
               ),
               const SizedBox(height: AppSpacing.md),
               Text(

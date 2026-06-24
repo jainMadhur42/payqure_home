@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../../core/theme/accent_color.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
@@ -134,7 +135,7 @@ class _RecordPaymentBottomSheetState extends State<RecordPaymentBottomSheet> {
                       CurrencyFormatter.rupees(remaining / 100),
                       style: Theme.of(context).textTheme.headlineMedium
                           ?.copyWith(
-                            color: AppColors.primary,
+                            color: Theme.of(context).colorScheme.primary,
                             fontWeight: FontWeight.w900,
                           ),
                     ),
@@ -437,11 +438,11 @@ class _PaymentModeChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
         decoration: BoxDecoration(
           color: isSelected
-              ? AppColors.primarySoft
+              ? context.accent.soft
               : Theme.of(context).colorScheme.surfaceContainerHigh,
           border: Border.all(
             color: isSelected
-                ? AppColors.primary
+                ? Theme.of(context).colorScheme.primary
                 : Theme.of(context).dividerColor,
           ),
           borderRadius: BorderRadius.circular(AppRadius.md),
@@ -454,7 +455,7 @@ class _PaymentModeChip extends StatelessWidget {
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
               color: isSelected
-                  ? AppColors.primary
+                  ? Theme.of(context).colorScheme.primary
                   : Theme.of(context).colorScheme.onSurface,
               fontWeight: FontWeight.w900,
             ),

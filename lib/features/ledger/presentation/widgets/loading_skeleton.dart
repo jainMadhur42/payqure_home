@@ -193,11 +193,13 @@ class _HeroSkeleton extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: AppColors.primary.withValues(alpha: 0.92),
+        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.92),
         borderRadius: BorderRadius.circular(AppRadius.lg),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.16),
+            color: Theme.of(
+              context,
+            ).colorScheme.primary.withValues(alpha: 0.16),
             blurRadius: 24,
             offset: const Offset(0, 14),
           ),

@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/analytics/app_analytics.dart';
 import 'core/app_info/app_version_provider.dart';
 import 'core/app_info/app_compatibility_repository.dart';
+import 'core/theme/accent_color.dart';
 import 'core/theme/app_theme.dart';
 import 'common/widgets/keyboard_done_accessory.dart';
 import 'features/ledger/data/database/ledger_database.dart';
@@ -88,16 +89,21 @@ class _PayqureHomeAppState extends State<PayqureHomeApp>
   Widget build(BuildContext context) {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: _controller.themeModeListenable,
-      builder: (context, themeMode, _) => MaterialApp(
-        debugShowCheckedModeBanner: false,
-        title: 'Daily Service Ledger',
-        theme: AppTheme.light,
-        darkTheme: AppTheme.dark,
-        themeMode: themeMode,
-        builder: (context, child) =>
-            KeyboardDoneAccessory(child: child ?? const SizedBox.shrink()),
-        home: LedgerHomeScreen(controller: _controller),
-      ),
+      builder: (context, themeMode, _) {
+        return ValueListenableBuilder<AppAccentColor>(
+          valueListenable: _controller.accentColorListenable,
+          builder: (context, accent, _) => MaterialApp(
+            debugShowCheckedModeBanner: false,
+            title: 'Daily Service Ledger',
+            theme: AppTheme.light(accent.color),
+            darkTheme: AppTheme.dark(accent.color),
+            themeMode: themeMode,
+            builder: (context, child) =>
+                KeyboardDoneAccessory(child: child ?? const SizedBox.shrink()),
+            home: LedgerHomeScreen(controller: _controller),
+          ),
+        );
+      },
     );
   }
 }

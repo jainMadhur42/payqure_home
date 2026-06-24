@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/theme/accent_color.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
@@ -138,12 +139,14 @@ class AppCenterAddButton extends StatelessWidget {
       child: FilledButton(
         onPressed: onPressed,
         style: FilledButton.styleFrom(
-          backgroundColor: AppColors.primary,
+          backgroundColor: Theme.of(context).colorScheme.primary,
           foregroundColor: Colors.white,
           padding: EdgeInsets.zero,
           shape: const CircleBorder(),
           elevation: 5,
-          shadowColor: AppColors.primary.withValues(alpha: 0.28),
+          shadowColor: Theme.of(
+            context,
+          ).colorScheme.primary.withValues(alpha: 0.28),
         ),
         child: const Icon(Icons.add, size: 27),
       ),
@@ -167,7 +170,7 @@ class _BottomNavDestination extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final color = isSelected
-        ? (isDark ? theme.colorScheme.primary : AppColors.primary)
+        ? theme.colorScheme.primary
         : theme.colorScheme.onSurfaceVariant;
     return InkWell(
       onTap: onTap,
@@ -186,7 +189,7 @@ class _BottomNavDestination extends StatelessWidget {
                 color: isSelected
                     ? (isDark
                           ? theme.colorScheme.primaryContainer
-                          : AppColors.primarySoft)
+                          : context.accent.soft)
                     : Colors.transparent,
                 borderRadius: BorderRadius.circular(AppRadius.sm),
               ),

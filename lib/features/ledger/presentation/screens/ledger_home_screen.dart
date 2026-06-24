@@ -77,6 +77,11 @@ class _LedgerHomeScreenState extends State<LedgerHomeScreen> {
       animation: controller,
       builder: (context, _) {
         return Scaffold(
+          backgroundColor: controller.route == LedgerRoute.splash
+              ? SplashScreen.scaffoldBackground(
+                  Theme.of(context).brightness == Brightness.dark,
+                )
+              : null,
           body: SafeArea(
             child: Stack(
               children: [

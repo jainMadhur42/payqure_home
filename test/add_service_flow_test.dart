@@ -75,7 +75,7 @@ void main() {
   ) async {
     await tester.pumpWidget(
       MaterialApp(
-        theme: AppTheme.dark,
+        theme: AppTheme.dark(),
         home: const ServiceTemplatePickerScreen(selectedTemplateId: 'milkman'),
       ),
     );
@@ -89,7 +89,7 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        theme: AppTheme.dark,
+        theme: AppTheme.dark(),
         home: const UnitPickerScreen(
           units: ['Liter', 'Packet'],
           selectedUnit: 'Liter',

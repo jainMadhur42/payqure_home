@@ -1,14 +1,26 @@
 import 'package:flutter/material.dart';
 
+import 'accent_color.dart';
 import 'app_colors.dart';
 import 'app_radius.dart';
 import 'app_spacing.dart';
 
 abstract final class AppTheme {
-  static ThemeData get light {
+  /// Default/brand accent used when none is supplied.
+  static Color get _defaultAccent => AppAccentColor.fallback.color;
+
+  static Color _lighten(Color color, double amount) {
+    final hsl = HSLColor.fromColor(color);
+    return hsl
+        .withLightness((hsl.lightness + amount).clamp(0.0, 1.0))
+        .toColor();
+  }
+
+  static ThemeData light([Color? accent]) {
+    final primary = accent ?? _defaultAccent;
     final colorScheme = ColorScheme.fromSeed(
-      seedColor: AppColors.primary,
-      primary: AppColors.primary,
+      seedColor: primary,
+      primary: primary,
       secondary: AppColors.success,
       error: AppColors.danger,
       surface: AppColors.surface,
@@ -19,6 +31,9 @@ abstract final class AppTheme {
       colorScheme: colorScheme,
       scaffoldBackgroundColor: AppColors.background,
       fontFamily: 'Roboto',
+      extensions: <ThemeExtension<dynamic>>[
+        AppAccent.fromSeed(primary, isDark: false),
+      ],
       textTheme: const TextTheme(
         headlineLarge: TextStyle(
           fontSize: 28,
@@ -60,7 +75,7 @@ abstract final class AppTheme {
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          backgroundColor: AppColors.primary,
+          backgroundColor: primary,
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadius.sm),
@@ -70,8 +85,8 @@ abstract final class AppTheme {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.primary,
-          side: const BorderSide(color: AppColors.primary),
+          foregroundColor: primary,
+          side: BorderSide(color: primary),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadius.sm),
           ),
@@ -99,7 +114,7 @@ abstract final class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.sm),
-          borderSide: const BorderSide(color: AppColors.primary),
+          borderSide: BorderSide(color: primary),
         ),
       ),
       bottomSheetTheme: const BottomSheetThemeData(
@@ -121,16 +136,19 @@ abstract final class AppTheme {
           fontSize: 13,
           fontWeight: FontWeight.w700,
         ),
-        actionTextColor: const Color(0xFFCFC7FF),
+        actionTextColor: _lighten(primary, 0.32),
       ),
     );
   }
 
-  static ThemeData get dark {
+  static ThemeData dark([Color? accent]) {
+    final base = accent ?? _defaultAccent;
+    final primary = _lighten(base, 0.18);
+    final buttonColor = _lighten(base, 0.08);
     final colorScheme = ColorScheme.fromSeed(
-      seedColor: AppColors.primary,
+      seedColor: base,
       brightness: Brightness.dark,
-      primary: const Color(0xFF9C8BFF),
+      primary: primary,
       secondary: const Color(0xFF5BD58F),
       error: const Color(0xFFFF6B82),
       surface: const Color(0xFF191A23),
@@ -142,6 +160,9 @@ abstract final class AppTheme {
       colorScheme: colorScheme,
       scaffoldBackgroundColor: const Color(0xFF101117),
       fontFamily: 'Roboto',
+      extensions: <ThemeExtension<dynamic>>[
+        AppAccent.fromSeed(primary, isDark: true),
+      ],
       textTheme: const TextTheme(
         headlineLarge: TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
         headlineMedium: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
@@ -159,7 +180,7 @@ abstract final class AppTheme {
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          backgroundColor: const Color(0xFF765EFF),
+          backgroundColor: buttonColor,
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadius.sm),
@@ -169,8 +190,8 @@ abstract final class AppTheme {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: const Color(0xFFB8ACFF),
-          side: const BorderSide(color: Color(0xFF765EFF)),
+          foregroundColor: _lighten(base, 0.30),
+          side: BorderSide(color: buttonColor),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadius.sm),
           ),
@@ -198,7 +219,7 @@ abstract final class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.sm),
-          borderSide: const BorderSide(color: Color(0xFF9C8BFF)),
+          borderSide: BorderSide(color: primary),
         ),
       ),
       dividerColor: const Color(0xFF30313D),
@@ -216,14 +237,14 @@ abstract final class AppTheme {
         insetPadding: const EdgeInsets.all(AppSpacing.lg),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadius.lg),
-          side: const BorderSide(color: Color(0xFF4A3CC2)),
+          side: BorderSide(color: _lighten(base, 0.02)),
         ),
         contentTextStyle: const TextStyle(
           color: Colors.white,
           fontSize: 13,
           fontWeight: FontWeight.w700,
         ),
-        actionTextColor: const Color(0xFFB8ACFF),
+        actionTextColor: _lighten(base, 0.34),
       ),
     );
   }

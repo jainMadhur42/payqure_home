@@ -14,11 +14,14 @@ import 'package:payqure_home/features/ledger/domain/entities/app_route.dart';
 import 'package:payqure_home/features/ledger/presentation/controllers/ledger_controller.dart';
 import 'package:payqure_home/features/ledger/presentation/screens/app_update_required_screen.dart';
 
+import 'support/app_version.dart';
+
 const _minimumSupportedAppVersion = '1.2.0';
-const _latestAppVersion = '1.6.0';
+// Single source of truth: the latest app version comes from pubspec.yaml.
+final _latestAppVersion = readPubspecAppVersion();
 const _supportedOlderAppVersion = '1.3.0';
 const _unsupportedAppVersion = '1.1.0';
-const _compatibilityFixture = AppCompatibilityConfig(
+final _compatibilityFixture = AppCompatibilityConfig(
   currentSchemaVersion: 6,
   minimumSupportedSchemaVersion: 3,
   minimumAppVersion: _minimumSupportedAppVersion,
@@ -97,7 +100,7 @@ void main() {
       ),
       pdfStatementService: const PdfStatementService(),
       appVersionProvider: const _TestAppVersionProvider(_unsupportedAppVersion),
-      appCompatibilityRepository: const _TestCompatibilityRepository(
+      appCompatibilityRepository: _TestCompatibilityRepository(
         _compatibilityFixture,
       ),
     );

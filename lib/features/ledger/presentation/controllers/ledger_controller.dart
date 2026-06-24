@@ -8,6 +8,7 @@ import '../../../../core/analytics/app_analytics.dart';
 import '../../../../core/app_info/app_compatibility.dart';
 import '../../../../core/app_info/app_compatibility_repository.dart';
 import '../../../../core/app_info/app_version_provider.dart';
+import '../../../../core/theme/accent_color.dart';
 import '../../../../core/utils/error_message_mapper.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../../legal/domain/legal_content.dart';
@@ -53,6 +54,7 @@ enum PdfSource { serviceDetail, manageService, bills }
 class LedgerController extends ChangeNotifier {
   static const _currencyPreferenceKey = 'currency_code';
   static const _themePreferenceKey = 'theme_mode';
+  static const _accentColorPreferenceKey = 'accent_color';
   static const _onboardingPreferenceKey = 'has_seen_onboarding';
   static const _compatibilityCacheKey = 'app_compatibility_config';
 
@@ -92,6 +94,7 @@ class LedgerController extends ChangeNotifier {
       _reminderCoordinator = ServiceReminderCoordinator(reminderScheduler) {
     unawaited(restoreCurrencyPreference());
     unawaited(restoreThemePreference());
+    unawaited(restoreAccentColorPreference());
     _appVersionLoadFuture = _loadAppVersion();
     unawaited(_appVersionLoadFuture);
     _authSubscription = _sessionController.watchProfile().listen(
@@ -171,6 +174,9 @@ class LedgerController extends ChangeNotifier {
   final ValueNotifier<ThemeMode> themeModeListenable = ValueNotifier(
     ThemeMode.system,
   );
+  final ValueNotifier<AppAccentColor> accentColorListenable = ValueNotifier(
+    AppAccentColor.fallback,
+  );
 
   bool get isAuthenticated => profile != null;
   bool get isEditingService => editingService != null;
@@ -192,6 +198,9 @@ class LedgerController extends ChangeNotifier {
   }
 
   ThemeMode get selectedThemeMode => themeModeListenable.value;
+
+  AppAccentColor get selectedAccentColor => accentColorListenable.value;
+  List<AppAccentColor> get accentColors => AppAccentColor.values;
 
   List<AppCurrency> get currencies => AppCurrency.values;
 
@@ -238,6 +247,23 @@ class LedgerController extends ChangeNotifier {
     await _ledgerRepository.saveLocalPreference(
       key: _themePreferenceKey,
       value: mode.name,
+    );
+  }
+
+  Future<void> restoreAccentColorPreference() async {
+    final value = await _ledgerRepository.getLocalPreference(
+      _accentColorPreferenceKey,
+    );
+    accentColorListenable.value = AppAccentColor.fromStorageKey(value);
+    notifyListeners();
+  }
+
+  Future<void> selectAccentColor(AppAccentColor accent) async {
+    accentColorListenable.value = accent;
+    notifyListeners();
+    await _ledgerRepository.saveLocalPreference(
+      key: _accentColorPreferenceKey,
+      value: accent.storageKey,
     );
   }
 
@@ -2316,6 +2342,7 @@ class LedgerController extends ChangeNotifier {
       LedgerRoute.profile ||
       LedgerRoute.currency ||
       LedgerRoute.theme ||
+      LedgerRoute.accentColor ||
       LedgerRoute.notifications => 3,
       LedgerRoute.privacyPolicy ||
       LedgerRoute.termsDisclaimer ||
@@ -2686,6 +2713,7 @@ class LedgerController extends ChangeNotifier {
     unawaited(_notificationTapSubscription?.cancel());
     _monthDataController.dispose();
     themeModeListenable.dispose();
+    accentColorListenable.dispose();
     super.dispose();
   }
 

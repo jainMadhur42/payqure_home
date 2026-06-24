@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import 'app_card.dart';
 
@@ -25,7 +24,7 @@ class AppEmptyState extends StatelessWidget {
     final content = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, color: AppColors.primary, size: 44),
+        Icon(icon, color: Theme.of(context).colorScheme.primary, size: 44),
         const SizedBox(height: AppSpacing.md),
         Text(
           title,

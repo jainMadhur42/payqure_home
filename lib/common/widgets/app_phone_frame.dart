@@ -19,7 +19,9 @@ class AppPhoneFrame extends StatelessWidget {
             border: Border.all(color: AppColors.line),
             boxShadow: [
               BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.08),
+                color: Theme.of(
+                  context,
+                ).colorScheme.primary.withValues(alpha: 0.08),
                 blurRadius: 30,
                 offset: const Offset(0, 18),
               ),

@@ -12,7 +12,7 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        theme: AppTheme.light,
+        theme: AppTheme.light(),
         home: const Scaffold(body: ContactsScreen(services: [])),
       ),
     );

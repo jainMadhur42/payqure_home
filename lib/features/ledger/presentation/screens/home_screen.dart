@@ -13,6 +13,7 @@ import '../../domain/entities/ledger_month.dart';
 import '../../domain/entities/app_route.dart';
 import '../../domain/entities/service_entry.dart';
 import '../../domain/entities/service_template.dart';
+import '../../../../core/theme/accent_color.dart';
 import '../../domain/services/calendar_entry_status_resolver.dart';
 import '../../domain/services/service_start_date_resolver.dart';
 import '../controllers/ledger_controller.dart';
@@ -147,9 +148,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   AppCard(
                     child: Column(
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.home_repair_service_outlined,
-                          color: AppColors.primary,
+                          color: Theme.of(context).colorScheme.primary,
                           size: 42,
                         ),
                         const SizedBox(height: AppSpacing.md),
@@ -284,7 +285,9 @@ class HomeHeroSummaryCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppRadius.lg),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.18),
+            color: Theme.of(
+              context,
+            ).colorScheme.primary.withValues(alpha: 0.18),
             blurRadius: 24,
             offset: const Offset(0, 14),
           ),
@@ -293,11 +296,14 @@ class HomeHeroSummaryCard extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(AppRadius.lg),
         child: DecoratedBox(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [AppColors.primary, AppColors.primaryDark],
+              colors: [
+                Theme.of(context).colorScheme.primary,
+                context.accent.dark,
+              ],
             ),
           ),
           child: Stack(
@@ -736,7 +742,7 @@ class _HomeServiceCardState extends State<HomeServiceCard> {
         children: [
           Positioned.fill(
             child: ColoredBox(
-              color: AppColors.primarySoft.withValues(alpha: 0.42),
+              color: context.accent.soft.withValues(alpha: 0.42),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
                 child: Row(

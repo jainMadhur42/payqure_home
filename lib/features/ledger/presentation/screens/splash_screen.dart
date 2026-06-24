@@ -9,6 +9,19 @@ class SplashScreen extends StatefulWidget {
 
   final VoidCallback onDone;
 
+  // Cohesive brand-purple backgrounds (no near-black) so the splash reads as a
+  // single surface instead of a dark band around a purple gradient.
+  static const _darkTop = Color(0xFF2E2257);
+  static const _darkBottom = Color(0xFF1B1440);
+  static const _lightTop = Colors.white;
+  static const _lightBottom = Color(0xFFF2EEFF);
+
+  /// Painted behind the status/navigation bars while the splash is visible so
+  /// those regions blend with the gradient instead of showing the dark
+  /// scaffold background.
+  static Color scaffoldBackground(bool isDark) =>
+      isDark ? const Color(0xFF241B4C) : Colors.white;
+
   @override
   State<SplashScreen> createState() => _SplashScreenState();
 }
@@ -51,8 +64,14 @@ class _SplashScreenState extends State<SplashScreen> {
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: isDark
-                  ? const [Color(0xFF101117), Color(0xFF241C48)]
-                  : const [Colors.white, Color(0xFFF2EEFF)],
+                  ? const [
+                      SplashScreen._darkTop,
+                      SplashScreen._darkBottom,
+                    ]
+                  : const [
+                      SplashScreen._lightTop,
+                      SplashScreen._lightBottom,
+                    ],
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
             ),

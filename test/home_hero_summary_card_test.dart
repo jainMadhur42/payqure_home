@@ -14,7 +14,7 @@ void main() {
     serviceCount: 6,
   );
 
-  for (final theme in <ThemeData>[AppTheme.light, AppTheme.dark]) {
+  for (final theme in <ThemeData>[AppTheme.light(), AppTheme.dark()]) {
     testWidgets('hero summary remains readable on a small phone', (
       tester,
     ) async {

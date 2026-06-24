@@ -315,6 +315,7 @@ class LedgerAnalyticsMapper {
       LedgerRoute.profile => 'profile_screen',
       LedgerRoute.currency => 'currency_picker',
       LedgerRoute.theme => 'theme_picker',
+      LedgerRoute.accentColor => 'accent_color_picker',
       LedgerRoute.notifications => 'notifications',
       LedgerRoute.privacyPolicy => 'privacy_policy',
       LedgerRoute.termsDisclaimer => 'terms_disclaimer',

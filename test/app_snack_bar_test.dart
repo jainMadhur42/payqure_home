@@ -5,8 +5,8 @@ import 'package:payqure_home/core/theme/app_theme.dart';
 
 void main() {
   for (final theme in <({String name, ThemeData data})>[
-    (name: 'light', data: AppTheme.light),
-    (name: 'dark', data: AppTheme.dark),
+    (name: 'light', data: AppTheme.light()),
+    (name: 'dark', data: AppTheme.dark()),
   ]) {
     testWidgets('app snackbar is readable in ${theme.name} mode', (
       tester,
@@ -46,7 +46,7 @@ void main() {
   testWidgets('error snackbar uses the error presentation', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
-        theme: AppTheme.light,
+        theme: AppTheme.light(),
         home: Builder(
           builder: (context) => Scaffold(
             body: TextButton(

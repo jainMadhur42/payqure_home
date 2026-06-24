@@ -18,7 +18,7 @@ insert into public.app_compatibility_config (
   minimum_app_version,
   latest_app_version
 )
-values ('mobile', 3, '1.2.0', '1.6.0')
+values ('mobile', 3, '1.2.0', '1.8.0')
 on conflict (id) do update
 set minimum_supported_schema_version =
       excluded.minimum_supported_schema_version,

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../core/theme/app_colors.dart';
+import '../../core/theme/accent_color.dart';
 import '../../core/theme/app_radius.dart';
 import '../../core/theme/app_spacing.dart';
 
@@ -34,14 +34,14 @@ class SelectionCard<T> extends StatelessWidget {
     final colorScheme = theme.colorScheme;
     final selectedBackground = theme.brightness == Brightness.dark
         ? colorScheme.primaryContainer.withValues(alpha: 0.28)
-        : AppColors.primarySoft.withValues(alpha: 0.56);
+        : context.accent.soft.withValues(alpha: 0.56);
     return Material(
       color: isSelected ? selectedBackground : colorScheme.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppRadius.xl),
         side: BorderSide(
           color: isSelected
-              ? AppColors.primary
+              ? colorScheme.primary
               : borderColor ?? theme.dividerColor,
           width: isSelected ? 1.5 : 1,
         ),

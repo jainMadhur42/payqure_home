@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/auth/auth_identifier.dart';
+import '../../../../core/platform/device_os.dart';
 import '../../../../core/utils/id_generator.dart';
 import '../../../legal/domain/legal_content.dart';
 import '../../domain/entities/otp_request_status.dart';
@@ -695,6 +696,9 @@ class SupabaseAuthRepository
         privacyPolicyAcceptedAt: acceptedAt,
         privacyPolicyVersion: policyVersion,
         preferredCurrencyCode: preferredCurrencyCode,
+        // Refresh the stored OS/version on every sign-in and session restore so
+        // existing users get it populated once they update the app.
+        os: currentDeviceOs(),
         suppressErrors: true,
       ),
     );
@@ -762,6 +766,7 @@ class SupabaseAuthRepository
     DateTime? privacyPolicyAcceptedAt,
     String privacyPolicyVersion = '',
     String preferredCurrencyCode = 'USD',
+    String? os,
     bool suppressErrors = false,
   }) async {
     final client = _client;
@@ -769,24 +774,30 @@ class SupabaseAuthRepository
       return;
     }
     try {
+      final payload = <String, dynamic>{
+        'id': user.id,
+        'name': name,
+        'email': email,
+        'phone': phone,
+        'email_verified': user.emailConfirmedAt != null,
+        'privacy_policy_accepted': privacyPolicyAccepted,
+        'privacy_policy_accepted_at': privacyPolicyAcceptedAt
+            ?.toUtc()
+            .toIso8601String(),
+        'privacy_policy_version': privacyPolicyVersion.isEmpty
+            ? null
+            : privacyPolicyVersion,
+        'preferred_currency': preferredCurrencyCode,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      };
+      // Only record the OS when known so web (or older backends without the
+      // column) are unaffected.
+      if (os != null && os.isNotEmpty) {
+        payload['os'] = os;
+      }
       await client
           .from('profiles')
-          .upsert({
-            'id': user.id,
-            'name': name,
-            'email': email,
-            'phone': phone,
-            'email_verified': user.emailConfirmedAt != null,
-            'privacy_policy_accepted': privacyPolicyAccepted,
-            'privacy_policy_accepted_at': privacyPolicyAcceptedAt
-                ?.toUtc()
-                .toIso8601String(),
-            'privacy_policy_version': privacyPolicyVersion.isEmpty
-                ? null
-                : privacyPolicyVersion,
-            'preferred_currency': preferredCurrencyCode,
-            'updated_at': DateTime.now().toUtc().toIso8601String(),
-          })
+          .upsert(payload)
           .timeout(const Duration(seconds: 6));
     } catch (_) {
       if (!suppressErrors) {

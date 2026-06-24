@@ -458,7 +458,7 @@ class _EntryStatusHeader extends StatelessWidget {
         vertical: AppSpacing.sm,
       ),
       decoration: BoxDecoration(
-        color: AppColors.primary.withValues(alpha: 0.08),
+        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(AppRadius.md),
       ),
       child: Row(
@@ -965,7 +965,7 @@ class EntryViewState extends State<EntryView> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(AppSpacing.md),
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha: 0.08),
+                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(AppRadius.md),
                     ),
                     child: Column(
@@ -981,7 +981,7 @@ class EntryViewState extends State<EntryView> {
                           CurrencyFormatter.rupees(amount.amountCents / 100),
                           style: Theme.of(context).textTheme.titleLarge
                               ?.copyWith(
-                                color: AppColors.primary,
+                                color: Theme.of(context).colorScheme.primary,
                                 fontWeight: FontWeight.w900,
                               ),
                         ),

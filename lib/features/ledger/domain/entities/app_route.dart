@@ -27,6 +27,7 @@ enum LedgerRoute {
   profile,
   currency,
   theme,
+  accentColor,
   notifications,
   privacyPolicy,
   termsDisclaimer,

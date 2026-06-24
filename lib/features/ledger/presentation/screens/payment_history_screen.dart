@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../../../common/widgets/app_card.dart';
 import '../../../../common/widgets/app_empty_state.dart';
+import '../../../../core/theme/accent_color.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
@@ -166,12 +167,12 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
                     width: 34,
                     height: 34,
                     decoration: BoxDecoration(
-                      color: AppColors.primarySoft,
+                      color: context.accent.soft,
                       borderRadius: BorderRadius.circular(AppRadius.sm),
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.lock_outline,
-                      color: AppColors.primary,
+                      color: Theme.of(context).colorScheme.primary,
                       size: 18,
                     ),
                   ),
@@ -303,7 +304,7 @@ class _PaymentHistoryCardState extends State<PaymentHistoryCard> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     _SwipeActionButton(
-                      color: AppColors.primary,
+                      color: Theme.of(context).colorScheme.primary,
                       icon: Icons.edit_outlined,
                       onTap: _editFromSwipe,
                     ),
@@ -427,7 +428,7 @@ class _PaymentHistoryCardState extends State<PaymentHistoryCard> {
                             subtitle:
                                 'Legacy payment without detailed allocation',
                             amountCents: payment.amountCents,
-                            color: AppColors.primary,
+                            color: Theme.of(context).colorScheme.primary,
                           ),
                           totalCents: payment.amountCents,
                         )

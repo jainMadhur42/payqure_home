@@ -200,7 +200,7 @@ class _SettlementHeroAmount extends StatelessWidget {
         Text(
           CurrencyFormatter.rupees(amountCents / 100),
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-            color: AppColors.primary,
+            color: Theme.of(context).colorScheme.primary,
             fontWeight: FontWeight.w900,
           ),
         ),

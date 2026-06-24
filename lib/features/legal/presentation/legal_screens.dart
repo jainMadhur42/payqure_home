@@ -4,7 +4,6 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../common/widgets/app_card.dart';
 import '../../../common/widgets/app_snack_bar.dart';
-import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../ledger/presentation/controllers/ledger_controller.dart';
 import '../domain/legal_content.dart';
@@ -236,9 +235,13 @@ class _DeletionPoint extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Padding(
-            padding: EdgeInsets.only(top: 7),
-            child: Icon(Icons.circle, size: 6, color: AppColors.primary),
+          Padding(
+            padding: const EdgeInsets.only(top: 7),
+            child: Icon(
+              Icons.circle,
+              size: 6,
+              color: Theme.of(context).colorScheme.primary,
+            ),
           ),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
@@ -277,10 +280,10 @@ class _PrivacyPolicyAcceptanceViewState
           padding: const EdgeInsets.all(AppSpacing.xl),
           children: [
             const SizedBox(height: AppSpacing.xxl),
-            const Icon(
+            Icon(
               Icons.privacy_tip_outlined,
               size: 56,
-              color: AppColors.primary,
+              color: Theme.of(context).colorScheme.primary,
             ),
             const SizedBox(height: AppSpacing.lg),
             Text(

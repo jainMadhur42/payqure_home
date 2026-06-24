@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../common/widgets/app_card.dart';
-import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 
 class UnitPickerScreen extends StatelessWidget {
@@ -117,10 +116,10 @@ class _UnitTile extends StatelessWidget {
             trailing: AnimatedSwitcher(
               duration: const Duration(milliseconds: 180),
               child: isSelected
-                  ? const Icon(
+                  ? Icon(
                       Icons.check_circle,
-                      key: ValueKey('selected'),
-                      color: AppColors.primary,
+                      key: const ValueKey('selected'),
+                      color: Theme.of(context).colorScheme.primary,
                     )
                   : const Icon(
                       Icons.chevron_right,

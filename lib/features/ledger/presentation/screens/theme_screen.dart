@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../common/widgets/app_card.dart';
+import '../../../../core/theme/accent_color.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../controllers/ledger_controller.dart';
@@ -80,7 +81,7 @@ class _ThemeTile extends StatelessWidget {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: isSelected
-              ? AppColors.primarySoft
+              ? context.accent.soft
               : Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(14),
         ),
@@ -91,7 +92,7 @@ class _ThemeTile extends StatelessWidget {
             ThemeMode.system => Icons.settings_brightness_outlined,
           },
           color: isSelected
-              ? AppColors.primary
+              ? Theme.of(context).colorScheme.primary
               : Theme.of(context).colorScheme.onSurface,
         ),
       ),
@@ -113,10 +114,10 @@ class _ThemeTile extends StatelessWidget {
       trailing: AnimatedSwitcher(
         duration: const Duration(milliseconds: 180),
         child: isSelected
-            ? const Icon(
+            ? Icon(
                 Icons.check_circle,
-                key: ValueKey('selected'),
-                color: AppColors.primary,
+                key: const ValueKey('selected'),
+                color: Theme.of(context).colorScheme.primary,
               )
             : const Icon(
                 Icons.chevron_right,
