@@ -10,7 +10,12 @@ enum AppAccentColor {
   emerald('emerald', 'Emerald', Color(0xFF10B981)),
   modernTeal('modern_teal', 'Modern Teal', Color(0xFF14B8A6)),
   coralOrange('coral_orange', 'Coral Orange', Color(0xFFFF6B57)),
-  rosePink('rose_pink', 'Rose Pink', Color(0xFFE11D48));
+  rosePink('rose_pink', 'Rose Pink', Color(0xFFE11D48)),
+  sunsetAmber('sunset_amber', 'Sunset Amber', Color(0xFFF59E0B)),
+  electricCyan('electric_cyan', 'Electric Cyan', Color(0xFF06B6D4)),
+  crimson('crimson', 'Crimson', Color(0xFFDC2626)),
+  limeGreen('lime_green', 'Lime Green', Color(0xFF84CC16)),
+  warmCopper('warm_copper', 'Warm Copper', Color(0xFFEA580C));
 
   const AppAccentColor(this.storageKey, this.label, this.color);
 

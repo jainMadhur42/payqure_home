@@ -5,6 +5,8 @@ import 'package:printing/printing.dart';
 
 import '../../../../common/widgets/app_card.dart';
 import '../../../../common/widgets/app_snack_bar.dart';
+import '../../../../core/app_info/feedback_links.dart';
+import '../../../../core/app_info/store_links.dart';
 import '../../../../core/theme/accent_color.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
@@ -807,6 +809,21 @@ class _SettingsView extends StatelessWidget {
             ),
           ],
         ),
+        _MoreSection(
+          title: 'About',
+          children: [
+            _MoreTile(
+              icon: Icons.star_outline_rounded,
+              title: 'Rate on ${StoreLinks.storeName}',
+              onTap: () => _openStoreReview(context),
+            ),
+            _MoreTile(
+              icon: Icons.lightbulb_outline_rounded,
+              title: 'Suggestions',
+              onTap: () => _openSuggestions(context),
+            ),
+          ],
+        ),
         _AppVersionFooter(versionLabel: controller.appVersionLabel),
       ],
     );
@@ -818,6 +835,28 @@ class _SettingsView extends StatelessWidget {
       ThemeMode.dark => 'Dark',
       ThemeMode.system => 'System',
     };
+  }
+
+  Future<void> _openStoreReview(BuildContext context) async {
+    final launched = await StoreLinks.openReview();
+    if (!launched && context.mounted) {
+      AppSnackBar.show(
+        context,
+        message: 'Could not open the ${StoreLinks.storeName}.',
+        tone: AppSnackBarTone.warning,
+      );
+    }
+  }
+
+  Future<void> _openSuggestions(BuildContext context) async {
+    final launched = await FeedbackLinks.openSuggestionForm();
+    if (!launched && context.mounted) {
+      AppSnackBar.show(
+        context,
+        message: 'Could not open the suggestions form.',
+        tone: AppSnackBarTone.warning,
+      );
+    }
   }
 }
 
