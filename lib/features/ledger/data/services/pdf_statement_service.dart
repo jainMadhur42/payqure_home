@@ -1097,7 +1097,7 @@ class PdfStatementService {
       children: [
         _legendDot('Delivered', _success),
         _legendDot('Not Delivered', _danger),
-        _legendDot('Quantity Change / Half Day', _warning),
+        _legendDot('Custome / Half Day', _warning),
         _legendDot('No Entry', _muted),
       ],
     );

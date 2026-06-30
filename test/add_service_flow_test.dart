@@ -13,7 +13,6 @@ import 'package:payqure_home/features/ledger/domain/entities/app_route.dart';
 import 'package:payqure_home/features/ledger/presentation/controllers/ledger_controller.dart';
 import 'package:payqure_home/features/ledger/presentation/models/add_service_draft.dart';
 import 'package:payqure_home/features/ledger/presentation/screens/ledger_flow_screen.dart';
-import 'package:payqure_home/features/ledger/presentation/widgets/service_identity_header.dart';
 import 'package:payqure_home/features/ledger/presentation/screens/service_template_picker_screen.dart';
 import 'package:payqure_home/features/ledger/presentation/screens/unit_picker_screen.dart';
 
@@ -142,10 +141,7 @@ void main() {
     }
   });
 
-  testWidgets('service review remains scrollable on a small phone', (
-    tester,
-  ) async {
-    await tester.binding.setSurfaceSize(const Size(375, 640));
+  test('submitting a service draft opens its service detail screen', () async {
     final database = LedgerDatabase(NativeDatabase.memory());
     final authRepository = SupabaseAuthRepository(client: null);
     final controller = LedgerController(
@@ -159,76 +155,7 @@ void main() {
 
     try {
       await controller.bypassLoginForDevelopment();
-      controller.reviewAddService(
-        AddServiceDraft(
-          providerName: 'Kuldeep',
-          contactNumber: '+91 7240873997',
-          serviceTime: '8:30 AM',
-          remindBeforeMinutes: 15,
-          startDate: DateTime(2026, 6),
-          serviceName: 'Milkman',
-          serviceTemplateName: 'milkman',
-          serviceIcon: 'milk',
-          templateType: ServiceTemplateType.quantity,
-          unit: 'Liter',
-          defaultQuantity: 0.5,
-          amount: 61,
-        ),
-      );
-
-      await tester.pumpWidget(
-        MaterialApp(home: LedgerFlowScreen(controller: controller)),
-      );
-      await tester.pumpAndSettle();
-
-      expect(
-        find.byKey(const ValueKey('service-review-scroll-view')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('service-review-hero-card')),
-        findsOneWidget,
-      );
-      expect(find.byType(ServiceIdentityHeader), findsOneWidget);
-      expect(find.text('Provider: Kuldeep'), findsOneWidget);
-      expect(find.text('Quantity Based'), findsOneWidget);
-      expect(find.text('Provider Details'), findsOneWidget);
-      expect(find.text('Schedule & Reminder'), findsOneWidget);
-
-      await tester.scrollUntilVisible(
-        find.text('Create Service'),
-        300,
-        scrollable: find.descendant(
-          of: find.byKey(const ValueKey('service-review-scroll-view')),
-          matching: find.byType(Scrollable),
-        ),
-      );
-      expect(find.text('Create Service'), findsOneWidget);
-    } finally {
-      controller.dispose();
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump(const Duration(milliseconds: 50));
-      await authRepository.dispose();
-      await database.close();
-      await tester.binding.setSurfaceSize(null);
-    }
-  });
-
-  test('creating a reviewed service opens its service detail screen', () async {
-    final database = LedgerDatabase(NativeDatabase.memory());
-    final authRepository = SupabaseAuthRepository(client: null);
-    final controller = LedgerController(
-      authRepository: authRepository,
-      ledgerRepository: DriftLedgerRepository(
-        database: database,
-        remoteDataSource: SupabaseLedgerRemoteDataSource(null),
-      ),
-      pdfStatementService: const PdfStatementService(),
-    );
-
-    try {
-      await controller.bypassLoginForDevelopment();
-      controller.reviewAddService(
+      await controller.submitServiceDraft(
         AddServiceDraft(
           providerName: 'Kuldeep',
           contactNumber: '+91 7240873997',
@@ -244,8 +171,6 @@ void main() {
           amount: 60,
         ),
       );
-
-      await controller.saveDraftService();
 
       expect(controller.route, LedgerRoute.calendar);
       expect(controller.selectedService?.name, 'Milkman');

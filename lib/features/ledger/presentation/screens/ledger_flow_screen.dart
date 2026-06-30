@@ -26,7 +26,7 @@ import '../widgets/ledger_screen_shared.dart';
 import '../widgets/loading_skeleton.dart';
 import '../widgets/month_selector.dart';
 import '../widgets/quick_entry_actions.dart';
-import '../widgets/service_identity_header.dart';
+import '../widgets/quick_log_horizontal_calendar.dart';
 import '../widgets/service_reminder_editor.dart';
 import '../widgets/zoomable_pdf_pages.dart';
 
@@ -85,9 +85,6 @@ class LedgerFlowScreen extends StatelessWidget {
           embedded: true,
         ),
         LedgerRoute.createService => _CreateServiceView(controller: controller),
-        LedgerRoute.createServiceReview => _CreateServiceReviewView(
-          controller: controller,
-        ),
         LedgerRoute.calendar =>
           selectedService == null
               ? const _EmptyLedgerView()
@@ -213,8 +210,6 @@ class LedgerFlowScreen extends StatelessWidget {
     final isCreateService = controller.route == LedgerRoute.createService;
     final isServiceTemplatePicker =
         controller.route == LedgerRoute.createServiceTemplate;
-    final isCreateServiceReview =
-        controller.route == LedgerRoute.createServiceReview;
     final isServiceDetail = controller.route == LedgerRoute.calendar;
     final isEntryDetail = controller.route == LedgerRoute.entry;
     final isQuickLog = controller.route == LedgerRoute.quickLog;
@@ -240,10 +235,6 @@ class LedgerFlowScreen extends StatelessWidget {
             ? controller.isEditingService
                   ? 'Edit Service'
                   : 'Add Service'
-            : isCreateServiceReview
-            ? controller.isEditingService
-                  ? 'Review Changes'
-                  : 'Service Details'
             : isServiceDetail
             ? selectedService?.name ?? 'Service Details'
             : controller.route == LedgerRoute.manageService
@@ -291,6 +282,16 @@ class LedgerFlowScreen extends StatelessWidget {
             : 'Payqure Home',
       ),
       actions: [
+        if (isServiceDetail && selectedService != null)
+          TextButton(
+            key: const ValueKey('service-detail-more-action'),
+            onPressed: () => controller.openManageService(selectedService),
+            style: TextButton.styleFrom(
+              backgroundColor: Colors.transparent,
+              side: BorderSide.none,
+            ),
+            child: const Text('More'),
+          ),
         if (showsMonthPicker) MonthSelector(controller: controller),
         if (showsMonthPicker) const SizedBox(width: AppSpacing.sm),
       ],
@@ -299,7 +300,6 @@ class LedgerFlowScreen extends StatelessWidget {
 
   LedgerRoute _backRoute() {
     return switch (controller.route) {
-      LedgerRoute.createServiceReview => LedgerRoute.createService,
       LedgerRoute.createService =>
         controller.isEditingService
             ? controller.serviceEditReturnRoute
@@ -357,33 +357,11 @@ class _QuickLogView extends StatelessWidget {
             104,
           ),
           children: [
-            AppCard(
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Log Date',
-                          style: Theme.of(context).textTheme.labelLarge
-                              ?.copyWith(color: AppColors.muted),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          formatFullDate(date),
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton.filledTonal(
-                    tooltip: 'Change date',
-                    onPressed: () => _pickLogDate(context),
-                    icon: const Icon(Icons.calendar_today_outlined),
-                  ),
-                ],
-              ),
+            QuickLogHorizontalCalendar(
+              monthKey: controller.monthKey,
+              selectedDate: date,
+              services: services,
+              onDateSelected: controller.setQuickLogDate,
             ),
             const SizedBox(height: AppSpacing.lg),
             if (services.isEmpty)
@@ -403,9 +381,9 @@ class _QuickLogView extends StatelessWidget {
                     const SizedBox(height: AppSpacing.sm),
                     Text(
                       'Add a service before logging entries.',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodyMedium?.copyWith(color: AppColors.muted),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: AppSpacing.lg),
@@ -419,28 +397,32 @@ class _QuickLogView extends StatelessWidget {
               )
             else ...[
               Text(
-                'Active Services',
+                'Active Services (${services.length})',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: AppSpacing.sm),
-              ...services.map(
-                (service) => Padding(
-                  padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                  child: _QuickLogServiceRow(
-                    key: ValueKey('quick-${service.id}-$day'),
-                    service: service,
-                    day: day,
-                    onStatusSelected: (status) =>
-                        _markStatus(context, service, day, status),
-                    onEdit: () {
-                      controller.selectedService = service;
-                      controller.selectDayForEdit(
-                        day,
-                        source: EntrySource.quickLog,
-                      );
-                    },
+              Column(
+                children: [
+                  ...services.map(
+                    (service) => Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                      child: _QuickLogServiceRow(
+                        key: ValueKey('quick-${service.id}'),
+                        service: service,
+                        day: day,
+                        onStatusSelected: (status) =>
+                            _markStatus(context, service, day, status),
+                        onEdit: () {
+                          controller.selectedService = service;
+                          controller.selectDayForEdit(
+                            day,
+                            source: EntrySource.quickLog,
+                          );
+                        },
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
             ],
           ],
@@ -450,29 +432,17 @@ class _QuickLogView extends StatelessWidget {
             left: AppSpacing.lg,
             right: AppSpacing.lg,
             bottom: AppSpacing.md,
-            child: FilledButton.icon(
-              onPressed: () => _markAllDefaults(context, services, day),
-              icon: const Icon(Icons.done_all_outlined),
-              label: const Text('Mark All Defaults'),
+            child: SafeArea(
+              top: false,
+              child: FilledButton.icon(
+                onPressed: () => _markAllDefaults(context, services, day),
+                icon: const Icon(Icons.done_all_outlined),
+                label: const Text('Mark All Defaults'),
+              ),
             ),
           ),
       ],
     );
-  }
-
-  Future<void> _pickLogDate(BuildContext context) async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: controller.quickLogDate,
-      firstDate: DateTime(now.year - 2),
-      lastDate: now,
-    );
-    if (picked == null) {
-      return;
-    }
-    HapticFeedback.selectionClick();
-    await controller.setQuickLogDate(picked);
   }
 
   void _markStatus(
@@ -527,20 +497,20 @@ class _QuickLogServiceRowState extends State<_QuickLogServiceRow> {
   @override
   void initState() {
     super.initState();
-    _provider = QuickLogCardProvider(_entryStatus);
+    _provider = QuickLogCardProvider(
+      _entryStatus,
+      isCustomQuickEntry(widget.service, _entry),
+    );
   }
 
   @override
   void didUpdateWidget(covariant _QuickLogServiceRow oldWidget) {
     super.didUpdateWidget(oldWidget);
     final nextStatus = _entryStatus;
-    if (oldWidget.day != widget.day ||
-        oldWidget.service.id != widget.service.id) {
-      _provider.dispose();
-      _provider = QuickLogCardProvider(nextStatus);
-    } else {
-      _provider.syncFromStore(nextStatus);
-    }
+    _provider.syncFromStore(
+      nextStatus,
+      isCustom: isCustomQuickEntry(widget.service, _entry),
+    );
   }
 
   @override
@@ -550,14 +520,20 @@ class _QuickLogServiceRowState extends State<_QuickLogServiceRow> {
   }
 
   ServiceEntryStatus get _entryStatus {
-    final entry = widget.service.entries
-        .where((entry) => entry.day == widget.day)
-        .firstOrNull;
-    return entry?.status ?? ServiceEntryStatus.noEntry;
+    return _entry?.status ?? ServiceEntryStatus.noEntry;
   }
+
+  ServiceEntry? get _entry => widget.service.entries
+      .where(
+        (entry) =>
+            entry.day == widget.day &&
+            entry.monthKey == widget.service.monthKey,
+      )
+      .firstOrNull;
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return AnimatedBuilder(
       animation: _provider,
       builder: (context, _) {
@@ -573,18 +549,18 @@ class _QuickLogServiceRowState extends State<_QuickLogServiceRow> {
               Row(
                 children: [
                   Container(
-                    width: 36,
-                    height: 36,
+                    width: 40,
+                    height: 40,
                     decoration: BoxDecoration(
-                      color: widget.service.templateType.color.withValues(
-                        alpha: 0.12,
+                      color: colorScheme.primaryContainer.withValues(
+                        alpha: 0.55,
                       ),
                       borderRadius: BorderRadius.circular(AppRadius.md),
                     ),
                     child: Icon(
                       serviceIcon(widget.service.icon),
-                      color: widget.service.templateType.color,
-                      size: 20,
+                      color: colorScheme.primary,
+                      size: 21,
                     ),
                   ),
                   const SizedBox(width: AppSpacing.sm),
@@ -605,7 +581,7 @@ class _QuickLogServiceRowState extends State<_QuickLogServiceRow> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: AppColors.muted),
+                              ?.copyWith(color: colorScheme.onSurfaceVariant),
                         ),
                       ],
                     ),
@@ -613,11 +589,30 @@ class _QuickLogServiceRowState extends State<_QuickLogServiceRow> {
                   AnimatedSwitcher(
                     duration: const Duration(milliseconds: 180),
                     child: status == ServiceEntryStatus.noEntry
-                        ? const SizedBox(width: 24, height: 24)
-                        : Icon(
-                            Icons.check_circle,
+                        ? Container(
+                            key: const ValueKey('quick-log-empty-status'),
+                            width: 28,
+                            height: 28,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: colorScheme.outlineVariant,
+                              ),
+                            ),
+                          )
+                        : Container(
                             key: ValueKey(status),
-                            color: _statusColor(status),
+                            width: 30,
+                            height: 30,
+                            decoration: BoxDecoration(
+                              color: colorScheme.primaryContainer,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.check,
+                              color: colorScheme.primary,
+                              size: 18,
+                            ),
                           ),
                   ),
                 ],
@@ -625,6 +620,8 @@ class _QuickLogServiceRowState extends State<_QuickLogServiceRow> {
               const SizedBox(height: AppSpacing.sm),
               QuickEntryActionGrid(
                 service: widget.service,
+                customSelectedOverride: _provider.isCustom,
+                selectedEntry: _entry,
                 selectedStatus: status,
                 onQuickMark: (nextStatus) {
                   HapticFeedback.selectionClick();
@@ -655,42 +652,39 @@ class _QuickLogServiceRowState extends State<_QuickLogServiceRow> {
           ? 0
           : 1,
     );
-    return '$quantity${service.unit} @ ${CurrencyFormatter.rupees(service.rateCents / 100)}';
+    final unit = service.unit.trim();
+    final quantityLabel = unit.isEmpty ? quantity : '$quantity $unit';
+    return '$quantityLabel @ ${CurrencyFormatter.rupees(service.rateCents / 100)}';
   }
 }
 
 class QuickLogCardProvider extends ChangeNotifier {
-  QuickLogCardProvider(this._status);
+  QuickLogCardProvider(this._status, this._isCustom);
 
   ServiceEntryStatus _status;
+  bool _isCustom;
 
   ServiceEntryStatus get status => _status;
+  bool get isCustom => _isCustom;
 
   void select(ServiceEntryStatus status) {
     if (_status == status) {
-      return;
+      if (!_isCustom) {
+        return;
+      }
     }
     _status = status;
+    _isCustom = false;
     notifyListeners();
   }
 
-  void syncFromStore(ServiceEntryStatus status) {
-    if (_status == status) {
+  void syncFromStore(ServiceEntryStatus status, {required bool isCustom}) {
+    if (_status == status && _isCustom == isCustom) {
       return;
     }
     _status = status;
-    notifyListeners();
+    _isCustom = isCustom;
   }
-}
-
-Color _statusColor(ServiceEntryStatus status) {
-  return switch (status) {
-    ServiceEntryStatus.delivered => AppColors.success,
-    ServiceEntryStatus.notDelivered => AppColors.danger,
-    ServiceEntryStatus.rateChanged => AppColors.info,
-    ServiceEntryStatus.halfDay => AppColors.warning,
-    ServiceEntryStatus.noEntry => AppColors.muted,
-  };
 }
 
 class _PdfPreview extends StatefulWidget {
@@ -1432,12 +1426,12 @@ class _CreateServiceViewState extends State<_CreateServiceView> {
         ),
         const SizedBox(height: AppSpacing.xl),
         FilledButton.icon(
-          onPressed: _save,
-          icon: const Icon(Icons.arrow_forward),
+          onPressed: widget.controller.isLoading ? null : _save,
+          icon: Icon(
+            widget.controller.isEditingService ? Icons.save : Icons.add,
+          ),
           label: Text(
-            widget.controller.isEditingService
-                ? 'Review Changes'
-                : 'Add Service',
+            widget.controller.isEditingService ? 'Save Changes' : 'Add Service',
           ),
         ),
       ],
@@ -1550,7 +1544,7 @@ class _CreateServiceViewState extends State<_CreateServiceView> {
     return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
   }
 
-  void _save() {
+  Future<void> _save() async {
     final template = _selectedTemplate;
     if (template == null) {
       AppSnackBar.show(
@@ -1563,7 +1557,7 @@ class _CreateServiceViewState extends State<_CreateServiceView> {
     if (_formKey.currentState?.validate() != true) {
       return;
     }
-    widget.controller.reviewAddService(
+    await widget.controller.submitServiceDraft(
       AddServiceDraft(
         providerName: providerNameController.text.trim(),
         contactNumber: _contactController.text.trim(),
@@ -1584,457 +1578,6 @@ class _CreateServiceViewState extends State<_CreateServiceView> {
                   template.defaultQuantity
             : 1,
         amount: double.tryParse(_amountController.text) ?? 0,
-      ),
-    );
-  }
-}
-
-class _CreateServiceReviewView extends StatelessWidget {
-  const _CreateServiceReviewView({required this.controller});
-
-  final LedgerController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    final draft = controller.addServiceDraft;
-    if (draft == null) {
-      return Center(
-        child: FilledButton(
-          onPressed: controller.startCreateService,
-          child: const Text('Back to Add Service'),
-        ),
-      );
-    }
-
-    void editDraft() => controller.goBackTo(LedgerRoute.createService);
-    final bottomInset = MediaQuery.paddingOf(context).bottom;
-
-    return ListView(
-      key: const ValueKey('service-review-scroll-view'),
-      padding: EdgeInsets.fromLTRB(
-        AppSpacing.lg,
-        AppSpacing.sm,
-        AppSpacing.lg,
-        AppSpacing.xl + bottomInset,
-      ),
-      children: [
-        Text(
-          controller.isEditingService
-              ? 'Please review the updated details before saving'
-              : 'Please review the service details before saving',
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        _ServiceReviewHero(draft: draft),
-        const SizedBox(height: AppSpacing.lg),
-        _ReviewSection(
-          icon: Icons.person_outline_rounded,
-          title: 'Provider Details',
-          children: [
-            _ReviewDetailTile(
-              icon: Icons.person_outline_rounded,
-              label: 'Provider Name',
-              value: draft.providerName,
-              onTap: editDraft,
-            ),
-            _ReviewDetailTile(
-              icon: Icons.phone_outlined,
-              label: 'Contact Number',
-              value: draft.contactNumber,
-              onTap: editDraft,
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        _ReviewSection(
-          icon: Icons.schedule_outlined,
-          title: 'Schedule & Reminder',
-          children: [
-            _ReviewDetailTile(
-              icon: Icons.schedule_outlined,
-              label: 'Service Time',
-              value: draft.serviceTime.isEmpty ? 'Not set' : draft.serviceTime,
-              onTap: editDraft,
-            ),
-            _ReviewDetailTile(
-              icon: Icons.notifications_none_rounded,
-              label: 'Reminder',
-              value: draft.remindBeforeMinutes <= 0
-                  ? 'No reminder'
-                  : '${draft.remindBeforeMinutes} minutes before',
-              valueAccent: draft.remindBeforeMinutes > 0,
-              onTap: editDraft,
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        _ReviewSection(
-          icon: Icons.sell_outlined,
-          title: 'Pricing Details',
-          children: [_ReviewPricingCard(draft: draft)],
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        _ReviewSection(
-          icon: Icons.calendar_month_outlined,
-          title: 'Service Dates',
-          children: [
-            _ReviewDetailTile(
-              icon: Icons.calendar_month_outlined,
-              label: 'Start Date',
-              value: fullDateLabel(
-                draft.startDate.day,
-                monthKeyForDate(draft.startDate),
-              ),
-              onTap: editDraft,
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.md,
-            vertical: AppSpacing.sm,
-          ),
-          decoration: BoxDecoration(
-            color: Theme.of(
-              context,
-            ).colorScheme.primary.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(AppRadius.md),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.verified_user_outlined,
-                size: 18,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Flexible(
-                child: Text(
-                  controller.isEditingService
-                      ? 'Review everything before updating your service.'
-                      : 'Review everything before creating your service.',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.primary,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        SizedBox(
-          height: 52,
-          child: FilledButton.icon(
-            onPressed: controller.isLoading
-                ? null
-                : controller.saveDraftService,
-            icon: const Icon(Icons.save_outlined, size: 20),
-            label: Text(
-              controller.isEditingService ? 'Save Changes' : 'Create Service',
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ServiceReviewHero extends StatelessWidget {
-  const _ServiceReviewHero({required this.draft});
-
-  final AddServiceDraft draft;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      key: const ValueKey('service-review-hero-card'),
-      padding: const EdgeInsets.all(AppSpacing.md),
-      child: ServiceIdentityHeader(
-        icon: draft.serviceIcon,
-        accentColor: draft.templateType.color,
-        serviceName: draft.serviceName,
-        providerName: draft.providerName,
-        templateType: draft.templateType,
-      ),
-    );
-  }
-}
-
-class _ReviewSection extends StatelessWidget {
-  const _ReviewSection({
-    required this.icon,
-    required this.title,
-    required this.children,
-  });
-
-  final IconData icon;
-  final String title;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
-            const SizedBox(width: AppSpacing.sm),
-            Text(
-              title,
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppCard(
-          padding: EdgeInsets.zero,
-          child: Column(
-            children: [
-              for (var index = 0; index < children.length; index++) ...[
-                children[index],
-                if (index < children.length - 1)
-                  Divider(
-                    height: 1,
-                    indent: 68,
-                    color: Theme.of(context).dividerColor,
-                  ),
-              ],
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ReviewDetailTile extends StatelessWidget {
-  const _ReviewDetailTile({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.onTap,
-    this.valueAccent = false,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-  final VoidCallback onTap;
-  final bool valueAccent;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppRadius.lg),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        child: Row(
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: Theme.of(
-                  context,
-                ).colorScheme.primary.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(AppRadius.xl),
-              ),
-              child: Icon(
-                icon,
-                size: 21,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    value,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: valueAccent
-                          ? Theme.of(context).colorScheme.primary
-                          : null,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(
-              Icons.chevron_right,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ReviewPricingCard extends StatelessWidget {
-  const _ReviewPricingCard({required this.draft});
-
-  final AddServiceDraft draft;
-
-  @override
-  Widget build(BuildContext context) {
-    final metrics = switch (draft.templateType) {
-      ServiceTemplateType.quantity => [
-        _ReviewMetric(
-          icon: Icons.inventory_2_outlined,
-          label: 'Unit',
-          value: draft.unit,
-          color: AppColors.success,
-        ),
-        _ReviewMetric(
-          icon: Icons.balance_outlined,
-          label: 'Default Quantity',
-          value: _formatQuantity(draft.defaultQuantity),
-          color: AppColors.success,
-        ),
-        _ReviewMetric(
-          icon: Icons.currency_rupee,
-          label: 'Unit Price',
-          value: CurrencyFormatter.rupees(draft.amount),
-          color: Theme.of(context).colorScheme.primary,
-        ),
-      ],
-      ServiceTemplateType.attendance => [
-        _ReviewMetric(
-          icon: Icons.calendar_today_outlined,
-          label: 'Unit',
-          value: 'Day',
-          color: AppColors.warning,
-        ),
-        _ReviewMetric(
-          icon: Icons.currency_rupee,
-          label: 'Monthly Charge',
-          value: CurrencyFormatter.rupees(draft.amount),
-          color: Theme.of(context).colorScheme.primary,
-        ),
-      ],
-      ServiceTemplateType.fixedMonthly => [
-        _ReviewMetric(
-          icon: Icons.calendar_month_outlined,
-          label: 'Unit',
-          value: 'Month',
-          color: AppColors.info,
-        ),
-        _ReviewMetric(
-          icon: Icons.currency_rupee,
-          label: 'Monthly Amount',
-          value: CurrencyFormatter.rupees(draft.amount),
-          color: Theme.of(context).colorScheme.primary,
-        ),
-      ],
-    };
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          for (var index = 0; index < metrics.length; index++) ...[
-            Expanded(child: metrics[index]),
-            if (index < metrics.length - 1)
-              SizedBox(
-                height: 72,
-                child: VerticalDivider(
-                  width: 1,
-                  color: Theme.of(context).dividerColor,
-                ),
-              ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  String _formatQuantity(double value) {
-    if (value.truncateToDouble() == value) {
-      return value.toStringAsFixed(0);
-    }
-    return value
-        .toStringAsFixed(3)
-        .replaceFirst(RegExp(r'0+$'), '')
-        .replaceFirst(RegExp(r'\.$'), '');
-  }
-}
-
-class _ReviewMetric extends StatelessWidget {
-  const _ReviewMetric({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
-      child: Column(
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.10),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: color, size: 19),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: color,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ],
       ),
     );
   }

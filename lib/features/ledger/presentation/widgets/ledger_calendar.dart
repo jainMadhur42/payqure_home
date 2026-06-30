@@ -143,10 +143,15 @@ class CalendarDayCell extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final colors = _entryColors(context, status);
-    final textColor = isSelected
+    final hasLoggedStatus =
+        status != CalendarEntryVisualStatus.noEntry && !isBlocked;
+    final showSelectedCircle = isSelected && !isBlocked;
+    final textColor = showSelectedCircle
         ? colorScheme.onPrimary
         : isBlocked
         ? colorScheme.onSurfaceVariant.withValues(alpha: 0.55)
+        : isSelected || isToday
+        ? colorScheme.primary
         : colors.foreground;
 
     return InkWell(
@@ -160,21 +165,21 @@ class CalendarDayCell extends StatelessWidget {
           vertical: AppSpacing.xs,
         ),
         decoration: BoxDecoration(
-          color: isSelected
+          color: showSelectedCircle
               ? colorScheme.primary
-              : isBlocked
-              ? colorScheme.surfaceContainerHighest.withValues(alpha: 0.45)
-              : colors.background,
+              : hasLoggedStatus
+              ? colors.background
+              : Colors.transparent,
           shape: BoxShape.circle,
-          border: Border.all(
-            color: isBlocked
-                ? colorScheme.outlineVariant.withValues(alpha: 0.55)
-                : isToday
-                ? colorScheme.primary
-                : isSelected
-                ? colorScheme.primary
-                : colors.border,
-          ),
+          border: hasLoggedStatus
+              ? Border.all(
+                  color: showSelectedCircle
+                      ? colorScheme.primary
+                      : colors.border,
+                )
+              : showSelectedCircle
+              ? Border.all(color: colorScheme.primary)
+              : null,
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -189,6 +194,21 @@ class CalendarDayCell extends StatelessWidget {
                 ),
               ),
             ),
+            if (showSelectedCircle) ...[
+              const SizedBox(height: 2),
+              Container(
+                key: ValueKey(
+                  'calendar-selected-status-${date.toIso8601String()}',
+                ),
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: colors.foreground,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: colorScheme.onPrimary, width: 0.8),
+                ),
+              ),
+            ],
             if (isBlocked)
               Container(
                 width: 14,

@@ -12,7 +12,6 @@ enum LedgerRoute {
   quickLog,
   createServiceTemplate,
   createService,
-  createServiceReview,
   calendar,
   manageService,
   entry,

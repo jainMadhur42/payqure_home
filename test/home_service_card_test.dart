@@ -39,6 +39,7 @@ void main() {
             onTap: () {},
             onQuickMark: (_) {},
             onCustomize: () {},
+            onEdit: () {},
           ),
         ),
       ),
@@ -71,6 +72,7 @@ void main() {
             onTap: () {},
             onQuickMark: (_) {},
             onCustomize: () {},
+            onEdit: () {},
           ),
         ),
       ),
@@ -113,6 +115,7 @@ void main() {
             onTap: () {},
             onQuickMark: (_) {},
             onCustomize: () {},
+            onEdit: () {},
           ),
         ),
       ),
@@ -140,6 +143,7 @@ void main() {
             onTap: () {},
             onQuickMark: (_) {},
             onCustomize: () {},
+            onEdit: () {},
           ),
         ),
       ),
@@ -147,6 +151,49 @@ void main() {
 
     expect(find.text("Today's Entry"), findsOne);
     expect(find.text('Billed This Month'), findsOne);
+  });
+
+  testWidgets('home card swipes right for status chips and left for edit', (
+    tester,
+  ) async {
+    ServiceEntryStatus? markedStatus;
+    var editTapped = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            child: HomeServiceCard(
+              summary: _summary(_service()),
+              onTap: () {},
+              onQuickMark: (status) => markedStatus = status,
+              onCustomize: () {},
+              onEdit: () => editTapped = true,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.drag(find.byType(HomeServiceCard), const Offset(300, 0));
+    await tester.pumpAndSettle();
+
+    expect(find.text('D'), findsNothing);
+    expect(find.text('ND'), findsNothing);
+    expect(find.text('C'), findsNothing);
+    expect(find.text('Delivered'), findsOneWidget);
+    expect(find.text('Missed'), findsOneWidget);
+    expect(find.text('Custom'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('quick-entry-delivered')));
+    await tester.pumpAndSettle();
+    expect(markedStatus, ServiceEntryStatus.delivered);
+
+    await tester.drag(find.byType(HomeServiceCard), const Offset(-150, 0));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('home-service-edit-action')));
+    expect(editTapped, isTrue);
   });
 }
 

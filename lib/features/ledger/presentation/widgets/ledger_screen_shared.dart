@@ -13,7 +13,7 @@ extension ServiceEntryStatusLabel on ServiceEntryStatus {
   String get label {
     return switch (this) {
       ServiceEntryStatus.delivered => 'Delivered',
-      ServiceEntryStatus.notDelivered => 'Not Delivered',
+      ServiceEntryStatus.notDelivered => 'Missed',
       ServiceEntryStatus.rateChanged => 'Rate Changed',
       ServiceEntryStatus.noEntry => 'No Entry',
       ServiceEntryStatus.halfDay => 'Half Day',

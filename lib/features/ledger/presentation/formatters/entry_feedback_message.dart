@@ -1,16 +1,16 @@
+import '../../../../core/utils/currency_formatter.dart';
+import '../../domain/entities/ledger_month.dart';
 import '../../domain/entities/service_entry.dart';
 import '../../domain/entities/service_template.dart';
-import '../../domain/entities/ledger_month.dart';
 
 abstract final class EntryFeedbackMessage {
   static String statusUpdated({
     required int day,
     required String monthKey,
-    required ServiceEntryStatus status,
-    required ServiceTemplateType templateType,
+    required ServiceEntry entry,
   }) {
-    return '${_dateLabel(day, monthKey)} has been marked as '
-        '${_statusLabel(status, templateType)}.';
+    return '${_dateLabel(day, monthKey)} updated. '
+        '${CurrencyFormatter.cents(entry.amountCents)} has been added to your bill.';
   }
 
   static String customized({
@@ -24,33 +24,14 @@ abstract final class EntryFeedbackMessage {
       final unit = entry.unit.trim();
       final quantity = _formatQuantity(entry.quantity);
       return '${_dateLabel(day, monthKey)} quantity has been updated to '
-          '$quantity${unit.isEmpty ? '' : ' $unit'}.';
+          '$quantity${unit.isEmpty ? '' : ' $unit'}. '
+          '${CurrencyFormatter.cents(entry.amountCents)} has been added to your bill.';
     }
     return statusUpdated(
       day: day,
       monthKey: monthKey,
-      status: entry.status,
-      templateType: templateType,
+      entry: entry,
     );
-  }
-
-  static String _statusLabel(
-    ServiceEntryStatus status,
-    ServiceTemplateType templateType,
-  ) {
-    return switch (status) {
-      ServiceEntryStatus.delivered =>
-        templateType == ServiceTemplateType.attendance
-            ? 'Present'
-            : 'Delivered',
-      ServiceEntryStatus.notDelivered =>
-        templateType == ServiceTemplateType.attendance
-            ? 'Absent'
-            : 'Not Delivered',
-      ServiceEntryStatus.halfDay => 'Half Day',
-      ServiceEntryStatus.rateChanged => 'Rate Changed',
-      ServiceEntryStatus.noEntry => 'No Entry',
-    };
   }
 
   static String _formatQuantity(double quantity) {

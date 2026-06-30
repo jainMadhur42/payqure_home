@@ -299,8 +299,7 @@ class LedgerAnalyticsMapper {
       LedgerRoute.contributionStats => 'spending_stats',
       LedgerRoute.quickLog => 'quick_log_screen',
       LedgerRoute.createServiceTemplate => 'service_template_picker',
-      LedgerRoute.createService ||
-      LedgerRoute.createServiceReview => 'add_service_screen',
+      LedgerRoute.createService => 'add_service_screen',
       LedgerRoute.calendar => 'service_detail_screen',
       LedgerRoute.manageService => 'manage_service',
       LedgerRoute.entry => 'add_entry_screen',

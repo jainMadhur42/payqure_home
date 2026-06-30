@@ -10,6 +10,7 @@ class TillDateSettlementResult {
     required this.previousBalanceRemainingCents,
     required this.openingAdvanceCents,
     required this.manualAdvanceCents,
+    this.paymentAdvanceCents = 0,
     required this.availableAdvanceCents,
     required this.advanceUsedCents,
     required this.paidThisMonthCents,
@@ -25,6 +26,7 @@ class TillDateSettlementResult {
   final int previousBalanceRemainingCents;
   final int openingAdvanceCents;
   final int manualAdvanceCents;
+  final int paymentAdvanceCents;
   final int availableAdvanceCents;
   final int advanceUsedCents;
   final int paidThisMonthCents;
@@ -32,6 +34,9 @@ class TillDateSettlementResult {
   final int carryForwardCents;
   final int advanceBalanceCents;
   final SettlementStatus status;
+
+  int get advanceCreatedThisMonthCents =>
+      manualAdvanceCents + paymentAdvanceCents;
 }
 
 class TillDateSettlementCalculator {
@@ -107,6 +112,7 @@ class TillDateSettlementCalculator {
       previousBalanceRemainingCents: previousBalanceRemaining,
       openingAdvanceCents: openingAdvance,
       manualAdvanceCents: manualAdvance,
+      paymentAdvanceCents: paymentAdvance,
       availableAdvanceCents: availableAdvance,
       advanceUsedCents: advanceUsed,
       paidThisMonthCents: paid,

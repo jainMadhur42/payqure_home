@@ -447,7 +447,7 @@ class LedgerController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void reviewAddService(AddServiceDraft draft) {
+  Future<void> submitServiceDraft(AddServiceDraft draft) async {
     addServiceDraft = draft;
     _analytics.logEvent(
       AnalyticsEvents.serviceTemplateSelected,
@@ -461,10 +461,10 @@ class LedgerController extends ChangeNotifier {
         AnalyticsParams.currencyCode: selectedCurrency.code,
       },
     );
-    _setRoute(LedgerRoute.createServiceReview);
     errorMessage = null;
     successMessage = null;
     notifyListeners();
+    await saveDraftService();
   }
 
   void startCreateService() {
@@ -1347,8 +1347,7 @@ class LedgerController extends ChangeNotifier {
         EntryFeedbackMessage.statusUpdated(
           day: day,
           monthKey: monthKey,
-          status: entry.status,
-          templateType: service.templateType,
+          entry: entry,
         ),
       );
     });
@@ -1385,8 +1384,7 @@ class LedgerController extends ChangeNotifier {
         EntryFeedbackMessage.statusUpdated(
           day: day,
           monthKey: monthKey,
-          status: entry.status,
-          templateType: service.templateType,
+          entry: entry,
         ),
       );
       notifyListeners();
@@ -2347,7 +2345,7 @@ class LedgerController extends ChangeNotifier {
       LedgerRoute.privacyPolicy ||
       LedgerRoute.termsDisclaimer ||
       LedgerRoute.deleteMyData => 3,
-      LedgerRoute.createServiceReview || LedgerRoute.calendar => 4,
+      LedgerRoute.calendar => 4,
       LedgerRoute.manageService => 5,
       LedgerRoute.entry ||
       LedgerRoute.settlementDetail ||

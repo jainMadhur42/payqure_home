@@ -19,6 +19,7 @@ import '../../domain/services/service_start_date_resolver.dart';
 import '../controllers/ledger_controller.dart';
 import '../widgets/loading_skeleton.dart';
 import '../widgets/month_selector.dart';
+import '../widgets/quick_entry_actions.dart';
 import '../widgets/service_contribution_stats.dart';
 import '../widgets/service_icon.dart';
 
@@ -194,6 +195,10 @@ class _HomeScreenState extends State<HomeScreen> {
                         onCustomize: () => controller.customizeEntryForService(
                           service: summary.service,
                           day: _quickLogDay(controller.monthKey),
+                        ),
+                        onEdit: () => controller.startEditService(
+                          summary.service,
+                          returnRoute: LedgerRoute.dashboard,
                         ),
                       ),
                     ),
@@ -466,7 +471,7 @@ class _HeroSummaryContent extends StatelessWidget {
           children: [
             Expanded(
               child: _HeroMetricItem(
-                label: 'This month Charges',
+                label: 'Current Bill',
                 value: CurrencyFormatter.rupees(summary.usageCents / 100),
               ),
             ),
@@ -617,6 +622,7 @@ class HomeServiceCard extends StatefulWidget {
     required this.onTap,
     required this.onQuickMark,
     required this.onCustomize,
+    required this.onEdit,
     super.key,
   });
 
@@ -624,99 +630,57 @@ class HomeServiceCard extends StatefulWidget {
   final VoidCallback onTap;
   final ValueChanged<ServiceEntryStatus> onQuickMark;
   final VoidCallback onCustomize;
+  final VoidCallback onEdit;
 
   @override
   State<HomeServiceCard> createState() => _HomeServiceCardState();
 }
 
 class _HomeServiceCardState extends State<HomeServiceCard> {
-  static const _actionSize = 50.0;
-  static const _actionSpacing = AppSpacing.sm;
+  static const _statusRevealWidth = 252.0;
+  static const _editRevealWidth = 72.0;
   double _revealOffset = 0;
-
-  List<_SwipeAction> get _actions {
-    final service = widget.summary.service;
-    return switch (service.templateType) {
-      ServiceTemplateType.attendance => [
-        _SwipeAction(
-          label: 'P',
-          tooltip: 'Present',
-          color: AppColors.success,
-          onTap: () => widget.onQuickMark(ServiceEntryStatus.delivered),
-        ),
-        _SwipeAction(
-          label: 'A',
-          tooltip: 'Absent',
-          color: AppColors.danger,
-          onTap: () => widget.onQuickMark(ServiceEntryStatus.notDelivered),
-        ),
-        _SwipeAction(
-          label: 'H',
-          tooltip: 'Half Day',
-          color: AppColors.warning,
-          onTap: () => widget.onQuickMark(ServiceEntryStatus.halfDay),
-        ),
-      ],
-      ServiceTemplateType.fixedMonthly => [
-        _SwipeAction(
-          label: 'D',
-          tooltip: 'Delivered',
-          color: AppColors.success,
-          onTap: () => widget.onQuickMark(ServiceEntryStatus.delivered),
-        ),
-        _SwipeAction(
-          label: 'ND',
-          tooltip: 'Not Delivered',
-          color: AppColors.danger,
-          onTap: () => widget.onQuickMark(ServiceEntryStatus.notDelivered),
-        ),
-      ],
-      _ => [
-        _SwipeAction(
-          label: 'D',
-          tooltip: 'Delivered',
-          color: AppColors.success,
-          onTap: () => widget.onQuickMark(ServiceEntryStatus.delivered),
-        ),
-        _SwipeAction(
-          label: 'ND',
-          tooltip: 'Not Delivered',
-          color: AppColors.danger,
-          onTap: () => widget.onQuickMark(ServiceEntryStatus.notDelivered),
-        ),
-        _SwipeAction(
-          label: 'C',
-          tooltip: 'Customize',
-          color: AppColors.primary,
-          onTap: widget.onCustomize,
-        ),
-      ],
-    };
-  }
-
-  double get _maxReveal =>
-      _actions.length * _actionSize + (_actions.length + 1) * _actionSpacing;
 
   void _handleDragUpdate(DragUpdateDetails details) {
     setState(() {
-      _revealOffset = (_revealOffset + details.delta.dx).clamp(-_maxReveal, 0);
+      _revealOffset = (_revealOffset + details.delta.dx).clamp(
+        -_editRevealWidth,
+        _statusRevealWidth,
+      );
     });
   }
 
   void _handleDragEnd(DragEndDetails details) {
-    final shouldOpen =
-        details.primaryVelocity != null && details.primaryVelocity! < -250 ||
-        _revealOffset.abs() > _maxReveal * 0.42;
-    setState(() => _revealOffset = shouldOpen ? -_maxReveal : 0);
-    if (shouldOpen) {
+    final velocity = details.primaryVelocity ?? 0;
+    final nextOffset = switch ((velocity, _revealOffset)) {
+      (> 250, _) => _statusRevealWidth,
+      (< -250, _) => -_editRevealWidth,
+      (_, > _statusRevealWidth * 0.35) => _statusRevealWidth,
+      (_, < -_editRevealWidth * 0.35) => -_editRevealWidth,
+      _ => 0.0,
+    };
+    setState(() => _revealOffset = nextOffset);
+    if (nextOffset != 0) {
       HapticFeedback.selectionClick();
     }
   }
 
-  void _runAction(_SwipeAction action) {
+  void _runQuickMark(ServiceEntryStatus status) {
     HapticFeedback.lightImpact();
     setState(() => _revealOffset = 0);
-    action.onTap();
+    widget.onQuickMark(status);
+  }
+
+  void _runCustomize() {
+    HapticFeedback.lightImpact();
+    setState(() => _revealOffset = 0);
+    widget.onCustomize();
+  }
+
+  void _runEdit() {
+    HapticFeedback.lightImpact();
+    setState(() => _revealOffset = 0);
+    widget.onEdit();
   }
 
   @override
@@ -732,9 +696,15 @@ class _HomeServiceCardState extends State<HomeServiceCard> {
         : summary.statusLabel == 'Paid'
         ? AppColors.success
         : AppColors.danger;
-    final revealProgress = _maxReveal == 0
-        ? 0.0
-        : (_revealOffset.abs() / _maxReveal).clamp(0.0, 1.0);
+    final statusRevealProgress = (_revealOffset / _statusRevealWidth).clamp(
+      0.0,
+      1.0,
+    );
+    final editRevealProgress = (-_revealOffset / _editRevealWidth).clamp(
+      0.0,
+      1.0,
+    );
+    final selectedEntry = _quickActionEntry(service);
     return ClipRRect(
       borderRadius: BorderRadius.circular(AppRadius.lg),
       child: Stack(
@@ -743,25 +713,81 @@ class _HomeServiceCardState extends State<HomeServiceCard> {
           Positioned.fill(
             child: ColoredBox(
               color: context.accent.soft.withValues(alpha: 0.42),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: _actions
-                      .map(
-                        (action) => Padding(
-                          padding: const EdgeInsets.only(left: AppSpacing.sm),
-                          child: Transform.scale(
-                            scale: 0.62 + revealProgress * 0.38,
-                            child: _SwipeActionButton(
-                              action: action,
-                              onPressed: () => _runAction(action),
+              child: Stack(
+                children: [
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: _revealOffset > 0
+                        ? SizedBox(
+                            width: _statusRevealWidth,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.sm,
+                              ),
+                              child: Transform.scale(
+                                alignment: Alignment.centerLeft,
+                                scale: 0.92 + statusRevealProgress * 0.08,
+                                child: Opacity(
+                                  opacity: statusRevealProgress,
+                                  child: QuickEntryActionGrid(
+                                    service: service,
+                                    selectedEntry: selectedEntry,
+                                    selectedStatus: selectedEntry?.status,
+                                    onQuickMark: _runQuickMark,
+                                    onCustomize: _runCustomize,
+                                  ),
+                                ),
+                              ),
                             ),
-                          ),
-                        ),
-                      )
-                      .toList(),
-                ),
+                          )
+                        : const SizedBox.shrink(),
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: _revealOffset < 0
+                        ? Padding(
+                            padding: const EdgeInsets.only(
+                              right: AppSpacing.md,
+                            ),
+                            child: Transform.scale(
+                              scale: 0.72 + editRevealProgress * 0.28,
+                              child: Opacity(
+                                opacity: editRevealProgress,
+                                child: Tooltip(
+                                  message: 'Edit Service',
+                                  child: Semantics(
+                                    key: const ValueKey(
+                                      'home-service-edit-action',
+                                    ),
+                                    button: true,
+                                    label: 'Edit Service',
+                                    child: SizedBox.square(
+                                      dimension: 48,
+                                      child: Material(
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.primary,
+                                        shape: const CircleBorder(),
+                                        elevation: 2,
+                                        child: InkWell(
+                                          onTap: _runEdit,
+                                          customBorder: const CircleBorder(),
+                                          child: const Icon(
+                                            Icons.edit_outlined,
+                                            color: Colors.white,
+                                            size: 21,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          )
+                        : const SizedBox.shrink(),
+                  ),
+                ],
               ),
             ),
           ),
@@ -830,6 +856,15 @@ class _HomeServiceCardState extends State<HomeServiceCard> {
       ),
     );
   }
+}
+
+ServiceEntry? _quickActionEntry(HouseholdService service) {
+  final month = LedgerMonth.parse(service.monthKey);
+  final now = DateTime.now();
+  final day = month == LedgerMonth.fromDate(now) ? now.day : month.daysInMonth;
+  return service.entries
+      .where((entry) => entry.monthKey == service.monthKey && entry.day == day)
+      .firstOrNull;
 }
 
 class _HomeServiceCardHeader extends StatelessWidget {
@@ -990,7 +1025,7 @@ String _todayEntryLabel(HomeServiceSummary summary) {
   return switch (entry.status) {
     ServiceEntryStatus.delivered ||
     ServiceEntryStatus.rateChanged => _quantityEntryLabel(entry, service),
-    ServiceEntryStatus.notDelivered => 'Not Delivered',
+    ServiceEntryStatus.notDelivered => 'Missed',
     _ => 'Not Logged',
   };
 }
@@ -1029,7 +1064,7 @@ String _formatQuantity(double value) {
 
 /// Side-border accent for today's entry, using the same status → colour logic
 /// as the service detail calendar (delivered = green, missed = red,
-/// quantity change = amber, no entry = grey).
+/// custom = amber, no entry = grey).
 Color _todayBorderColor(HouseholdService service) {
   if (_todayEntryStatus(service) == _TodayEntryStatus.inactive) {
     return _visualStatusColor(CalendarEntryVisualStatus.noEntry);
@@ -1059,56 +1094,6 @@ Color _visualStatusColor(CalendarEntryVisualStatus status) {
     CalendarEntryVisualStatus.quantityChanged => AppColors.warning,
     CalendarEntryVisualStatus.noEntry => AppColors.muted,
   };
-}
-
-class _SwipeAction {
-  const _SwipeAction({
-    required this.label,
-    required this.tooltip,
-    required this.color,
-    required this.onTap,
-  });
-
-  final String label;
-  final String tooltip;
-  final Color color;
-  final VoidCallback onTap;
-}
-
-class _SwipeActionButton extends StatelessWidget {
-  const _SwipeActionButton({required this.action, required this.onPressed});
-
-  final _SwipeAction action;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: action.tooltip,
-      child: SizedBox.square(
-        dimension: 50,
-        child: Material(
-          color: action.color,
-          shape: const CircleBorder(),
-          elevation: 3,
-          child: InkWell(
-            onTap: onPressed,
-            customBorder: const CircleBorder(),
-            child: Center(
-              child: Text(
-                action.label,
-                maxLines: 1,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class ServiceMetricLine extends StatelessWidget {

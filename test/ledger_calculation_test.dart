@@ -235,7 +235,24 @@ void main() {
 
     expect(result.status, SettlementStatus.overpaid);
     expect(result.advanceBalanceCents, 20000);
+    expect(result.paymentAdvanceCents, 20000);
+    expect(result.advanceCreatedThisMonthCents, 20000);
   });
+
+  test(
+    'advance this month includes manual advance and overpayment advance',
+    () {
+      final result = settlementCalculator.calculate(
+        usageAmountCents: 70000,
+        advances: [_advance(10000)],
+        payments: [_payment(100000)],
+      );
+
+      expect(result.manualAdvanceCents, 10000);
+      expect(result.paymentAdvanceCents, 40000);
+      expect(result.advanceCreatedThisMonthCents, 50000);
+    },
+  );
 
   test(
     'current month charges stay separate from paid and advance settlement',
