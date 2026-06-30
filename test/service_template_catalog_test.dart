@@ -40,4 +40,26 @@ void main() {
       containsAll(ServiceTemplateType.values),
     );
   });
+
+  test('every built-in category maps to the correct entry action policy', () {
+    final builtInTemplates = ServiceTemplateCatalog.templates.where(
+      (template) => !template.isCustom,
+    );
+
+    for (final template in builtInTemplates) {
+      final expectedType = switch (template.category) {
+        ServiceTemplateCategory.daily => ServiceTemplateType.quantity,
+        ServiceTemplateCategory.attendance => ServiceTemplateType.attendance,
+        ServiceTemplateCategory.monthly => ServiceTemplateType.fixedMonthly,
+        ServiceTemplateCategory.custom => throw StateError(
+          '${template.id} is marked built-in but uses the custom category',
+        ),
+      };
+      expect(
+        template.templateType,
+        expectedType,
+        reason: '${template.title} is mapped to the wrong service category',
+      );
+    }
+  });
 }

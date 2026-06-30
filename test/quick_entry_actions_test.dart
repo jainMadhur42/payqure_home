@@ -61,7 +61,7 @@ void main() {
     },
   );
 
-  testWidgets('attendance quick actions use a two by two action set', (
+  testWidgets('attendance actions do not expose quantity customization', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -79,7 +79,7 @@ void main() {
     expect(find.text('Present'), findsOneWidget);
     expect(find.text('Absent'), findsOneWidget);
     expect(find.text('Half Day'), findsOneWidget);
-    expect(find.text('Custom'), findsOneWidget);
+    expect(find.text('Custom'), findsNothing);
     expect(
       tester.getTopLeft(find.byKey(const ValueKey('quick-entry-half-day'))).dy,
       greaterThan(
@@ -88,6 +88,65 @@ void main() {
             .dy,
       ),
     );
+  });
+
+  testWidgets('fixed monthly delivered entry never selects custom', (
+    tester,
+  ) async {
+    final service = _service(
+      ServiceTemplateType.fixedMonthly,
+      monthlyAmountCents: 31000,
+    );
+    final entry = ServiceEntry(
+      id: 'newspaper-entry',
+      serviceId: service.id,
+      day: 12,
+      monthKey: service.monthKey,
+      status: ServiceEntryStatus.delivered,
+      quantity: 1,
+      unit: 'Month',
+      rateCents: 1000,
+      amountCents: 31000,
+      updatedAt: DateTime(2026, 6, 12),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: QuickEntryActionGrid(
+            service: service,
+            selectedEntry: entry,
+            onQuickMark: (_) {},
+            onCustomize: () {},
+          ),
+        ),
+      ),
+    );
+
+    expect(isCustomQuickEntry(service, entry), isFalse);
+    expect(find.text('Custom'), findsNothing);
+    expect(_isSelected(tester, 'quick-entry-delivered'), isTrue);
+  });
+
+  test('attendance entry with a derived daily rate is not custom', () {
+    final service = _service(
+      ServiceTemplateType.attendance,
+      monthlyAmountCents: 31000,
+    );
+    final entry = ServiceEntry(
+      id: 'cleaning-entry',
+      serviceId: service.id,
+      day: 12,
+      monthKey: service.monthKey,
+      status: ServiceEntryStatus.delivered,
+      quantity: 1,
+      unit: 'Day',
+      rateCents: 1000,
+      amountCents: 1000,
+      updatedAt: DateTime(2026, 6, 12),
+    );
+
+    expect(isCustomQuickEntry(service, entry), isFalse);
   });
 
   testWidgets('custom quantity remains selected and appears in chip label', (
@@ -251,7 +310,10 @@ bool _isSelected(WidgetTester tester, String key) {
       Tristate.isTrue;
 }
 
-HouseholdService _service(ServiceTemplateType templateType) {
+HouseholdService _service(
+  ServiceTemplateType templateType, {
+  int monthlyAmountCents = 0,
+}) {
   return HouseholdService(
     id: 'service',
     userId: 'user',
@@ -263,7 +325,7 @@ HouseholdService _service(ServiceTemplateType templateType) {
     unit: templateType == ServiceTemplateType.attendance ? 'Day' : 'L',
     defaultQuantity: 1,
     rateCents: 6000,
-    monthlyAmountCents: 0,
+    monthlyAmountCents: monthlyAmountCents,
     entries: const [],
     updatedAt: DateTime(2026, 6, 1),
   );

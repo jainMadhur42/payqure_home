@@ -113,9 +113,11 @@ class QuickEntryActionGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isAttendance = service.templateType == ServiceTemplateType.attendance;
+    final canCustomize =
+        showCustomize && service.templateType == ServiceTemplateType.quantity;
     final currentStatus = selectedStatus ?? selectedEntry?.status;
     final customSelected =
-        showCustomize &&
+        canCustomize &&
         (customSelectedOverride ?? isCustomQuickEntry(service, selectedEntry));
     final actions = [
       _QuickEntryAction(
@@ -159,7 +161,7 @@ class QuickEntryActionGrid extends StatelessWidget {
           selected: currentStatus == ServiceEntryStatus.noEntry,
           onPressed: () => onQuickMark(ServiceEntryStatus.noEntry),
         ),
-      if (showCustomize)
+      if (canCustomize)
         _QuickEntryAction(
           key: const ValueKey('quick-entry-custom'),
           label: customSelected && selectedEntry != null
@@ -217,17 +219,14 @@ class QuickEntryActionGrid extends StatelessWidget {
 }
 
 bool isCustomQuickEntry(HouseholdService service, ServiceEntry? entry) {
-  if (entry == null ||
+  if (service.templateType != ServiceTemplateType.quantity ||
+      entry == null ||
       entry.status == ServiceEntryStatus.noEntry ||
       entry.status == ServiceEntryStatus.notDelivered ||
       entry.status == ServiceEntryStatus.halfDay) {
     return false;
   }
-  if (service.templateType == ServiceTemplateType.quantity) {
-    return (entry.quantity - service.defaultQuantity).abs() > 0.0001;
-  }
-  return entry.status == ServiceEntryStatus.rateChanged ||
-      entry.rateCents != service.rateCents;
+  return (entry.quantity - service.defaultQuantity).abs() > 0.0001;
 }
 
 class _QuickEntryStatusChip extends StatelessWidget {
