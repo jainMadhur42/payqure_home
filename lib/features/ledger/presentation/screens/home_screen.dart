@@ -453,56 +453,64 @@ class _HeroSummaryContent extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Amount Due',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: Colors.white.withValues(alpha: 0.72),
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        AmountText(
-          amount: summary.totalDueCents / 100,
-          large: true,
-          color: Colors.white,
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _HeroPrimaryMetric(
+                label: 'Amount Due',
+                amountCents: summary.totalDueCents,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.lg),
+            Container(
+              width: 1,
+              height: 52,
+              color: Colors.white.withValues(alpha: 0.16),
+            ),
+            const SizedBox(width: AppSpacing.lg),
+            Expanded(
+              child: _HeroPrimaryMetric(
+                label: 'Total Expense',
+                amountCents: summary.usageCents,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: AppSpacing.xl),
-        Row(
-          children: [
-            Expanded(
-              child: _HeroMetricItem(
-                label: 'Current Bill',
-                value: CurrencyFormatter.rupees(summary.usageCents / 100),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.lg),
-            Expanded(
-              child: _HeroMetricItem(
-                label: 'Previous Balance',
-                value: CurrencyFormatter.rupees(
-                  summary.previousPendingCents / 100,
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final metricWidth = (constraints.maxWidth - AppSpacing.lg) / 2;
+            return Wrap(
+              spacing: AppSpacing.lg,
+              runSpacing: AppSpacing.lg,
+              children: [
+                SizedBox(
+                  width: metricWidth,
+                  child: _HeroMetricItem(
+                    label: 'Previous Balance',
+                    value: CurrencyFormatter.rupees(
+                      summary.previousPendingCents / 100,
+                    ),
+                  ),
                 ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        Row(
-          children: [
-            Expanded(
-              child: _HeroMetricItem(
-                label: 'Advance balance',
-                value: CurrencyFormatter.rupees(summary.advanceCents / 100),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.lg),
-            Expanded(
-              child: _HeroMetricItem(
-                label: 'Paid this month',
-                value: CurrencyFormatter.rupees(summary.paidCents / 100),
-              ),
-            ),
-          ],
+                SizedBox(
+                  width: metricWidth,
+                  child: _HeroMetricItem(
+                    label: 'Advance balance',
+                    value: CurrencyFormatter.rupees(summary.advanceCents / 100),
+                  ),
+                ),
+                SizedBox(
+                  width: metricWidth,
+                  child: _HeroMetricItem(
+                    label: 'Paid this month',
+                    value: CurrencyFormatter.rupees(summary.paidCents / 100),
+                  ),
+                ),
+              ],
+            );
+          },
         ),
         const SizedBox(height: AppSpacing.lg),
         Material(
@@ -576,6 +584,33 @@ class _HeroSummaryContent extends StatelessWidget {
             ),
           ),
         ),
+      ],
+    );
+  }
+}
+
+class _HeroPrimaryMetric extends StatelessWidget {
+  const _HeroPrimaryMetric({required this.label, required this.amountCents});
+
+  final String label;
+  final int amountCents;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: Colors.white.withValues(alpha: 0.72),
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        AmountText(amount: amountCents / 100, large: true, color: Colors.white),
       ],
     );
   }

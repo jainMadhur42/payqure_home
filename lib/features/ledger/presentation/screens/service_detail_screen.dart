@@ -487,22 +487,13 @@ class ServiceDetailSummaryCard extends StatelessWidget {
         final settlement = summary?.settlement;
         final deliveredDays = usage?.deliveredDays ?? 0;
         final missedDays = usage?.missedDays ?? 0;
-        final totalQuantity = usage?.totalQuantity ?? 0;
-        final quantity = totalQuantity.toStringAsFixed(
-          totalQuantity.truncateToDouble() == totalQuantity ? 0 : 1,
-        );
-        final metric = service.templateType == ServiceTemplateType.attendance
-            ? '$deliveredDays Present'
-            : service.templateType == ServiceTemplateType.fixedMonthly
-            ? 'Fixed Monthly'
-            : '$quantity${service.unit.trim().isEmpty ? '' : ' ${service.unit.trim()}'}';
         final dueLabel = _isCurrentMonth(controller.monthKey)
             ? 'Due till today'
             : 'Monthly Due';
         final currentMonthCharges = settlement?.usageAmountCents ?? 0;
         final previousBalance = settlement?.previousBalanceRemainingCents ?? 0;
-        final advancePaidThisMonth =
-            settlement?.advanceCreatedThisMonthCents ?? 0;
+        final advanceAvailableThisMonth =
+            settlement?.advanceAvailableThisMonthCents ?? 0;
         final paidThisMonth = settlement?.paidThisMonthCents ?? 0;
         return AppCard(
           padding: const EdgeInsets.all(AppSpacing.md),
@@ -546,20 +537,11 @@ class ServiceDetailSummaryCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: AppSpacing.md),
-              Row(
-                children: [
-                  Expanded(
-                    child: _StatementMetric(
-                      label: dueLabel,
-                      value: CurrencyFormatter.rupees(
-                        (settlement?.carryForwardCents ?? 0) / 100,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: _StatementMetric(label: 'Activity', value: metric),
-                  ),
-                ],
+              _StatementMetric(
+                label: dueLabel,
+                value: CurrencyFormatter.rupees(
+                  (settlement?.carryForwardCents ?? 0) / 100,
+                ),
               ),
               const SizedBox(height: AppSpacing.md),
               const Divider(height: 1),
@@ -568,7 +550,7 @@ class ServiceDetailSummaryCard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: _StatementMetric(
-                      label: 'Current month',
+                      label: 'Total Spend',
                       value: CurrencyFormatter.rupees(
                         currentMonthCharges / 100,
                       ),
@@ -589,7 +571,7 @@ class ServiceDetailSummaryCard extends StatelessWidget {
                     child: _StatementMetric(
                       label: 'Advance this month',
                       value: CurrencyFormatter.rupees(
-                        advancePaidThisMonth / 100,
+                        advanceAvailableThisMonth / 100,
                       ),
                     ),
                   ),

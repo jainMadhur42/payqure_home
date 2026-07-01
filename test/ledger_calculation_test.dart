@@ -285,6 +285,23 @@ void main() {
     expect(result.advanceUsedCents, 40000);
   });
 
+  test('previous unused advance appears in current month advance total', () {
+    final result = settlementCalculator.calculate(
+      usageAmountCents: 0,
+      advances: const [],
+      payments: const [],
+      previousSettlement: _previousSettlement(
+        carryForwardCents: 0,
+        advanceCents: 40000,
+      ),
+    );
+
+    expect(result.openingAdvanceCents, 40000);
+    expect(result.advanceCreatedThisMonthCents, 0);
+    expect(result.advanceAvailableThisMonthCents, 40000);
+    expect(result.advanceBalanceCents, 40000);
+  });
+
   test('attendance present absent and half-day amounts use monthly charge', () {
     final service = _service(
       templateType: ServiceTemplateType.attendance,

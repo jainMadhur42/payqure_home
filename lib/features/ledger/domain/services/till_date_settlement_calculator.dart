@@ -37,6 +37,9 @@ class TillDateSettlementResult {
 
   int get advanceCreatedThisMonthCents =>
       manualAdvanceCents + paymentAdvanceCents;
+
+  int get advanceAvailableThisMonthCents =>
+      openingAdvanceCents + advanceCreatedThisMonthCents;
 }
 
 class TillDateSettlementCalculator {

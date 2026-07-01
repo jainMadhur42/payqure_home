@@ -32,6 +32,9 @@ migrate_working_dir/
 build/
 coverage/
 
+# Supabase CLI local project state
+supabase/.temp/
+
 # Local compile-time config / secrets
 *.env
 *.env.*

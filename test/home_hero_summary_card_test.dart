@@ -34,7 +34,8 @@ void main() {
       );
 
       expect(find.text('Amount Due'), findsOneWidget);
-      expect(find.text('Current Bill'), findsOneWidget);
+      expect(find.text('Total Expense'), findsOneWidget);
+      expect(find.text('Current Bill'), findsNothing);
       expect(find.text('Previous Balance'), findsOneWidget);
       expect(find.text('Advance balance'), findsOneWidget);
       expect(find.text('Paid this month'), findsOneWidget);
